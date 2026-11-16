@@ -1,17 +1,22 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLiveGamePlayer, type LiveGameRecord } from '@/lib/live-game';
 
-const storage = vi.hoisted(() => new Map<string, string>());
+const { storage, multiSet } = vi.hoisted(() => {
+  const storage = new Map<string, string>();
+  return {
+    storage,
+    multiSet: vi.fn(async (entries: [string, string][]) => {
+      entries.forEach(([key, value]) => storage.set(key, value));
+    }),
+  };
+});
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
     setItem: vi.fn(async (key: string, value: string) => { storage.set(key, value); }),
     removeItem: vi.fn(async (key: string) => { storage.delete(key); }),
-    multiSet: vi.fn(async (entries: [string, string][]) => {
-      entries.forEach(([key, value]) => storage.set(key, value));
-    }),
+    multiSet,
   },
 }));
 
@@ -151,7 +156,7 @@ describe('replacement of an offline live game', () => {
     const old = previous();
     await saveLiveGameOfflineSession('group-1', old);
     const before = new Map(storage);
-    vi.mocked(AsyncStorage.multiSet).mockRejectedValueOnce(new Error('storage unavailable'));
+    multiSet.mockRejectedValueOnce(new Error('storage unavailable'));
     await expect(prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve()))
       .rejects.toThrow('storage unavailable');
     expect(storage).toEqual(before);
@@ -218,7 +223,7 @@ describe('replacement of an offline live game', () => {
   it('keeps A recoverable if saving the new journal fails after archiving', async () => {
     const old = previous();
     const next = await prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve());
-    vi.mocked(AsyncStorage.multiSet).mockRejectedValueOnce(new Error('new journal failed'));
+    multiSet.mockRejectedValueOnce(new Error('new journal failed'));
     await expect(saveLiveGameOfflineSession('group-1', next)).rejects.toThrow('new journal failed');
     expect((await loadLiveGameOutbox())[0]).toMatchObject({
       id: 'old', serverRecord: { id: 'old' }, mutations: old.mutations, cancel: true,
