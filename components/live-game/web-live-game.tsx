@@ -97,6 +97,8 @@ import {
 } from '@/lib/live-game-history';
 import { persistLiveGameTelemetry, recordLiveGameQueueDepth } from '@/lib/live-game-telemetry';
 import { WebJournalWarning } from '@/components/live-game/web-journal-warning';
+import { WebSyncBadge } from '@/components/live-game/web-sync-badge';
+import { countLiveGamePendingOperations, getLiveGameSyncState, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
 import type { WebJournalError } from '@/lib/live-game-offline';
 import { webJournalHasPendingOperations } from '@/lib/live-game-journal-contract';
 import {
@@ -260,7 +262,7 @@ export function WebLiveGame({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [localSaveError, setLocalSaveError] = useState<WebJournalError | null>(null);
   const [recoveryIssue, setRecoveryIssue] = useState<WebJournalError | null>(null);
-  const [syncBadgeVisible, setSyncBadgeVisible] = useState(true);
+  const [authenticationRequired, setAuthenticationRequired] = useState(false);
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
   const [recoveredJournal, setRecoveredJournal] = useState(false);
   const telemetrySessionRef = useRef(globalThis.crypto.randomUUID());
@@ -294,23 +296,8 @@ export function WebLiveGame({
   const [completedRecord, setCompletedRecord] = useState<LiveGameRecord | null>(null);
   const [completedDuration, setCompletedDuration] = useState('00:00');
   const durationRef = useRef('00:00');
-  const syncPresentationStatus = localSaveError ? 'storage_error' : syncError
-    && pendingSyncCount > 0
-    ? 'error'
-    : syncing
-      ? 'syncing'
-      : pendingSyncCount
-        ? 'pending'
-        : online
-          ? 'synced'
-          : 'offline';
-
-  useEffect(() => {
-    setSyncBadgeVisible(true);
-    if (syncPresentationStatus !== 'synced' && syncPresentationStatus !== 'offline') return;
-    const timer = window.setTimeout(() => setSyncBadgeVisible(false), 15_000);
-    return () => window.clearTimeout(timer);
-  }, [syncPresentationStatus]);
+  const syncPresentationStatus = getLiveGameSyncState({ pendingOperations: pendingSyncCount, online, syncing,
+    localPersistenceAvailable: localSaveError === null, authenticationRequired, hasError: syncError !== null });
   const [confirmRematch, setConfirmRematch] = useState(false);
   const [confirmEliminate, setConfirmEliminate] = useState<ParticipantKey | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -408,7 +395,8 @@ export function WebLiveGame({
       history: historyRef.current,
     }, userId);
     setLocalSaveError(result.ok ? null : result.error);
-    setPendingSyncCount(queueRef.current.length + Number(needsCreateRef.current) + Number(Boolean(pendingFinalizationRef.current)) + Number(pendingCancelRef.current));
+    setPendingSyncCount(countLiveGamePendingOperations({ mutations: queueRef.current.length, needsCreate: needsCreateRef.current,
+      finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
   }, [groupId, userId]);
 
   const clearJournal = useCallback((liveGameId: string) => {
@@ -499,6 +487,7 @@ export function WebLiveGame({
       return true;
     } catch (error) {
       failed = true;
+      setAuthenticationRequired(isLiveGameAuthenticationError(error));
       persist(recordRef.current);
       setSyncError(error instanceof Error ? error.message : 'Sync failed');
       console.error('Web live-game sync failed', error);
@@ -506,6 +495,7 @@ export function WebLiveGame({
     } finally {
       syncingRef.current = false;
       setSyncing(false);
+      if (!failed) setAuthenticationRequired(false);
       void persistLiveGameTelemetry(supabase, {
         userId,
         liveGameId: recordRef.current?.id ?? null,
@@ -614,7 +604,8 @@ export function WebLiveGame({
         historyRef.current = cached.history;
         setUndoDepth(cached.history.undo.length);
         setRedoDepth(cached.history.redo.length);
-        setPendingSyncCount(cached.mutations.length + Number(cached.needsCreate) + Number(Boolean(cached.pendingFinalization)) + Number(cached.pendingCancel));
+        setPendingSyncCount(countLiveGamePendingOperations({ mutations: cached.mutations.length, needsCreate: cached.needsCreate,
+          finalization: Boolean(cached.pendingFinalization), cancellation: cached.pendingCancel }));
         setOptimisticRecord(cached.record);
       }
       try {
@@ -1644,18 +1635,7 @@ export function WebLiveGame({
           </Button>
         </div>
         </div>}
-        {syncBadgeVisible ? <button
-          type="button"
-          onClick={() => void flush()}
-          className={cn(
-            'absolute right-2 top-[calc(env(safe-area-inset-top)+.5rem)] z-40 flex items-center gap-1.5 rounded-full border bg-black/75 px-2.5 py-1 text-[10px] font-bold backdrop-blur',
-            syncError && pendingSyncCount > 0 ? 'border-rose-400/50 text-rose-200' : online ? 'border-emerald-400/30 text-emerald-200' : 'border-amber-400/40 text-amber-200',
-          )}
-          title={pendingSyncCount > 0 ? syncError ?? undefined : undefined}
-        >
-          {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : online ? <CircleDot className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          {localSaveError ? copy({ it: 'Salvataggio locale non disponibile', en: 'Local saving unavailable' }) : syncError && pendingSyncCount > 0 ? copy({ it: 'Riprova sync', en: 'Retry sync' }) : syncing ? copy({ it: 'Sincronizzo', en: 'Syncing' }) : pendingSyncCount ? `${pendingSyncCount} ${copy({ it: 'in attesa', en: 'pending' })}` : online ? copy({ it: 'Sincronizzato', en: 'Synced' }) : 'Offline'}
-        </button> : null}
+        <WebSyncBadge state={syncPresentationStatus} pendingOperations={pendingSyncCount} errorDetail={syncError} onRetry={() => void flush()} />
         {randomOpponentMode && <div className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+1rem)] z-40 mx-auto max-w-md rounded-2xl border border-emerald-400/40 bg-emerald-950/95 px-4 py-3 text-center text-sm font-bold shadow-2xl backdrop-blur">{copy({ it: 'Tocca qualsiasi punto della card del giocatore attivo da escludere.', en: 'Tap anywhere on the active player card to exclude them.' })}</div>}
         {recoveredJournal ? <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+3.25rem)] z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber-400/35 bg-zinc-950/95 px-3 py-2 text-xs text-amber-100 shadow-xl"><span>{copy({ it: 'Partita recuperata dal dispositivo', en: 'Game recovered from this device' })}</span>{pendingSyncCount > 0 ? <button type="button" onClick={() => void flush()} className="font-black text-emerald-300">{copy({ it: 'Sincronizza', en: 'Sync' })}</button> : null}<button type="button" aria-label="Close" onClick={() => setRecoveredJournal(false)}><X className="h-3.5 w-3.5" /></button></div> : null}
         {liveOnboardingOpen ? <div role="dialog" aria-label={copy({ it: 'Guida rapida live', en: 'Live quick guide' })} className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(92vw,390px)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-xl"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><p className="font-black text-emerald-100">{copy({ it: 'Tre gesti utili', en: 'Three useful gestures' })}</p><ul className="mt-2 space-y-1 text-xs text-zinc-300"><li>{copy({ it: 'Tieni premuto +/− per modificare di 10.', en: 'Hold +/− to change by 10.' })}</li><li>{copy({ it: 'Trascina da un giocatore a un altro per assegnare danno.', en: 'Drag between players to assign damage.' })}</li><li>{copy({ it: 'La bandierina conclude e salva la partita.', en: 'The flag ends and saves the game.' })}</li></ul></div><button type="button" aria-label={copy({ it: 'Chiudi guida', en: 'Close guide' })} onClick={() => { try { localStorage.setItem('live-onboarding-v1', 'done'); } catch { /* Optional preference. */ } setLiveOnboardingOpen(false); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5"><X className="h-4 w-4" /></button></div></div> : null}

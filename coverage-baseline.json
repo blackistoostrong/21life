@@ -635,6 +635,18 @@
     "functions": 100,
     "statements": 100
   },
+  "lib/live-game-sync-presentation.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/live-game-sync-presentation.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
   "packages/domain/deck-ranking-visibility.ts": {
     "lines": 100,
     "branches": 100,

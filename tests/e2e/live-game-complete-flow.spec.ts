@@ -55,11 +55,11 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
       body: JSON.stringify({ code: 'PGRST301', message: 'JWT expired', details: null, hint: null }),
     }));
     await page.getByRole('button', { name: /Reduce life for|Riduci punti vita di/ }).first().click();
-    await expect(page.getByRole('button', { name: /Retry sync|Riprova sync/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Sign-in required|Accesso richiesto/ })).toBeVisible();
     expect((await journal()).mutations.length).toBe(1);
     expect((await journal()).record.state.players[0].life).toBe(before - 2);
     await page.unroute('**/rest/v1/rpc/apply_live_game_mutation*');
-    await page.getByRole('button', { name: /Retry sync|Riprova sync/ }).click();
+    await page.getByRole('button', { name: /Sign-in required|Accesso richiesto/ }).click();
     await expect.poll(async () => (await journal())?.mutations.length).toBe(0);
     const secondContext = await browser.newContext({ storageState: await page.context().storageState() });
     try {
@@ -113,7 +113,7 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
     expect((await journal()).record.state.players[0].life).toBe(before - 4);
     await page.evaluate(() => sessionStorage.setItem('qa-journal-quota','0'));
     await page.unroute('**/rest/v1/rpc/apply_live_game_mutation*');
-    await page.getByRole('button', { name: 'Local saving unavailable', exact: true }).click();
+    await page.getByRole('button', { name: /Local saving unavailable/ }).click();
     await expect(page.getByTestId('live-journal-warning')).toHaveCount(0);
     await expect.poll(async () => (await journal())?.serverRecord.state.players[0].life).toBe(before - 5);
   }

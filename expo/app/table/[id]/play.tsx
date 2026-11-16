@@ -37,6 +37,8 @@ import {
 import { hapticLight, hapticMedium, hapticSuccess, hapticWarning } from '@/lib/haptics';
 import { apiPost } from '@/lib/api';
 import { ArenaSyncError, syncAndRefreshArenaMember } from '@/lib/arena-archidekt-sync';
+import { queueLiveGameJournalWrite } from '@/lib/live-game-journal-writer';
+import { countLiveGamePendingOperations, getLiveGameSyncState, getLiveGameSyncIndicator, getLiveGameSyncCopy, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
 import { getLastDeckSelectionForParticipant } from '@/lib/arena-participants';
 import { getPreferredDeckId } from '@/lib/arena-deck-selection';
 import {
@@ -218,6 +220,13 @@ export default function LiveGameScreen() {
   const [syncStatus, setSyncStatus] = useState<'offline' | 'pending' | 'syncing' | 'synced' | 'error'>('synced');
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [localPersistenceAvailable, setLocalPersistenceAvailable] = useState(true);
+  const [authenticationRequired, setAuthenticationRequired] = useState(false);
+  const [networkOnline, setNetworkOnline] = useState(true);
+  const publishPendingSyncCount = useCallback(() => {
+    setPendingSyncCount(countLiveGamePendingOperations({ mutations: mutationQueueRef.current.length,
+      needsCreate: needsCreateRef.current, finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
+  },[]);
   const telemetrySessionRef = useRef(Crypto.randomUUID());
   const [setupReadyKey, setSetupReadyKey] = useState<string | null>(null);
   const [setupRestoreError, setSetupRestoreError] = useState(false);
@@ -454,14 +463,15 @@ export default function LiveGameScreen() {
       pendingCancel: pendingCancelRef.current,
       history: historyRef.current,
     };
-    journalWriteRef.current = journalWriteRef.current
-      .catch(() => undefined)
-      .then(() => {
+    publishPendingSyncCount();
+    journalWriteRef.current = queueLiveGameJournalWrite(journalWriteRef.current, async () => {
         if (sessionClosedRef.current) return;
-        return saveLiveGameOfflineSession(groupId, snapshot);
+        await saveLiveGameOfflineSession(groupId, snapshot);
+      }, saved => {
+        if (!sessionClosedRef.current) setLocalPersistenceAvailable(saved);
       });
     return journalWriteRef.current;
-  }, [groupId]);
+  }, [groupId, publishPendingSyncCount]);
 
   const flushOutbox = useCallback(async () => {
     const outbox = await loadLiveGameOutbox();
@@ -538,7 +548,7 @@ export default function LiveGameScreen() {
           serverRecordRef.current = serverRecord;
           mutationQueueRef.current = mutationQueueRef.current.slice(batch.length);
           if (mutationQueueRef.current.length === 0) syncBatchStartedAtRef.current = null;
-          setPendingSyncCount(mutationQueueRef.current.length);
+          publishPendingSyncCount();
           setOptimisticRecord(replayQueuedMutations(serverRecord, mutationQueueRef.current));
           await saveJournal();
         }
@@ -550,6 +560,7 @@ export default function LiveGameScreen() {
         }
       } catch (error) {
         failed = true;
+        setAuthenticationRequired(isLiveGameAuthenticationError(error));
         const message = getSupabaseErrorMessage(error, 'Sync failed');
         setSyncError(message);
         recordLiveGameSyncError(new Error(message));
@@ -558,6 +569,7 @@ export default function LiveGameScreen() {
       } finally {
         syncRunningRef.current = false;
         if (!failed) {
+          setAuthenticationRequired(false);
           setSyncStatus(mutationQueueRef.current.length ? 'pending' : 'synced');
         }
         if (currentUserId) {
@@ -575,7 +587,7 @@ export default function LiveGameScreen() {
     });
     syncPromiseRef.current = tracked;
     return tracked;
-  }, [currentUserId, flushOutbox, groupId, saveJournal, setOptimisticRecord]);
+  }, [currentUserId, flushOutbox, groupId, publishPendingSyncCount, saveJournal, setOptimisticRecord]);
 
   const flushArchivedOutbox = useCallback(() => {
     const pendingSync = syncPromiseRef.current;
@@ -607,6 +619,7 @@ export default function LiveGameScreen() {
   useEffect(() => {
     return NetInfo.addEventListener((state) => {
       const online = state.isConnected === true && state.isInternetReachable !== false;
+      setNetworkOnline(online);
       if (!online) {
         if (syncTimerRef.current) {
           clearTimeout(syncTimerRef.current);
@@ -650,7 +663,7 @@ export default function LiveGameScreen() {
         historyRef.current = cached.history;
         setUndoDepth(cached.history.undo.length);
         setRedoDepth(cached.history.redo.length);
-        setPendingSyncCount(cached.mutations.length);
+        publishPendingSyncCount();
         setSyncStatus(cached.mutations.length ? 'pending' : 'synced');
         setOptimisticRecord(cached.record);
       }
@@ -679,7 +692,7 @@ export default function LiveGameScreen() {
           const queue = cached?.record.id === remote.id ? mutationQueueRef.current : [];
           mutationQueueRef.current = queue;
           syncBatchStartedAtRef.current = queue.length ? Date.now() : null;
-          setPendingSyncCount(queue.length);
+          publishPendingSyncCount();
           needsCreateRef.current = false;
           setOptimisticRecord(replayQueuedMutations(remote, queue));
           await saveJournal();
@@ -707,7 +720,7 @@ export default function LiveGameScreen() {
       }
     })();
     return () => { mounted = false; };
-  }, [currentUserId, groupId, saveJournal, setOptimisticRecord, syncJournal]);
+  }, [currentUserId, groupId, publishPendingSyncCount, saveJournal, setOptimisticRecord, syncJournal]);
 
   const refreshAuthoritativeState = useCallback(async () => {
     const current = liveGameRef.current;
@@ -932,7 +945,7 @@ export default function LiveGameScreen() {
     const queued = { id, mutation: trackedMutation };
     if (mutationQueueRef.current.length === 0) syncBatchStartedAtRef.current = Date.now();
     mutationQueueRef.current = [...mutationQueueRef.current, queued];
-    setPendingSyncCount(mutationQueueRef.current.length);
+    publishPendingSyncCount();
     setSyncStatus('pending');
     recordLiveGameQueueDepth(mutationQueueRef.current.length);
     if (inverse && historyMode === 'record') {
@@ -941,8 +954,8 @@ export default function LiveGameScreen() {
       setRedoDepth(0);
     }
     setOptimisticRecord({ ...current, state: applyLiveGameMutation(current.state, trackedMutation) });
-    void saveJournal().then(scheduleSync);
-  }, [saveJournal, scheduleSync, setOptimisticRecord]);
+    void saveJournal().then(scheduleSync,scheduleSync);
+  }, [publishPendingSyncCount, saveJournal, scheduleSync, setOptimisticRecord]);
 
   const handleUndo = () => {
     const result = undoLiveGameHistory(historyRef.current);
@@ -1459,6 +1472,16 @@ export default function LiveGameScreen() {
   }
 
   const gameState = liveGame?.state;
+  const presentationPendingCount = countLiveGamePendingOperations({ mutations: pendingSyncCount,
+    needsCreate: false, finalization: false, cancellation: false,
+    archivedOperations: recoveryOutbox.reduce((count,item) => count + countLiveGamePendingOperations({ mutations: item.mutations.length,
+      needsCreate: item.needsCreate, finalization: Boolean(item.finalization), cancellation: item.cancel }),0),
+  });
+  const presentationState = getLiveGameSyncState({ pendingOperations: presentationPendingCount,
+    online: networkOnline && syncStatus !== 'offline', syncing: syncStatus === 'syncing', localPersistenceAvailable,
+    authenticationRequired, hasError: syncError !== null,
+  });
+  const presentationCopy = getLiveGameSyncCopy(presentationState,language);
   const activePlayers = (gameState?.players ?? []).filter((player: LiveGamePlayer) => !player.isEliminated);
   const endGameWarnings = gameState ? getLiveGameResultWarnings(gameState, {
     winnerKey: endIsDraw ? null : endWinnerKey || null,
@@ -1529,16 +1552,10 @@ export default function LiveGameScreen() {
           onUndo={handleUndo}
           canRedo={redoDepth > 0}
           onRedo={handleRedo}
-          syncStatus={syncStatus}
-          syncLabel={copy(syncStatus === 'offline'
-            ? 'liveGameSyncOffline'
-            : syncStatus === 'pending'
-              ? 'liveGameSyncPending'
-              : syncStatus === 'syncing'
-                ? 'liveGameSyncing'
-                : syncStatus === 'error' ? 'liveGameSyncError' : 'liveGameSynced')}
-          pendingSyncCount={pendingSyncCount}
-          syncError={syncError}
+          syncStatus={getLiveGameSyncIndicator(presentationState)}
+          syncLabel={presentationCopy.label}
+          pendingSyncCount={presentationPendingCount}
+          syncError={presentationCopy.hint || (!localPersistenceAvailable ? presentationCopy.label : syncError)}
           onRetrySync={() => void syncJournal()}
           onEndGame={() => openEndGameModal(liveGame.state)}
           onAdjust={handleAdjust}

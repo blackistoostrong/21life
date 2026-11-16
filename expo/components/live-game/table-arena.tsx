@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   LayoutChangeEvent,
@@ -300,18 +301,24 @@ export function TableArena({
   const [dragHoverKey, setDragHoverKey] = useState<ParticipantKey | null>(null);
   const [pendingTransfer, setPendingTransfer] = useState<PendingTransfer | null>(null);
   const [syncBadgeVisible, setSyncBadgeVisible] = useState(true);
+  const announcedSyncLabel = useRef(syncLabel);
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
 
   useEffect(() => {
-    if (syncStatus === 'error' && pendingSyncCount === 0) {
-      setSyncBadgeVisible(false);
-      return;
-    }
     setSyncBadgeVisible(true);
     if (syncStatus !== 'synced' && syncStatus !== 'offline') return;
     const timer = setTimeout(() => setSyncBadgeVisible(false), 15_000);
     return () => clearTimeout(timer);
   }, [pendingSyncCount, syncStatus]);
+
+  useEffect(() => {
+    if (announcedSyncLabel.current === syncLabel) return;
+    const timer = setTimeout(() => {
+      announcedSyncLabel.current = syncLabel;
+      AccessibilityInfo.announceForAccessibility(syncLabel);
+    },1500);
+    return () => clearTimeout(timer);
+  },[syncLabel]);
 
   useEffect(() => {
     let active = true;
@@ -718,7 +725,8 @@ export function TableArena({
       {syncBadgeVisible ? <Pressable
         onPress={onRetrySync}
         accessibilityRole="button"
-        accessibilityLabel={syncLabel}
+        accessibilityLabel={`${syncLabel}${pendingSyncCount > 0 ? ` · ${pendingSyncCount}` : ''}`}
+        accessibilityHint={syncError || undefined}
         style={[
           styles.syncBadge,
           { top: Math.max(insets.top, SYSTEM_GESTURE_GUARD) + 6, right: Math.max(insets.right, SYSTEM_GESTURE_GUARD) + 6 },
