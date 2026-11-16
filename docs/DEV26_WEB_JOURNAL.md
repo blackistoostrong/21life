@@ -26,6 +26,8 @@ The next candidate adds `packages/domain/live-game-sync-presentation.ts` as the 
 
 Still required for DEV26-05: account-change/in-flight cancellation, same-browser multi-tab queue ownership, the full recovery interaction for retained incompatible journals, native journal/outbox scope hardening and telemetry/retention documentation. Builds/exports and real-browser verification of the newest shared-presentation candidate are tracked in PROJECT_CHECKLIST. No database migration is introduced by this journal change.
 
+Shared-presentation candidate `aa814d21` verified: web476 / Expo369 tests, script53, coverage ratchets109/107, Next54 routes with2.82MiB JavaScript, Android export9.26MiB and iOS export pass. The real Dev four-player/two-client flow passes desktop/mobile with the new authentication-required state, preserved queue after401, quota warning/retry and lost-finalization-response idempotency. Exactly two matches and fixture cleanup verified. Evidence: `artifacts/dev26/shared-sync-{web-quality,expo-quality,web-build,native-export,e2e}.log`. Native exports verify bundling and types; they are not native device interaction tests.
+
 ## Existing response-listener warning
 
 `artifacts/dev26/listener-diagnostic.log` captures `NODE_OPTIONS=--trace-warnings` on the pre-journal candidate. Desktop/mobile authenticated responsive checks pass with fixture cleanup. The warning stack attaches listeners in Next's bundled `compression` and `httpxy` response forwarding (`handleResponse`), rather than identifying an application React effect. This locates the observed attachment; it does not prove absence of a framework leak. No listener limits were raised, warnings suppressed or dependency patches applied. The application lifecycle audit remains required.
