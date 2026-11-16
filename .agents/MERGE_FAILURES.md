@@ -64,3 +64,13 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 - Root cause reproduced locally: desktop transition-property override removed transform/translate/scale animation. Existing active translate-y-px jumps a centered counter button away from pointer before mouseup; its rotated wrapper intercepts clicks. Without override the same real click changes40to41; with override timeout/life40.
 - Recovery: remove only transition-property override, retaining Button default transition-all; phone and gameplay logic unchanged. Verify existing desktop/mobile life-feedback tests on fresh build and remote required checks before merge.
 - Prevention: desktop restyle changes to shared Button must run actual quick-game life-feedback E2E, including normal/system/app reduced motion; setup-only smoke is insufficient.
+
+## 2026-11-16 — PR246 conflitto documentale dopo PR248
+- Stato remoto OPEN/DIRTY verificato prima del recupero. Merge locale origin/Dev30ad2a90 fallito esclusivamente su .agents/PROJECT_CHECKLIST.md: append concorrenti dei registri offline e rename.
+- Risoluzione: preservate entrambe le sezioni; nessuna scelta ours/theirs sull'intero file. Verifica assenza file unmerged/marker, quindi nuova CI obbligatoria prima del merge Dev. Nessun deploy/tag/APK/IPA.
+- Prevenzione: controllare base e HEAD dopo aggiornamenti concorrenti della checklist; registrare la causa prima di riprendere compilazioni dipendenti.
+
+## 2026-11-16 — Integrazione fix odierni nel candidato 9.3.0
+- Merge locale di origin/fix/dev-offline-recovery65843c20 nel branch improvement/dev26-foundation3e2cecb5: conflitti su versioni9.3.0 contro hotfix9.2.1 e relativi lockfile/User-Agent/README. PR241 e246 remote OPEN verificati; nessuna integrazione remota o deploy.
+- Recupero: preservare versione candidata9.3.0/90300 e regole/toolchain del foundation, incorporare correzioni9.2.1 e patchSDK; rigenerare lock coerenti e verificare marker/file unmerged prima di quality. Nessun cambio DB o buildAPK/IPA.
+- Prevenzione: distinguere versione candidata dalle versioni dei rami hotfix durante il riallineamento; validare insieme manifest/lock/config nativi.

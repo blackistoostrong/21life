@@ -2,6 +2,9 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+Aggiornamento PM2026-11-16: mantenere VIVI questo branch `improvement/dev26-foundation` e PR241 draft durante la pulizia GitHub. Integrati gli hotfix9.2.1, recupero offline PR246 (archiviazione obbligatoria/isolamento terminali/journal/bootstrap), rinomina GitHub PR247/248 e patchSDK57.0.33. Versione candidata9.3.0/90300 preservata. I punti DEV26-04…12 non diventano completati per questo riallineamento; riprendere dal piano esistente. Nessuna nuova APK/IPA o distribuzione applicativa autorizzata. Quality web ed Expo complete PASS Node24.21.0, coperture/ratchet/soglie preservate;364testExpo. Nessun build distributivo o deploy eseguito.
+
+
 Mandato: eseguire docs/IMPLEMENTATION_PLAN_DEV_2026-11-12.md punti1–6 fino al refactoring approfondito, solo Dev. Versione candidata9.3.0/90300 sostituisce il vincolo9.2.0 del piano originale. Primario PM preservato; worktree ../21life-dev26, branch improvement/dev26-foundation da origin/Dev bac40b9c. Nessuna produzione/main/deploy/tag.
 
 - [x] DEV26-00: baseline riproducibile Node24.21.0/SHA ufficiale e npm11.16.0 locale; clean ci web/Expo dopo aggiornamento lock, quality entrambi PASS; Doctor21/21 PASS con fallback DNS solo nel processo per exp.host, TLS invariato. Nessun bypass o modifica rete workstation.
@@ -234,3 +237,9 @@ Le note precedenti descrivono le fasi storiche; questa sezione indica lo stato c
 - [ ] Dev9.1.3 implementazione pronta per verifica finale: patchtecnicheadvisory conhash/postinstall/auditfailclosed e828testupstreamforge; registrazionepush/stato/logout+revocaserver, queue/receipt/eventotransazionale. Migrazioni20261021145111+20261021150824 applicateDev/testROLLBACKPASS; versioni9.1.3/90103. FirebaseEAS/secretGitHub/worker/testfisico pendenti; nessunmain/prod/deploy. Report docs/RELEASE_9.1.3_DEV.md.
 
 - [x] CandidatoDev9.1.3/90103 PM2026-10-21 verificato: codecommitd35a7b4;358web+1skip/324Expo/47script, quality/lint/typecheck/coverage/security/knip/manifest, buildweb edexportAndroidDevPASS; patchinstallpulito e828forge+4pending, auditraw20high mitigaticonSHAverificati senza prorogaderoga. SQLindicizzato=checksumDev entrambe migrazioni; testROLLBACKdiqueue/revocalatePOST/grantPASS. Primariopreservato, nessunmain/prod/deploy/tag/APK. PRdraftversoDev inpreparazione; Firebase/EAS/secretGitHub/worker/testfisico ancora gateesterni. Report docs/RELEASE_9.1.3_DEV.md.
+
+- [x] Fix audit9.2.1 PM2026-11-16: blocco adozione B se archivio A fallisce, attesa journal, reset flag terminali/history e esclusione sync durante bootstrap. Sette regressioni persistenza; quality Expo PASS Node24.21.0 (364 test e ratchet101file). Report docs/LIVE_GAME_RECOVERY_FIX_2026-11-16.md. Target PR Dev, nessun main/prod/versione/schema/deploy.
+
+- [ ] Mandato prossima release PM2026-11-16: entrambi fix recupero/sync PR246 e usernamePR247/248 obbligatori sul candidato finale. Gate persistente RELEASE_PREBUILD_CHECKLIST. CIweb246 fermato da import AsyncStorage nel test (unlisted dependency); import rimosso tramite mockhoisted condiviso,14regressioni/typecheckExpo/kniprootPASS senza bypass. Richiesta nuova CI per mergeDev; nessunaAPK/IPA/deploy.
+
+- [x] Rename GitHub PM2026-11-16: riferimenti attivi README/F-Droid/latest-release aggiornati a blackistoostrong/21life; test latest-release6/6, lint e typecheck PASS Node24.21.0. Remote locale e sorgenti Git Dokploy Dev/main aggiornati senza modificare chiavi o branch; readiness e app-config200, APK vecchio/nuovo URL200. Variante Dev include client contatori compatibile anche con link legacy e 4test PASS. Nessun DB/versione/APK modificato.

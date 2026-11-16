@@ -67,3 +67,9 @@ che ne dipende; non equivale a un risultato positivo.
 - [ ] Back-merge main/Dev: controllare checklist concorrenti; zero marker di conflitto e zero file unmerged prima di build/deploy.
 - [ ] Unit test importazione: fixture offline per API esterne; HTTP403 esterni non giustificano bypass dei controlli merge.
 - [ ] Shared web Button style changes: run desktop/mobile life-feedback E2E with normal/system/app reduced motion before promotion.
+
+## Prossima release — mandato PM 2026-11-16
+
+- [ ] Il candidato finale deve includere ENTRAMBI: recupero offline live game PR246 (archiviazione riuscita prima di sostituire il journal, reset flag terminali/history, sync escluso durante bootstrap) e rinomina GitHub PR247/248 a blackistoostrong/21life. Verificare il contenuto sui rami effettivamente rilasciati, inclusa la variante F-Droid se richiesta; la sola presenza delle PR non basta.
+- [ ] Eseguire regressioni recupero/persistenza/sync e controlli web/Expo sul candidato finale, senza ridurre le soglie o ignorare dipendenze segnalate. Pubblicare anche il candidato statico aggiornato (link, client compatibile, CSP) registrato in docs/GITHUB_USERNAME_RENAME_2026-11-16.md; backup/candidato in artifacts/github-rename.
+- [ ] Nessuna nuova APK/IPA o distribuzione prima della prossima release autorizzata: il PM ha rinviato esplicitamente le pubblicazioni. Nessun obbligo di aggiornare F-Droid9.2.1 per il solo cambio username.

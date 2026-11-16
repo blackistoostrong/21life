@@ -5,7 +5,7 @@ import {
   type QueuedLiveGameMutation,
   type WinCondition,
 } from '@/lib/live-game';
-import { parseLiveGameHistory, type LiveGameHistory } from '@/lib/live-game-history';
+import { createLiveGameHistory, parseLiveGameHistory, type LiveGameHistory } from '@/lib/live-game-history';
 
 const STORAGE_PREFIX = 'phyrexian-arena:live-game:v2:';
 const STORAGE_BACKUP_PREFIX = 'phyrexian-arena:live-game:v2:backup:';
@@ -151,4 +151,36 @@ export async function archiveAndClearLiveGameSession(
     [storageKey(groupId), 'null'],
     [backupStorageKey(groupId), 'null'],
   ]);
+}
+
+/** Prepare a different game's session only after the old work is durable.
+ * Rejection leaves the caller's live references untouched. Waiting for queued
+ * journal writes prevents a late write from restoring the superseded session.
+ */
+export async function prepareLiveGameReplacement(
+  groupId: string,
+  previous: LiveGameOfflineSession,
+  remote: LiveGameRecord,
+  pendingJournalWrite: Promise<void>,
+): Promise<Omit<LiveGameOfflineSession, 'savedAt'>> {
+  await pendingJournalWrite.catch(() => undefined);
+  if (previous.mutations.length || previous.pendingFinalization || previous.pendingCancel) {
+    await archiveAndClearLiveGameSession(groupId, {
+      id: previous.record.id,
+      serverRecord: previous.serverRecord,
+      needsCreate: previous.needsCreate,
+      mutations: previous.mutations,
+      finalization: previous.pendingFinalization,
+      cancel: previous.pendingCancel,
+    });
+  }
+  return {
+    record: remote,
+    serverRecord: remote,
+    needsCreate: false,
+    mutations: [],
+    pendingFinalization: null,
+    pendingCancel: false,
+    history: createLiveGameHistory(),
+  };
 }
