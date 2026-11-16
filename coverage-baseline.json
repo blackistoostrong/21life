@@ -353,11 +353,17 @@
     "functions": 100,
     "statements": 100
   },
+  "lib/live-game-journal-contract.ts": {
+    "lines": 100,
+    "branches": 92.85,
+    "functions": 100,
+    "statements": 100
+  },
   "lib/live-game-offline.ts": {
-    "lines": 0,
-    "branches": 0,
-    "functions": 0,
-    "statements": 0
+    "lines": 98.24,
+    "branches": 92.59,
+    "functions": 100,
+    "statements": 96.1
   },
   "lib/live-game-recap-share.ts": {
     "lines": 100,

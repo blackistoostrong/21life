@@ -69,6 +69,7 @@ try {
   process.env.E2E_USERNAME = email;
   process.env.E2E_PASSWORD = password;
   process.env.E2E_GROUP_ID = groupId;
+  process.env.E2E_USER_ID = userIds[0];
   process.env.E2E_LIVE_GAME_FLOW = '1';
   const sessionCookies = [];
   const authClient = createServerClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {

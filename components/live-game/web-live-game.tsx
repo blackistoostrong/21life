@@ -96,6 +96,9 @@ import {
   type LiveGameHistory,
 } from '@/lib/live-game-history';
 import { persistLiveGameTelemetry, recordLiveGameQueueDepth } from '@/lib/live-game-telemetry';
+import { WebJournalWarning } from '@/components/live-game/web-journal-warning';
+import type { WebJournalError } from '@/lib/live-game-offline';
+import { webJournalHasPendingOperations } from '@/lib/live-game-journal-contract';
 import {
   createDefaultWebLiveGameSetup,
   loadWebLiveGameSetup,
@@ -255,6 +258,8 @@ export function WebLiveGame({
   const [syncing, setSyncing] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [localSaveError, setLocalSaveError] = useState<WebJournalError | null>(null);
+  const [recoveryIssue, setRecoveryIssue] = useState<WebJournalError | null>(null);
   const [syncBadgeVisible, setSyncBadgeVisible] = useState(true);
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
   const [recoveredJournal, setRecoveredJournal] = useState(false);
@@ -289,7 +294,7 @@ export function WebLiveGame({
   const [completedRecord, setCompletedRecord] = useState<LiveGameRecord | null>(null);
   const [completedDuration, setCompletedDuration] = useState('00:00');
   const durationRef = useRef('00:00');
-  const syncPresentationStatus = syncError
+  const syncPresentationStatus = localSaveError ? 'storage_error' : syncError
     && pendingSyncCount > 0
     ? 'error'
     : syncing
@@ -393,7 +398,7 @@ export function WebLiveGame({
 
   const persist = useCallback((next = recordRef.current) => {
     if (!next || !serverRef.current) return;
-    saveWebLiveGameJournal(groupId, {
+    const result = saveWebLiveGameJournal(groupId, {
       record: next,
       serverRecord: serverRef.current,
       needsCreate: needsCreateRef.current,
@@ -401,8 +406,15 @@ export function WebLiveGame({
       pendingFinalization: pendingFinalizationRef.current,
       pendingCancel: pendingCancelRef.current,
       history: historyRef.current,
-    });
-  }, [groupId]);
+    }, userId);
+    setLocalSaveError(result.ok ? null : result.error);
+    setPendingSyncCount(queueRef.current.length + Number(needsCreateRef.current) + Number(Boolean(pendingFinalizationRef.current)) + Number(pendingCancelRef.current));
+  }, [groupId, userId]);
+
+  const clearJournal = useCallback((liveGameId: string) => {
+    const result = clearWebLiveGameJournal(groupId, userId, liveGameId);
+    setLocalSaveError(result.ok ? null : result.error);
+  }, [groupId, userId]);
 
   const showCompletedGame = useCallback((completed: LiveGameRecord, endedAt: string) => {
     setCompletedDuration(formatDuration(completed.started_at, endedAt));
@@ -472,14 +484,14 @@ export function WebLiveGame({
           body: JSON.stringify({ matchId }),
         });
         pendingFinalizationRef.current = null;
-        clearWebLiveGameJournal(groupId);
+        clearJournal(server.id);
         if (completed) showCompletedGame(completed, finalization.endedAt);
         return true;
       }
       if (pendingCancelRef.current) {
         await cancelLiveGame(supabase, server.id);
         pendingCancelRef.current = false;
-        clearWebLiveGameJournal(groupId);
+        clearJournal(server.id);
         clearCancelledGame();
         return true;
       }
@@ -502,7 +514,7 @@ export function WebLiveGame({
         force: failed,
       }).catch(() => undefined);
     }
-  }, [clearCancelledGame, groupId, persist, setOptimisticRecord, showCompletedGame, userId]);
+  }, [clearCancelledGame, clearJournal, persist, setOptimisticRecord, showCompletedGame, userId]);
 
   const scheduleFlush = useCallback(() => {
     if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
@@ -588,8 +600,10 @@ export function WebLiveGame({
     let mounted = true;
     void (async () => {
       const participantKey = `user:${userId}` as ParticipantKey;
-      const cached = loadWebLiveGameJournal(groupId);
-      if (cached?.record.state.players.some((player) => player.participantKey === participantKey)) {
+      const loaded = loadWebLiveGameJournal(groupId, userId);
+      const cached = loaded.journal;
+      setRecoveryIssue(loaded.error);
+      if (cached && (cached.record.created_by === userId || cached.record.state.players.some((player) => player.participantKey === participantKey))) {
         setRecoveredJournal(true);
         serverRef.current = cached.serverRecord;
         queueRef.current = cached.mutations;
@@ -600,7 +614,7 @@ export function WebLiveGame({
         historyRef.current = cached.history;
         setUndoDepth(cached.history.undo.length);
         setRedoDepth(cached.history.redo.length);
-        setPendingSyncCount(cached.mutations.length);
+        setPendingSyncCount(cached.mutations.length + Number(cached.needsCreate) + Number(Boolean(cached.pendingFinalization)) + Number(cached.pendingCancel));
         setOptimisticRecord(cached.record);
       }
       try {
@@ -611,6 +625,17 @@ export function WebLiveGame({
         const remote = await fetchActiveLiveGame(supabase, groupId, participantKey);
         if (!mounted) return;
         if (remote) {
+          if (cached && cached.record.id !== remote.id && webJournalHasPendingOperations(cached)) {
+            setRecoveryIssue('pending_game');
+            return;
+          }
+          if (cached?.record.id !== remote.id) {
+            pendingFinalizationRef.current = null;
+            pendingCancelRef.current = false;
+            historyRef.current = createLiveGameHistory();
+            setUndoDepth(0);
+            setRedoDepth(0);
+          }
           const queue = cached?.record.id === remote.id ? queueRef.current : [];
           serverRef.current = remote;
           queueRef.current = queue;
@@ -621,11 +646,15 @@ export function WebLiveGame({
           persist(recordRef.current);
           void flush();
         } else if (cached && !cached.needsCreate) {
-          clearWebLiveGameJournal(groupId);
+          if (webJournalHasPendingOperations(cached)) { setRecoveryIssue('pending_game'); return; }
+          clearJournal(cached.record.id);
           serverRef.current = null;
           queueRef.current = [];
           syncBatchStartedAtRef.current = null;
           setOptimisticRecord(null);
+        } else if (cached?.needsCreate) {
+          persist(cached.record);
+          void flush();
         }
       } catch {
         // The crash-safe local journal remains playable offline.
@@ -634,11 +663,13 @@ export function WebLiveGame({
       }
     })();
     return () => { mounted = false; };
-  }, [flush, groupId, persist, setOptimisticRecord, userId]);
+  }, [clearJournal, flush, groupId, persist, setOptimisticRecord, userId]);
 
   const activeRecordId = record?.id;
   useEffect(() => {
-    if (!activeRecordId || localStorage.getItem('live-onboarding-v1')) return;
+    if (!activeRecordId) return;
+    try { if (localStorage.getItem('live-onboarding-v1')) return; }
+    catch { /* Onboarding preferences are optional; the journal reports storage failure. */ }
     const timer = window.setTimeout(() => setLiveOnboardingOpen(true), 4_500);
     return () => window.clearTimeout(timer);
   }, [activeRecordId]);
@@ -649,12 +680,16 @@ export function WebLiveGame({
       if (recordRef.current?.id !== activeRecordId) return;
       if (remote.status !== 'active') {
         if (pendingFinalizationRef.current || pendingCancelRef.current) return;
+        if (needsCreateRef.current || queueRef.current.length > 0) {
+          setRecoveryIssue('pending_game');
+          return;
+        }
         serverRef.current = null;
         queueRef.current = [];
         syncBatchStartedAtRef.current = null;
         pendingFinalizationRef.current = null;
         pendingCancelRef.current = false;
-        clearWebLiveGameJournal(groupId);
+        clearJournal(remote.id);
         setOptimisticRecord(null);
         if (remote.status === 'ended') {
           setCompletedRecord(remote);
@@ -674,7 +709,7 @@ export function WebLiveGame({
         void refreshAuthoritativeState().catch(() => undefined).finally(() => flush());
       }
     });
-  }, [activeRecordId, copy, flush, groupId, persist, refreshAuthoritativeState, router, setOptimisticRecord, toast]);
+  }, [activeRecordId, clearJournal, copy, flush, groupId, persist, refreshAuthoritativeState, router, setOptimisticRecord, toast]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -792,12 +827,14 @@ export function WebLiveGame({
       pendingCancelRef.current = false;
       setCompletedRecord(null);
       setOptimisticRecord(created);
-      saveWebLiveGameSetup(groupId, userId, {
-        playerCount: nextPlayerCount,
-        layoutVariant: nextLayoutVariant,
-        startingLife: nextStartingLife,
-        seats: nextSeats,
-      });
+      try {
+        saveWebLiveGameSetup(groupId, userId, {
+          playerCount: nextPlayerCount,
+          layoutVariant: nextLayoutVariant,
+          startingLife: nextStartingLife,
+          seats: nextSeats,
+        });
+      } catch { setLocalSaveError('unavailable'); }
       persist(created);
       runRoulette(keys, startingPlayer.participantKey);
       void flush();
@@ -1074,6 +1111,7 @@ export function WebLiveGame({
       };
       return (
         <div className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_top,#0a1a0d_0%,#08080e_52%,#000_100%)] p-4 text-foreground">
+          <WebJournalWarning error={recoveryIssue || localSaveError} />
           <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-emerald-400/30 bg-card/95 shadow-2xl shadow-emerald-950/50 backdrop-blur-xl">
             <div className="bg-gradient-to-br from-emerald-600/30 via-teal-600/15 to-transparent p-7 text-center">
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-emerald-500/20 text-emerald-200 shadow-lg">
@@ -1154,6 +1192,7 @@ export function WebLiveGame({
       && seats.every((seat) => Boolean(seat.participantKey && seat.deckId));
     return (
       <div className="min-h-dvh bg-[radial-gradient(circle_at_top,#08100a_0%,#08080e_48%,#000_100%)] px-3 pb-10 pt-[max(1rem,env(safe-area-inset-top))] text-foreground sm:px-6">
+        <WebJournalWarning error={recoveryIssue || localSaveError} className="mx-auto mb-4 max-w-5xl" />
         <div className="mx-auto max-w-5xl">
           <div className="mb-5 flex items-center gap-3">
             <Button variant="ghost" size="icon" aria-label={copy({ it: 'Torna al playgroup', en: 'Back to playgroup' })} onClick={() => router.push(`/table/${groupId}`)}><ArrowLeft /></Button>
@@ -1500,6 +1539,7 @@ export function WebLiveGame({
 
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-black text-white touch-none">
+      <WebJournalWarning error={recoveryIssue || localSaveError} className="absolute inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-50 mx-auto max-w-xl" />
       <div ref={tableRef} className="absolute inset-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
         {assignments.map(({ player, layout }) => {
           const rotation = orientation === 'landscape'
@@ -1614,11 +1654,11 @@ export function WebLiveGame({
           title={pendingSyncCount > 0 ? syncError ?? undefined : undefined}
         >
           {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : online ? <CircleDot className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          {syncError && pendingSyncCount > 0 ? copy({ it: 'Riprova sync', en: 'Retry sync' }) : syncing ? copy({ it: 'Sincronizzo', en: 'Syncing' }) : pendingSyncCount ? `${pendingSyncCount} ${copy({ it: 'in attesa', en: 'pending' })}` : online ? copy({ it: 'Sincronizzato', en: 'Synced' }) : 'Offline'}
+          {localSaveError ? copy({ it: 'Salvataggio locale non disponibile', en: 'Local saving unavailable' }) : syncError && pendingSyncCount > 0 ? copy({ it: 'Riprova sync', en: 'Retry sync' }) : syncing ? copy({ it: 'Sincronizzo', en: 'Syncing' }) : pendingSyncCount ? `${pendingSyncCount} ${copy({ it: 'in attesa', en: 'pending' })}` : online ? copy({ it: 'Sincronizzato', en: 'Synced' }) : 'Offline'}
         </button> : null}
         {randomOpponentMode && <div className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+1rem)] z-40 mx-auto max-w-md rounded-2xl border border-emerald-400/40 bg-emerald-950/95 px-4 py-3 text-center text-sm font-bold shadow-2xl backdrop-blur">{copy({ it: 'Tocca qualsiasi punto della card del giocatore attivo da escludere.', en: 'Tap anywhere on the active player card to exclude them.' })}</div>}
         {recoveredJournal ? <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+3.25rem)] z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber-400/35 bg-zinc-950/95 px-3 py-2 text-xs text-amber-100 shadow-xl"><span>{copy({ it: 'Partita recuperata dal dispositivo', en: 'Game recovered from this device' })}</span>{pendingSyncCount > 0 ? <button type="button" onClick={() => void flush()} className="font-black text-emerald-300">{copy({ it: 'Sincronizza', en: 'Sync' })}</button> : null}<button type="button" aria-label="Close" onClick={() => setRecoveredJournal(false)}><X className="h-3.5 w-3.5" /></button></div> : null}
-        {liveOnboardingOpen ? <div role="dialog" aria-label={copy({ it: 'Guida rapida live', en: 'Live quick guide' })} className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(92vw,390px)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-xl"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><p className="font-black text-emerald-100">{copy({ it: 'Tre gesti utili', en: 'Three useful gestures' })}</p><ul className="mt-2 space-y-1 text-xs text-zinc-300"><li>{copy({ it: 'Tieni premuto +/− per modificare di 10.', en: 'Hold +/− to change by 10.' })}</li><li>{copy({ it: 'Trascina da un giocatore a un altro per assegnare danno.', en: 'Drag between players to assign damage.' })}</li><li>{copy({ it: 'La bandierina conclude e salva la partita.', en: 'The flag ends and saves the game.' })}</li></ul></div><button type="button" aria-label={copy({ it: 'Chiudi guida', en: 'Close guide' })} onClick={() => { localStorage.setItem('live-onboarding-v1', 'done'); setLiveOnboardingOpen(false); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5"><X className="h-4 w-4" /></button></div></div> : null}
+        {liveOnboardingOpen ? <div role="dialog" aria-label={copy({ it: 'Guida rapida live', en: 'Live quick guide' })} className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[min(92vw,390px)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-xl"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><p className="font-black text-emerald-100">{copy({ it: 'Tre gesti utili', en: 'Three useful gestures' })}</p><ul className="mt-2 space-y-1 text-xs text-zinc-300"><li>{copy({ it: 'Tieni premuto +/− per modificare di 10.', en: 'Hold +/− to change by 10.' })}</li><li>{copy({ it: 'Trascina da un giocatore a un altro per assegnare danno.', en: 'Drag between players to assign damage.' })}</li><li>{copy({ it: 'La bandierina conclude e salva la partita.', en: 'The flag ends and saves the game.' })}</li></ul></div><button type="button" aria-label={copy({ it: 'Chiudi guida', en: 'Close guide' })} onClick={() => { try { localStorage.setItem('live-onboarding-v1', 'done'); } catch { /* Optional preference. */ } setLiveOnboardingOpen(false); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5"><X className="h-4 w-4" /></button></div></div> : null}
       </div>
 
       {drag && <svg className="pointer-events-none fixed inset-0 z-50 h-full w-full"><defs><marker id="damage-arrow" markerWidth="14" markerHeight="14" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185" /></marker><filter id="damage-glow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs><path d={`M ${drag.startX} ${drag.startY} Q ${(drag.startX + drag.x) / 2} ${Math.min(drag.startY, drag.y) - 90} ${drag.x} ${drag.y}`} fill="none" stroke="#fb7185" strokeWidth="7" strokeLinecap="round" markerEnd="url(#damage-arrow)" filter="url(#damage-glow)" strokeDasharray="12 8"><animate attributeName="stroke-dashoffset" from="40" to="0" dur=".7s" repeatCount="indefinite" /></path></svg>}

@@ -31,11 +31,11 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   await expect(page.getByTestId('live-end')).toBeVisible({ timeout: 20_000 });
   const arenaA11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(arenaA11y.violations.filter((entry) => ['serious', 'critical'].includes(entry.impact ?? ''))).toEqual([]);
-  const journal = () => page.evaluate((groupId) => {
-    const key = `phyrexian-arena:web-live-game:v1:${groupId}`;
+  const journal = () => page.evaluate(({ groupId, userId }) => {
+    const key = `phyrexian-arena:web-live-game:v2:${userId}:${groupId}`;
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  }, process.env.E2E_GROUP_ID);
+    return raw ? JSON.parse(raw).journal : null;
+  }, { groupId: process.env.E2E_GROUP_ID, userId: process.env.E2E_USER_ID });
   if (process.env.E2E_GROUP_ID) {
     await expect.poll(async () => (await journal())?.mutations.length).toBe(0);
     const before = (await journal()).record.state.players[0].life;
@@ -84,10 +84,10 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
         clientPage.getByRole('button', { name: /Reduce life for|Riduci punti vita di/ }).first().click()
       ));
       try { for (const clientPage of [page, secondPage]) {
-        await expect.poll(() => clientPage.evaluate((groupId) => {
-          const value = JSON.parse(localStorage.getItem(`phyrexian-arena:web-live-game:v1:${groupId}`)!);
+        await expect.poll(() => clientPage.evaluate(({ groupId, userId }) => {
+          const value = JSON.parse(localStorage.getItem(`phyrexian-arena:web-live-game:v2:${userId}:${groupId}`)!).journal;
           return { life: value.serverRecord.state.players[0].life, pending: value.mutations.length };
-        }, process.env.E2E_GROUP_ID), { timeout: 20_000 }).toEqual({ life: before - 4, pending: 0 });
+        }, { groupId: process.env.E2E_GROUP_ID, userId: process.env.E2E_USER_ID }), { timeout: 20_000 }).toEqual({ life: before - 4, pending: 0 });
       }
       } finally {
         console.log('Synthetic sync boundaries:', JSON.stringify(diagnostics));
@@ -96,6 +96,26 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
     } finally {
       await secondContext.close();
     }
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith('phyrexian-arena:web-live-game:v2:') && sessionStorage.getItem('qa-journal-quota') === '1') {
+          throw new DOMException('Synthetic full storage', 'QuotaExceededError');
+        }
+        return original.call(this, key, value);
+      };
+      sessionStorage.setItem('qa-journal-quota','1');
+    });
+    await page.route('**/rest/v1/rpc/apply_live_game_mutation*', route => route.abort());
+    await page.getByRole('button', { name: /Reduce life for|Riduci punti vita di/ }).first().click();
+    await expect(page.getByTestId('live-journal-warning')).toContainText('Local saving unavailable');
+    // The durable snapshot remains unchanged; the unsaved action is still in memory.
+    expect((await journal()).record.state.players[0].life).toBe(before - 4);
+    await page.evaluate(() => sessionStorage.setItem('qa-journal-quota','0'));
+    await page.unroute('**/rest/v1/rpc/apply_live_game_mutation*');
+    await page.getByRole('button', { name: 'Local saving unavailable', exact: true }).click();
+    await expect(page.getByTestId('live-journal-warning')).toHaveCount(0);
+    await expect.poll(async () => (await journal())?.serverRecord.state.players[0].life).toBe(before - 5);
   }
   await page.getByRole('button', { name: /Reduce life for|Riduci punti vita di/ }).first().click();
   await page.getByTestId('live-end').focus();
