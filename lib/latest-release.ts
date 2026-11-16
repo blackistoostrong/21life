@@ -3,7 +3,7 @@ import 'server-only';
 /** Only published, stable standard releases are eligible for update notices. */
 export async function getLatestReleasedVersion(): Promise<string | null> {
   try {
-    const response = await fetch('https://api.github.com/repos/marco201091-glitch/21life/releases/latest', {
+    const response = await fetch('https://api.github.com/repos/blackistoostrong/21life/releases/latest', {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': '21Life' },
       next: { revalidate: 3600 },
       signal: AbortSignal.timeout(3000),
