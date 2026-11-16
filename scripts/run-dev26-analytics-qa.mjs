@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { extractAnalyticsQaPayload } from './analytics-qa-payload.mjs';
 
-if (process.argv.slice(2).some(arg => arg !== '--draft')) throw new Error('Only --draft is supported');
+if (process.argv.slice(2).some(arg => !['--draft','--profile-draft','--profile'].includes(arg))) throw new Error('Unsupported QA option');
 nextEnv.loadEnvConfig(resolve(process.env.E2E_ENV_ROOT || '.'));
 const env = process.env;
 if (env.SELFHOSTED_DEV_COMPOSE_PROJECT !== 'supabase-dev' || !env.SUPABASE_URL
@@ -25,6 +25,13 @@ if (process.argv.includes('--draft')) {
   sql = 'BEGIN ISOLATION LEVEL REPEATABLE READ;\n'
     + readFileSync(resolve('supabase/migrations/20261116135644_analytics_dashboard_v2.sql'),'utf8') + '\n'
     + sql.replace(/^BEGIN ISOLATION LEVEL REPEATABLE READ;\r?\n/m,'');
+}
+if (process.argv.includes('--profile-draft')) {
+  sql = sql.replace('BEGIN ISOLATION LEVEL REPEATABLE READ;', () => 'BEGIN ISOLATION LEVEL REPEATABLE READ;\n'
+    + readFileSync(resolve('supabase/migrations/20261116150922_profile_catalog_metrics_v2.sql'),'utf8'));
+}
+if (process.argv.includes('--profile-draft') || process.argv.includes('--profile')) {
+  sql = sql.replace(/ROLLBACK;\s*$/,() => readFileSync(resolve('scripts/qa/profile-catalog-metrics-v2.sql'),'utf8') + '\nROLLBACK;\n');
 }
 const result = spawnSync('ssh',args,{ input: sql, encoding: 'utf8', timeout: 120000, windowsHide: true });
 const directory = resolve('artifacts/dev26');

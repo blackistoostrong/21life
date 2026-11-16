@@ -36,3 +36,4 @@ supabase/migrations/20261111145921_preserve_deleted_deck_history.sql -text white
 supabase/migrations/20261111151357_preserve_deck_delete_service_maintenance.sql -text whitespace=cr-at-eol
 /supabase/migrations/20261116094824_admin_user_directory.sql text eol=lf
 /supabase/migrations/20261116135644_analytics_dashboard_v2.sql text eol=lf
+/supabase/migrations/20261116150922_profile_catalog_metrics_v2.sql text eol=lf

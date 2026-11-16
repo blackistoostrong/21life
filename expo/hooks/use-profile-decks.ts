@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiPost } from '@/lib/api';
 import { isImportedDeckSource } from '@/lib/deck-importers';
 import { prefetchEdhrecStats } from '@/lib/edhrec-client';
@@ -23,16 +23,10 @@ import {
   resolveSelectedCommanderOption,
   type CommanderMetadataOption,
 } from '@/lib/deck-metadata';
-import {
-  buildPersonalAnalytics,
-  type PersonalDeckSnapshot,
-  type PersonalMatchParticipantRow,
-} from '@/lib/personal-analytics';
-import { buildMatchRecord, type MatchRecord } from '@/lib/win-rate';
-import { getDeckDisplayColors } from '@/lib/deck-metadata';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { supabase } from '@/lib/supabase';
 import { prefetchProfileDeckImages } from '@/lib/deck-image-cache';
+import { fetchCompleteProfileCatalog,fetchProfileCatalogPage } from '@/lib/profile-catalog-pages';
 import { fetchProfileDeckPerformance } from '@/lib/profile-deck-performance';
 import type { DeckPerformance, DeckWinRate, ProfileDeck } from '@/lib/types/profile';
 import { syncArchidektUserDecks as syncArchidektDecks } from '@/lib/archidekt-auto-sync';
@@ -50,162 +44,44 @@ export function useProfileDecks(userId: string | undefined) {
   const [performance, setPerformance] = useState<Record<string, DeckPerformance>>({});
   const [loading, setLoading] = useState(true);
 
+  const requestRef=useRef<AbortController | null>(null);
+  const [dataUserId,setDataUserId]=useState<string | undefined>(undefined);
+  const [metricsStatus,setMetricsStatus]=useState<'loading' | 'ready' | 'error'>('loading');
+  const [catalogError,setCatalogError]=useState(false);
   const refresh = useCallback(async () => {
-    if (!userId) {
-      setDecks([]);
-      setWinRates({});
-      setPerformance({});
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
+    requestRef.current?.abort();
+    const controller=new AbortController();
+    requestRef.current=controller;
+    const current=()=>requestRef.current===controller && !controller.signal.aborted;
+    setDataUserId(userId);setLoading(true);setMetricsStatus('loading');setCatalogError(false);
+    setWinRates({});setPerformance({});
+    if (!userId) { setDecks([]);setLoading(false);return; }
     try {
-      const { data: deckRows, error: deckError } = await supabase
-        .from('decks')
-        .select('id, user_id, group_id, name, commander, commander_image, source_url, source_type, bracket, color_identity, commander_options, commander_cmc, is_favorite, is_archived, created_at, updated_at')
-        .is('group_id', null)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (deckError) throw deckError;
-
-      const loadedDecks = (deckRows as ProfileDeck[]) || [];
-      setDecks(loadedDecks);
-      setLoading(false);
+      const deckRows=await fetchCompleteProfileCatalog((after,revision,signal)=>fetchProfileCatalogPage(supabase,userId,after,revision,signal),controller.signal);
+      if (!current()) return;
+      const loadedDecks=deckRows as unknown as ProfileDeck[];
+      setDecks(loadedDecks);setLoading(false);
       prefetchProfileDeckImages(loadedDecks);
-      void repairLoadedDeckArtwork(loadedDecks).then((repairedDecks) => {
-        const repairedById = new Map(repairedDecks.map((deck) => [deck.id, deck]));
-        setDecks((current) => current.map((deck) => repairedById.get(deck.id) || deck));
-        prefetchProfileDeckImages(repairedDecks);
-      });
-
-      const deckIds = loadedDecks.map((deck) => deck.id);
-      if (deckIds.length === 0) {
-        setWinRates({});
-        setPerformance({});
-        return;
-      }
-
-      const rollup = await fetchProfileDeckPerformance(supabase, userId);
-      if (rollup) {
-        setWinRates(rollup.winRates);
-        setPerformance(rollup.performance);
-        return;
-      }
-
-      // V6 compatibility while production is waiting for the aggregate RPC.
-      const { data: participantRows, error: participantsError } = await supabase
-        .from('match_participants')
-        .select('is_winner, deck_id, placement, life_lost, life_gained, life_damage_dealt, commander_damage_dealt, infect_dealt, eliminations_caused, matches (is_draw, duration_seconds, tracking_version)')
-        .in('deck_id', deckIds);
-
-      if (participantsError) {
-        console.error(
-          'Error fetching deck performance:',
-          getSupabaseErrorMessage(participantsError, 'Failed to fetch deck performance'),
-        );
-        setWinRates({});
-        setPerformance({});
-        return;
-      }
-
-      const participants = (participantRows as PersonalMatchParticipantRow[]) || [];
-      const decksById = new Map<string, PersonalDeckSnapshot>(
-        loadedDecks.map((deck) => [deck.id, {
-          id: deck.id,
-          name: deck.name,
-          commander: deck.commander,
-          commander_image: deck.commander_image,
-          color_identity: deck.color_identity,
-          source_type: deck.source_type,
-          source_url: deck.source_url,
-        }]),
-      );
-      const colorOverrides = new Map<string, string[]>();
-      loadedDecks.forEach((deck) => {
-        const colors = getDeckDisplayColors(deck);
-        if (colors.length > 0) colorOverrides.set(deck.id, colors);
-      });
-
-      const analytics = buildPersonalAnalytics(participants, decksById, colorOverrides);
-      const nextWinRates: Record<string, DeckWinRate> = {};
-      analytics.topDecks.forEach((deck) => {
-        nextWinRates[deck.id] = {
-          gamesPlayed: deck.gamesPlayed,
-          wins: deck.wins,
-          losses: deck.losses,
-          draws: deck.draws,
-          decisiveGames: deck.decisiveGames,
-          winRate: deck.winRate,
-        };
-      });
-      setWinRates(nextWinRates);
-
-      type PerformanceAccumulator = Omit<DeckPerformance, keyof MatchRecord>
-        & { gamesPlayed: number; wins: number; draws: number; winningDurations?: number[] };
-      const performanceMap: Record<string, PerformanceAccumulator> = {};
-      ((participantRows || []) as Array<Record<string, unknown>>).forEach((raw) => {
-        const deckId = raw.deck_id as string | null;
-        if (!deckId) return;
-        const relation = Array.isArray(raw.matches) ? raw.matches[0] : raw.matches;
-        const match = (relation || {}) as { is_draw?: boolean | null; duration_seconds?: number | null; tracking_version?: number | null };
-        const tracked = match.tracking_version != null || match.duration_seconds != null;
-        const current = performanceMap[deckId] || {
-          gamesPlayed: 0, wins: 0, draws: 0, masteryPoints: 0, trackedGames: 0, trackingCoverage: 0,
-          secondPlaces: 0, damageDealt: 0, damageTaken: 0, lifeGained: 0,
-          commanderDamage: 0, infectDealt: 0, eliminations: 0,
-          medianWinningDurationSeconds: null, winningDurations: [],
-        };
-        current.gamesPlayed += 1;
-        if (match.is_draw) current.draws += 1;
-        if (raw.is_winner) current.wins += 1;
-        if (raw.placement === 2) current.secondPlaces += 1;
-        if (tracked) {
-          current.trackedGames += 1;
-          current.damageDealt += Number(raw.life_damage_dealt || 0);
-          current.damageTaken += Number(raw.life_lost || 0);
-          current.lifeGained += Number(raw.life_gained || 0);
-          current.commanderDamage += Number(raw.commander_damage_dealt || 0);
-          current.infectDealt += Number(raw.infect_dealt || 0);
-          current.eliminations += Number(raw.eliminations_caused || 0);
-          if (raw.is_winner && match.duration_seconds != null) current.winningDurations!.push(match.duration_seconds);
-        }
-        performanceMap[deckId] = current;
-      });
-      const nextPerformance: Record<string, DeckPerformance> = {};
-      Object.entries(performanceMap).forEach(([deckId, entry]) => {
-        const { winningDurations = [], ...rest } = entry;
-        const values = [...winningDurations].sort((a, b) => a - b);
-        const middle = Math.floor(values.length / 2);
-        nextPerformance[deckId] = {
-          ...rest,
-          ...buildMatchRecord(entry),
-          masteryPoints: entry.gamesPlayed + entry.wins * 2,
-          trackingCoverage: entry.gamesPlayed
-            ? Math.round((entry.trackedGames / entry.gamesPlayed) * 100)
-            : 0,
-          medianWinningDurationSeconds: values.length
-            ? (values.length % 2
-              ? values[middle]
-              : Math.round((values[middle - 1] + values[middle]) / 2))
-            : null,
-        };
-      });
-      setPerformance(nextPerformance);
-    } catch (error) {
-      console.error('Error fetching decks:', getSupabaseErrorMessage(error, 'Failed to fetch decks'));
-      setDecks([]);
-      setWinRates({});
-      setPerformance({});
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+      void repairLoadedDeckArtwork(loadedDecks).then(repaired=>{
+        if (!current()) return;
+        const byId=new Map(repaired.map(deck=>[deck.id,deck]));
+        setDecks(previous=>previous.map(deck=>byId.get(deck.id) || deck));
+        prefetchProfileDeckImages(repaired);
+      }).catch(()=>{});
+      try {
+        const rollup=await fetchProfileDeckPerformance(supabase,userId,controller.signal);
+        if (!current()) return;
+        if (loadedDecks.some(deck=>!rollup.performance[deck.id])) throw new Error('ANALYTICS_CATALOG_CHANGED');
+        setWinRates(rollup.winRates);setPerformance(rollup.performance);setMetricsStatus('ready');
+      } catch { if (current()) setMetricsStatus('error'); }
+    } catch {
+      if (current()) { setDecks([]);setCatalogError(true);setMetricsStatus('error'); }
+    } finally { if (current()) setLoading(false); }
+  },[userId]);
+  useEffect(()=>{
+    void refresh();
+    return ()=>{requestRef.current?.abort();};
+  },[refresh]);
 
   const deleteDeck = useCallback(async (deckId: string) => {
     const { error } = await supabase.from('decks').delete().eq('id', deckId);
@@ -583,10 +459,13 @@ export function useProfileDecks(userId: string | undefined) {
   }, []);
 
   return {
-    decks,
-    winRates,
-    performance,
-    loading,
+    decks: dataUserId===userId ? decks : [],
+    winRates: dataUserId===userId ? winRates : {},
+    performance: dataUserId===userId ? performance : {},
+    loading: dataUserId!==userId || loading,
+    metricsLoading: dataUserId!==userId || metricsStatus==='loading',
+    metricsError: dataUserId===userId && metricsStatus==='error',
+    catalogError: dataUserId===userId && catalogError,
     refresh,
     deleteDeck,
     toggleDeckFavorite,

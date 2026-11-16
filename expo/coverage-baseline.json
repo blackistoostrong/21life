@@ -658,5 +658,23 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "lib/profile-catalog-query.ts": {
+    "lines": 100,
+    "branches": 64.28,
+    "functions": 100,
+    "statements": 80
+  },
+  "../packages/domain/profile-catalog-metrics.ts": {
+    "lines": 87.5,
+    "branches": 75,
+    "functions": 100,
+    "statements": 82.35
+  },
+  "lib/profile-catalog-pages.ts": {
+    "lines": 95.12,
+    "branches": 81.15,
+    "functions": 80,
+    "statements": 80.32
   }
 }

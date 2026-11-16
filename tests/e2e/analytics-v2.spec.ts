@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { analyticsDashboardFixture } from '../fixtures/analytics-dashboard';
 import { fixtureLogin } from './fixture-login';
+import { profileCatalogFixture } from '../fixtures/profile-catalog';
 
 test('analytics v2 refuses incomplete data and retries without a facts fallback',async({ page })=>{
   test.skip(process.env.E2E_ANALYTICS_FLOW !== '1','Requires a disposable authenticated backend.');
@@ -40,4 +41,35 @@ test('analytics v2 cancels its owned request when navigating away',async({ page 
     await expect(page).toHaveURL(/\/profile$/);
     await expect.poll(()=>cancelled).toBe(requests);
   } finally { releases.forEach(release=>release()); }
+});
+
+test('profile v2 reports backend errors and retries with neutral draws',async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  const userId=process.env.E2E_USER_ID!;
+  const deckId='00000000-0000-4000-8000-000000000001';
+  let valid=false;const legacy:string[]=[];
+  page.on('request',request=>{
+    if(/\/rest\/v1\/match_participants\?/.test(request.url()) || /\/rpc\/get_profile_deck_performance$/.test(request.url())) legacy.push(request.url());
+  });
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>route.fulfill({status:200,json:{
+    schemaVersion:2,scope:'personal',userId,revision:'a'.repeat(32),total:1,next:null,
+    decks:[{id:deckId,user_id:userId,group_id:null,name:'DEV26 profile metric fixture',commander:'Atraxa, Praetors’ Voice',
+      commander_image:'https://cards.scryfall.io/normal/front/0/0/00000000-0000-4000-8000-000000000001.jpg',
+      commander_cmc:4,commander_options:[],color_identity:['W','U','B','G'],bracket:'3',source_type:'manual',source_url:null,
+      is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:'2026-01-01T00:00:00Z'}],
+  }}));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+    const report=profileCatalogFixture();report.userId=userId;report.decks[0].deck_id=deckId;
+    return route.fulfill({status:200,json:{...report,complete:valid}});
+  });
+  await fixtureLogin(page);
+  await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'Statistics unavailable.'})).toBeVisible();
+  const card=page.getByRole('region',{name:'Your player card'});
+  await expect(card.getByText('—',{exact:true})).toHaveCount(2);
+  valid=true;
+  await page.getByRole('alert').filter({hasText:'Statistics unavailable.'}).getByRole('button',{name:'Retry',exact:true}).click();
+  await expect(card.getByText('50%',{exact:true})).toBeVisible();
+  await expect(page.getByRole('alert').filter({hasText:'Statistics unavailable.'})).toHaveCount(0);
+  expect(legacy).toEqual([]);
 });

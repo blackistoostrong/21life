@@ -66,7 +66,8 @@ import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { runWhenIdle } from '@/lib/idle-work';
-import { type DeckWinRateSnapshot } from '@/lib/personal-analytics';
+import { fetchCompleteProfileCatalog,fetchProfileCatalogPage,parseProfileCatalogPage } from '@/lib/profile-catalog-pages';
+import { useProfileMetrics } from '@/hooks/use-profile-metrics';
 import { MANA_COLOR_LABELS, MANA_COLOR_ORDER } from '@/lib/mana-colors';
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
@@ -74,8 +75,6 @@ import { ManaColorPills } from '@/components/ui/mana-color-pills';
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
-  buildDeckPerformanceStats,
-  type DeckPerformanceInputRow,
   type DeckPerformanceStats,
 } from '@/lib/deck-performance-analytics';
 import { getDeckMastery, getHighestMasteryDeck } from '@/lib/deck-mastery';
@@ -109,7 +108,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { buildMatchRecord, formatMatchRecord } from '@/lib/win-rate';
 
 interface Deck {
   id: string;
@@ -134,7 +133,6 @@ interface Deck {
   } | null;
 }
 
-const PROFILE_DECK_COLUMNS = 'id, user_id, group_id, name, commander, commander_image, source_url, source_type, bracket, color_identity, commander_options, commander_cmc, is_favorite, is_archived, created_at, updated_at';
 
 interface Profile {
   id: string;
@@ -565,13 +563,20 @@ function uniqueCommanderOptions(options: ImportedCommanderOption[]) {
   );
 }
 
+const EMPTY_PROFILE_DECKS:Deck[]=[];
+
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { copy: t } = useLanguage();
-  const { adminMode } = usePlatformAdmin();
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const { adminMode, loading:adminLoading } = usePlatformAdmin();
+  const [catalogDecks,setDecks]=useState<Deck[]>([]);
+  const catalogKey=user ? user.id+':'+adminMode : null;
+  const [loadedCatalogKey,setLoadedCatalogKey]=useState<string|null>(null);
+  const [catalogError,setCatalogError]=useState(false);
+  const catalogRequestRef=useRef<AbortController|null>(null);
+  const decks=loadedCatalogKey===catalogKey ? catalogDecks : EMPTY_PROFILE_DECKS;
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<AddDeckMode>('choose');
@@ -646,8 +651,7 @@ export default function ProfilePage() {
   const [deckSearchQuery, setDeckSearchQuery] = useState('');
   const [deckColorFilter, setDeckColorFilter] = useState<string[]>([]);
   const [deckPlayerFilter, setDeckPlayerFilter] = useState('all');
-  const [deckWinRates, setDeckWinRates] = useState<Map<string, DeckWinRateSnapshot>>(new Map());
-  const [deckPerformance, setDeckPerformance] = useState<Map<string, DeckPerformanceStats>>(new Map());
+  const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
   const [deckSort, setDeckSort] = useState<'recent' | 'winRate' | 'gamesPlayed' | 'damage' | 'eliminations' | 'fastest'>('recent');
   const [detailsDeck, setDetailsDeck] = useState<Deck | null>(null);
   const currentProfile = user ? profiles.find((profile) => profile.id === user.id) || null : null;
@@ -844,121 +848,37 @@ export default function ProfilePage() {
     }
   }, []);
 
-  const fetchDeckWinRates = useCallback(async (loadedDecks: Deck[]) => {
-    const deckIds = loadedDecks.map((deck) => deck.id).filter(Boolean);
-    if (deckIds.length === 0) {
-      setDeckWinRates(new Map());
-      setDeckPerformance(new Map());
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('match_participants')
-        .select(`
-          is_winner,
-          deck_id,
-          placement,
-          life_lost,
-          life_gained,
-          life_damage_dealt,
-          commander_damage_dealt,
-          infect_dealt,
-          eliminations_caused,
-          group_damage_dealt,
-          group_damage_events,
-          matches (is_draw, duration_seconds, tracking_version)
-        `)
-        .in('deck_id', deckIds);
-
-      if (error) throw error;
-
-      const decksById = new Map(loadedDecks.map((deck) => [deck.id, deck]));
-      type PerformanceMatch = { is_draw?: boolean | null; duration_seconds?: number | null; tracking_version?: number | null };
-      const performanceRows = ((data || []) as Array<{
-        is_winner: boolean;
-        deck_id: string;
-        placement?: number | null;
-        life_lost?: number;
-        life_gained?: number;
-        life_damage_dealt?: number;
-        commander_damage_dealt?: number;
-        infect_dealt?: number;
-        eliminations_caused?: number;
-        group_damage_dealt?: number;
-        group_damage_events?: number;
-        matches?: PerformanceMatch | PerformanceMatch[] | null;
-      }>).map((row): DeckPerformanceInputRow => {
-        const deck = decksById.get(row.deck_id);
-        const match = Array.isArray(row.matches) ? row.matches[0] : row.matches;
-        return {
-          deck_id: row.deck_id,
-          guest_deck_id: null,
-          deck_name: deck?.name || null,
-          guest_deck_name: null,
-          deck_commander: deck?.commander || null,
-          guest_deck_commander: null,
-          deck_commander_image: deck?.commander_image || null,
-          guest_deck_commander_image: null,
-          is_winner: row.is_winner,
-          is_draw: Boolean(match?.is_draw),
-          placement: row.placement ?? null,
-          duration_seconds: match?.duration_seconds ?? null,
-          tracking_version: match?.tracking_version ?? null,
-          life_lost: row.life_lost || 0,
-          life_gained: row.life_gained || 0,
-          life_damage_dealt: row.life_damage_dealt || 0,
-          commander_damage_dealt: row.commander_damage_dealt || 0,
-          infect_dealt: row.infect_dealt || 0,
-          eliminations_caused: row.eliminations_caused || 0,
-          group_damage_dealt: row.group_damage_dealt || 0,
-          group_damage_events: row.group_damage_events || 0,
-        };
-      });
-      const performance = buildDeckPerformanceStats(performanceRows);
-      setDeckPerformance(new Map(performance.map((entry) => [entry.deckId, entry])));
-      setDeckWinRates(new Map(performance.map((entry) => [entry.deckId, entry])));
-    } catch (error) {
-      console.error('Error fetching deck win rates:', error);
-      setDeckWinRates(new Map());
-      setDeckPerformance(new Map());
-    }
-  }, []);
+  useEffect(()=>()=>catalogRequestRef.current?.abort(),[catalogKey]);
 
   const fetchDecks = useCallback(async () => {
-    if (!user) return;
-
+    if (!user || adminLoading) return;
+    catalogRequestRef.current?.abort();
+    const controller=new AbortController();catalogRequestRef.current=controller;
+    setCatalogError(false);
     try {
-      const query = adminMode
-        ? supabase
-            .from('decks')
-            .select(`${PROFILE_DECK_COLUMNS}, profiles:user_id (username, display_name)`)
-            .is('group_id', null)
-            .order('created_at', { ascending: false })
-        : supabase
-            .from('decks')
-            .select(PROFILE_DECK_COLUMNS)
-            .is('group_id', null)
-            .eq('user_id', user!.id)
-            .order('created_at', { ascending: false });
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      const loadedDecks = (data || []) as Deck[];
+      const data=await fetchCompleteProfileCatalog(async(after,revision,signal)=>{
+        if(!adminMode) return fetchProfileCatalogPage(supabase,user.id,after,revision,signal);
+        const params=new URLSearchParams();if(after)params.set('after',after);if(revision)params.set('revision',revision);
+        const response=await fetch('/api/admin/profile-catalog?'+params,{cache:'no-store',signal});
+        if(!response.ok) throw new Error('PROFILE_CATALOG_UNAVAILABLE');
+        return parseProfileCatalogPage(await response.json(),null,after,revision);
+      },controller.signal);
+      if(controller.signal.aborted) return;
+      const loadedDecks=data as unknown as Deck[];
+      setLoadedCatalogKey(catalogKey);
       setDecks(loadedDecks);
-      void fetchDeckWinRates(loadedDecks);
       runWhenIdle(() => {
+        if(controller.signal.aborted) return;
         void syncMissingDeckMetadata(loadedDecks).finally(() => {
           void syncMissingCommanderCmc();
         });
       }, { timeoutMs: 6000 });
     } catch (error) {
-      console.error('Error fetching decks:', error);
+      if(!controller.signal.aborted) {setCatalogError(true);setLoadedCatalogKey(catalogKey);setDecks([]);}
     } finally {
-      setLoading(false);
+      if(!controller.signal.aborted) setLoading(false);
     }
-  }, [adminMode, fetchDeckWinRates, syncMissingCommanderCmc, syncMissingDeckMetadata, user]);
+  }, [adminMode, adminLoading, catalogKey, syncMissingCommanderCmc, syncMissingDeckMetadata, user]);
 
   const visibleDecks = useMemo(() => {
     const activeDecks = decks.filter((deck) => !deck.is_archived);
@@ -1022,7 +942,8 @@ export default function ProfilePage() {
     const wins = performances.reduce((total, entry) => total + entry.wins, 0);
     const favorite = getHighestMasteryDeck(visibleDecks, (deck) => deckPerformance.get(deck.id));
     const mostPlayed = [...visibleDecks].sort((a, b) => (deckPerformance.get(b.id)?.gamesPlayed || 0) - (deckPerformance.get(a.id)?.gamesPlayed || 0))[0];
-    return { games, wins, winRate: games ? Math.round((wins / games) * 100) : 0, favorite, mostPlayed };
+    const draws=performances.reduce((total,entry)=>total+entry.draws,0);
+    return { games, wins, winRate: buildMatchRecord({gamesPlayed:games,wins,draws}).winRate, favorite, mostPlayed };
   }, [deckPerformance, visibleDecks]);
 
   const toggleDeckFavorite = useCallback(async (deck: Deck) => {
@@ -2399,6 +2320,8 @@ export default function ProfilePage() {
 
       <main className="web-container mx-auto max-w-[92rem] px-3 py-5 sm:px-4 sm:py-8">
         {/* Profile Info */}
+        {catalogError ? <div role="alert" className="mb-4 rounded-xl border border-amber-400/30 p-4"><p>{t({it:'Catalogo non disponibile. Riprova.',en:'Catalog unavailable. Please retry.'})}</p><Button onClick={()=>void fetchDecks()}>{t({it:'Riprova',en:'Retry'})}</Button></div> : null}
+        {metricsError ? <div role="alert" className="mb-4 rounded-xl border border-amber-400/30 p-4"><p>{t({ it: 'Statistiche non disponibili. Nessun dato parziale viene mostrato.', en: 'Statistics unavailable. Partial data is not displayed.' })}</p><Button onClick={refreshMetrics}>{t({ it: 'Riprova', en: 'Retry' })}</Button></div> : null}
         <MotionPanel>
           <Card className="phyrexian-panel-strong mb-8 overflow-hidden">
             <CardContent className="relative pt-6">
@@ -2667,7 +2590,7 @@ export default function ProfilePage() {
           </Card>
         )}
 
-        {!adminMode && (
+        {!adminMode && !catalogError && (
           <section className="web-player-card mb-8 overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-950/45 via-background to-violet-950/35 p-4 shadow-[0_16px_42px_rgba(6,182,212,0.08)] sm:p-5" aria-label={t({ it: 'La tua scheda giocatore', en: 'Your player card' })}>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div><p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300/70">{t({ it: 'Scheda giocatore', en: 'Player card' })}</p><h2 className="mt-1 text-xl font-bold text-foreground">{t({ it: 'La tua Command Zone', en: 'Your Command Zone' })}</h2></div>
@@ -2675,12 +2598,12 @@ export default function ProfilePage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                { label: t({ it: 'Partite giocate', en: 'Matches played' }), value: personalSnapshot.games, tone: 'from-cyan-500/20 to-cyan-950/10', icon: Swords },
-                { label: t({ it: 'Win rate', en: 'Win rate' }), value: `${personalSnapshot.winRate}%`, tone: 'from-emerald-500/20 to-emerald-950/10', icon: Trophy },
+                { label: t({ it: 'Partite giocate', en: 'Matches played' }), value: metricsLoading || metricsError ? '—' : personalSnapshot.games, tone: 'from-cyan-500/20 to-cyan-950/10', icon: Swords },
+                { label: t({ it: 'Win rate', en: 'Win rate' }), value: metricsLoading || metricsError ? '—' : `${personalSnapshot.winRate}%`, tone: 'from-emerald-500/20 to-emerald-950/10', icon: Trophy },
                 { label: t({ it: 'Mazzi attivi', en: 'Active decks' }), value: visibleDecks.length, tone: 'from-violet-500/20 to-violet-950/10', icon: Star },
               ].map(({ label, value, tone, icon: Icon }) => <div key={label} className={`rounded-xl border border-white/10 bg-gradient-to-br ${tone} p-3`}><div className="flex items-center justify-between text-xs text-muted-foreground"><span>{label}</span><Icon className="h-4 w-4 text-white/70" /></div><p className="mt-2 text-2xl font-bold text-foreground">{value}</p></div>)}
             </div>
-            {personalSnapshot.favorite || personalSnapshot.mostPlayed ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-amber-300/15 bg-amber-500/5 p-3"><p className="text-xs text-amber-200/70">{t({ it: 'Mazzo preferito', en: 'Favorite deck' })}</p><p className="mt-1 truncate font-semibold text-foreground">{personalSnapshot.favorite?.name || '—'}</p></div><div className="rounded-xl border border-cyan-300/15 bg-cyan-500/5 p-3"><p className="text-xs text-cyan-200/70">{t({ it: 'Più giocato', en: 'Most played' })}</p><p className="mt-1 truncate font-semibold text-foreground">{personalSnapshot.mostPlayed?.name || '—'}</p></div></div> : null}
+            {!metricsLoading && !metricsError && (personalSnapshot.favorite || personalSnapshot.mostPlayed) ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-amber-300/15 bg-amber-500/5 p-3"><p className="text-xs text-amber-200/70">{t({ it: 'Mazzo preferito', en: 'Favorite deck' })}</p><p className="mt-1 truncate font-semibold text-foreground">{personalSnapshot.favorite?.name || '—'}</p></div><div className="rounded-xl border border-cyan-300/15 bg-cyan-500/5 p-3"><p className="text-xs text-cyan-200/70">{t({ it: 'Più giocato', en: 'Most played' })}</p><p className="mt-1 truncate font-semibold text-foreground">{personalSnapshot.mostPlayed?.name || '—'}</p></div></div> : null}
           </section>
         )}
 
@@ -2779,7 +2702,7 @@ export default function ProfilePage() {
           />
         ) : null}
 
-        {visibleDecks.length === 0 ? (
+        {catalogError ? null : visibleDecks.length === 0 ? (
           <Card className="phyrexian-panel">
             <CardContent className="py-12 text-center">
               {adminMode && deckPlayerFilter !== 'all' && decks.length > 0 ? (
@@ -2890,7 +2813,7 @@ export default function ProfilePage() {
 
                       <div className="web-deck-footer mt-auto flex flex-col gap-3 lg:flex-row lg:items-end">
                         <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-7">
-                          <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} />
+                          {!metricsLoading && !metricsError ? <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} /> : null}
                           <div className="min-w-[4.75rem] text-center">
                             <p className="text-2xl font-black text-white">{performance?.winRate ?? 0}%</p>
                             <p className="text-xs text-white/60">Win rate</p>
@@ -2996,7 +2919,7 @@ export default function ProfilePage() {
                   </SheetHeader>
                 </div>
                 <div className="space-y-6 p-5">
-                  <DeckPerformancePanel performance={performance} />
+                  {!metricsLoading && !metricsError ? <DeckPerformancePanel performance={performance} /> : null}
                 </div>
               </>
             );

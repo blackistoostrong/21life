@@ -42,4 +42,4 @@ Questi sono confini preparatori necessari a DEV26-05. Non sostituiscono la scomp
 | Partita web |1718|43|15|
 | Partita mobile |2140|37|12|
 
-Inventario dettagliato in artifacts/dev26/architecture-before.json (locale ignorato). Non esiste ancora una misura dopo del refactoring schermate: restano invariate. Il dominio condiviso è verificato da quality web394test/mobile352test,51testscript, build Next e Android export con configurazione sintetica. Questo non sostituisce E2E autenticati, prova iOS o smoke remoto.
+Inventario dettagliato in artifacts/dev26/architecture-before.json (locale ignorato). Il successivo step profilo estrae richieste/contratti e rimuove scansioni raw e fallback; `use-profile-metrics`, i moduli condivisi `profile-catalog-*` e le API admin possiedono ora questi confini. Questo avanzamento non costituisce ancora la misura dopo e le prove11d dell'intero refactoring: tavolo e schermate partita restano da scomporre. Le verifiche aggiornate sono nella checklist e in DEV26_ANALYTICS.md; i vecchi conteggi394web/352mobile rappresentano solo la baseline storica.

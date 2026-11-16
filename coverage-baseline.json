@@ -676,5 +676,47 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "expo/lib/profile-catalog-pages.ts": {
+    "lines": 97.56,
+    "branches": 94.2,
+    "functions": 100,
+    "statements": 91.8
+  },
+  "expo/lib/profile-catalog-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/global-profile-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/profile-catalog-metrics.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/profile-catalog-pages.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/profile-catalog-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/profile-catalog-metrics.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
   }
 }

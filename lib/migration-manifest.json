@@ -494,6 +494,11 @@
       "version": "20261116135644",
       "name": "20261116135644_analytics_dashboard_v2.sql",
       "checksum": "ad669ddcc30e98287d109debb1e50a166a74396ef8ee767f4aec8062e937b7fc"
+    },
+    {
+      "version": "20261116150922",
+      "name": "20261116150922_profile_catalog_metrics_v2.sql",
+      "checksum": "34ad64ed1a1c154dbcb72b5d0b5076a3d3d10e96ab7e5e40fb1f442d3ab9df15"
     }
   ]
 }
