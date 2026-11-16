@@ -8,7 +8,7 @@
     let target;
     try { target = new URL(anchor.href); } catch { return; }
     const type = target.origin === 'https://app.21life.win' && target.pathname === '/' ? 'web'
-      : target.origin === 'https://github.com' && /^\/marco201091-glitch\/21life\/releases\/download\/v[0-9]+\.[0-9]+\.[0-9]+\/21life-v[0-9]+\.[0-9]+\.[0-9]+\.apk$/.test(target.pathname) ? 'apk' : null;
+      : target.origin === 'https://github.com' && /^\/(?:blackistoostrong|marco201091-glitch)\/21life\/releases\/download\/v[0-9]+\.[0-9]+\.[0-9]+\/21life-v[0-9]+\.[0-9]+\.[0-9]+\.apk$/.test(target.pathname) ? 'apk' : null;
     if (!type) return;
     try {
       if (!navigator.sendBeacon || !navigator.sendBeacon(endpoint, type)) {

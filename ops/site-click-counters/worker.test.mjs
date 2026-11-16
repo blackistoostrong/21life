@@ -20,3 +20,24 @@ test('reports storage failures instead of silently counting', async () => {
   const failing={DB:{prepare(){return {bind(){return {async run(){throw Error('unavailable')}}}}}}};
   assert.equal((await worker.fetch(req('apk'), failing)).status, 503);
 });
+
+// Run the actual browser client against a minimal DOM without sending events.
+test('browser client recognizes renamed and cached legacy APK links only', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { runInNewContext } = await import('node:vm');
+  const handlers = new Map();
+  const sent = [];
+  class Element { constructor(href) { this.href = href; } closest() { return this; } }
+  runInNewContext(readFileSync(new URL('./site-client.js', import.meta.url), 'utf8'), {
+    location: { hostname: '21life.win' }, URL, Element,
+    document: { addEventListener(name, fn) { handlers.set(name, fn); } },
+    navigator: { sendBeacon(endpoint, type) { sent.push({ endpoint, type }); return true; } },
+  });
+  for (const owner of ['blackistoostrong', 'marco201091-glitch']) {
+    handlers.get('click')({ target: new Element(`https://github.com/${owner}/21life/releases/download/v9.2.1/21life-v9.2.1.apk`) });
+  }
+  handlers.get('click')({ target: new Element('https://github.com/unrelated/21life/releases/download/v9.2.1/21life-v9.2.1.apk') });
+  handlers.get('click')({ target: new Element('https://app.21life.win/') });
+  assert.deepEqual(sent.map(x => x.type), ['apk', 'apk', 'web']);
+  assert.ok(sent.every(x => x.endpoint === 'https://21life-clicks.21life-stats.workers.dev/click'));
+});
