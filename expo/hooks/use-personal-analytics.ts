@@ -1,45 +1,24 @@
 import { useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getDeckDisplayColors } from '@/lib/deck-metadata';
-import {
-  buildPersonalAnalytics,
-  emptyPersonalAnalytics,
-  type PersonalAnalytics,
-} from '@/lib/personal-analytics';
-import { fetchPersonalAnalyticsInputs } from '@/lib/personal-analytics-query';
+import { fetchPersonalAnalyticsDashboard } from '@/lib/analytics-dashboard-query';
 import { prefetchCommanderNames, prefetchDeckImageUrls } from '@/lib/deck-image-cache';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { supabase } from '@/lib/supabase';
 
 export function usePersonalAnalytics(userId: string | undefined) {
   const analyticsQuery = useQuery({
-    queryKey: ['personal-analytics', userId],
+    queryKey: ['personal-analytics', userId, 'v2'],
     enabled: Boolean(userId),
     staleTime: 60_000,
-    queryFn: async (): Promise<PersonalAnalytics> => {
-      const { participants, decksById } = await fetchPersonalAnalyticsInputs(supabase, userId!);
-      if (decksById.size === 0) {
-        return emptyPersonalAnalytics();
-      }
-
-      const colorOverrides = new Map<string, string[]>();
-      decksById.forEach((deck, deckId) => {
-        const colors = getDeckDisplayColors(deck);
-        if (colors.length > 0) {
-          colorOverrides.set(deckId, colors);
-        }
-      });
-
-      const analyticsResult = buildPersonalAnalytics(participants, decksById, colorOverrides);
+    queryFn: async ({ signal }) => {
+      const analyticsResult = await fetchPersonalAnalyticsDashboard(supabase,userId!,{},signal);
       void prefetchDeckImageUrls([
         ...analyticsResult.topDecks.map((deck) => deck.commanderImage),
         analyticsResult.bestDeck?.commanderImage,
-        ...Array.from(decksById.values()).map((deck) => deck.commander_image),
       ], { background: true });
       void prefetchCommanderNames([
         ...analyticsResult.topDecks.map((deck) => deck.commander),
         analyticsResult.bestDeck?.commander,
-        ...Array.from(decksById.values()).map((deck) => deck.commander),
       ], { background: true });
       return analyticsResult;
     },
@@ -60,8 +39,9 @@ export function usePersonalAnalytics(userId: string | undefined) {
   }, [analyticsQuery, userId]);
 
   return {
-    analytics: analyticsQuery.data ?? null,
+    analytics: userId && !analyticsQuery.isError ? analyticsQuery.data ?? null : null,
     loading: Boolean(userId) && analyticsQuery.isPending,
+    error: analyticsQuery.isError,
     refresh,
   };
 }

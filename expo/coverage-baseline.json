@@ -635,6 +635,24 @@
     "functions": 83.33,
     "statements": 64.86
   },
+  "lib/analytics-dashboard-query.ts": {
+    "lines": 88.88,
+    "branches": 66.66,
+    "functions": 80,
+    "statements": 76
+  },
+  "../packages/domain/analytics-dashboard-contract.ts": {
+    "lines": 89.06,
+    "branches": 70,
+    "functions": 90.62,
+    "statements": 80.24
+  },
+  "../packages/domain/analytics-dashboard.ts": {
+    "lines": 87.5,
+    "branches": 61.11,
+    "functions": 81.81,
+    "statements": 90
+  },
   "../packages/domain/deck-ranking-visibility.ts": {
     "lines": 100,
     "branches": 100,

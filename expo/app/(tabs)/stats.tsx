@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView } from 'react-native';
+import { RefreshControl, ScrollView, Text } from 'react-native';
+import { Button } from '@/components/ui/button';
+import { PhyrexianPanel } from '@/components/ui/phyrexian-panel';
 import { PersonalAnalyticsSection } from '@/components/dashboard/personal-analytics-section';
 import { StatsSkeleton } from '@/components/ui/screen-skeletons';
 import { Screen } from '@/components/ui/screen';
@@ -12,14 +14,13 @@ import { useScreenInsets } from '@/hooks/use-screen-insets';
 export default function StatsScreen() {
   const { user } = useAuth();
   const { copy, language } = useLanguage();
-  const { analytics, loading, refresh } = usePersonalAnalytics(user?.id);
+  const { analytics, loading, error, refresh } = usePersonalAnalytics(user?.id);
   const [refreshing, setRefreshing] = useState(false);
   const { scrollContentStyle } = useScreenInsets();
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refresh();
-    setRefreshing(false);
+    try { await refresh(); } finally { setRefreshing(false); }
   }, [refresh]);
 
   if (loading && !analytics) {
@@ -34,7 +35,9 @@ export default function StatsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
-        <PersonalAnalyticsSection
+        {error ? <PhyrexianPanel><Text accessibilityRole="alert" style={{ color: colors.foreground }}>{language === 'it'
+          ? 'Statistiche non disponibili. Nessun risultato parziale viene mostrato.'
+          : 'Statistics unavailable. Partial results are not displayed.'}</Text><Button label={language === 'it' ? 'Riprova' : 'Retry'} onPress={()=>void refresh()} /></PhyrexianPanel> : <PersonalAnalyticsSection
           analytics={analytics}
           language={language}
           title={copy('personalAnalytics')}
@@ -58,7 +61,7 @@ export default function StatsScreen() {
           hideProvisionalDecksLabel={copy('hideProvisionalDecks')}
           provisionalDeckSampleLabel={copy('provisionalDeckSample')}
           noRankedDecksLabel={copy('noRankedDecks')}
-        />
+        />}
       </ScrollView>
     </Screen>
   );

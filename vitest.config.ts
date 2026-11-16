@@ -9,7 +9,9 @@ export default defineConfig({
     clearMocks: true,
     coverage: {
       provider: 'v8',
-      include: ['lib/**/*.ts', 'packages/domain/**/*.ts'],
+      // This isomorphic query adapter is consumed by both clients; count its
+      // actual implementation rather than only the web compatibility export.
+      include: ['lib/**/*.ts', 'packages/domain/**/*.ts', 'expo/lib/analytics-dashboard-query.ts'],
       exclude: ['lib/types/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {

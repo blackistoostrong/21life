@@ -647,6 +647,30 @@
     "functions": 100,
     "statements": 100
   },
+  "expo/lib/analytics-dashboard-query.ts": {
+    "lines": 100,
+    "branches": 93.93,
+    "functions": 100,
+    "statements": 92
+  },
+  "lib/analytics-dashboard-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/analytics-dashboard-contract.ts": {
+    "lines": 98.43,
+    "branches": 97,
+    "functions": 100,
+    "statements": 97.53
+  },
+  "packages/domain/analytics-dashboard.ts": {
+    "lines": 100,
+    "branches": 88.88,
+    "functions": 100,
+    "statements": 100
+  },
   "packages/domain/deck-ranking-visibility.ts": {
     "lines": 100,
     "branches": 100,

@@ -489,6 +489,11 @@
       "version": "20261116094824",
       "name": "20261116094824_admin_user_directory.sql",
       "checksum": "548158b55a20acf8a726da89b0186121a11da2e7696e369ce3501569b8e85f7c"
+    },
+    {
+      "version": "20261116135644",
+      "name": "20261116135644_analytics_dashboard_v2.sql",
+      "checksum": "ad669ddcc30e98287d109debb1e50a166a74396ef8ee767f4aec8062e937b7fc"
     }
   ]
 }

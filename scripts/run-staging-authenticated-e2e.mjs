@@ -71,6 +71,7 @@ try {
   process.env.E2E_GROUP_ID = groupId;
   process.env.E2E_USER_ID = userIds[0];
   process.env.E2E_LIVE_GAME_FLOW = '1';
+  process.env.E2E_ANALYTICS_FLOW = '1';
   const sessionCookies = [];
   const authClient = createServerClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     auth: { storageKey: 'sb-supabase-staging-auth-token' },
@@ -103,6 +104,7 @@ try {
       'tests/e2e/staging-archive.spec.ts',
       'tests/e2e/live-game-wizard.spec.ts',
       'tests/e2e/deck-ranking-filter.spec.ts',
+      'tests/e2e/analytics-v2.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
     ], { stdio: 'inherit' });
