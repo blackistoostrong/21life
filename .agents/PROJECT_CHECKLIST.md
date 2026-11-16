@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] DEV26-13 PM2026-11-16: area admin web utenti/filtri/report, specifica aggiunta al piano. Directory read-only, filtro server completo, riepiloghi e CSV protetto; autorizzazioni server e RPCservice-only. Lavoro sul candidato35393fc6 che contiene origin/Dev2cc63fc3 e tutti i fix recenti; nessun nuovo merge necessario al riallineamento. CIweb241 rossa solo snapshot wizard desktop dopo fix9.2.1: causa/diff da verificare, nessun bypass o snapshot aggiornato alla cieca. Versione9.3.0 confermata; punti04–12 restano aperti.
+
 Aggiornamento PM2026-11-16: mantenere VIVI questo branch `improvement/dev26-foundation` e PR241 draft durante la pulizia GitHub. Integrati gli hotfix9.2.1, recupero offline PR246 (archiviazione obbligatoria/isolamento terminali/journal/bootstrap), rinomina GitHub PR247/248 e patchSDK57.0.33. Versione candidata9.3.0/90300 preservata. I punti DEV26-04…12 non diventano completati per questo riallineamento; riprendere dal piano esistente. Nessuna nuova APK/IPA o distribuzione applicativa autorizzata. Quality web ed Expo complete PASS Node24.21.0, coperture/ratchet/soglie preservate;364testExpo. Nessun build distributivo o deploy eseguito.
 
 

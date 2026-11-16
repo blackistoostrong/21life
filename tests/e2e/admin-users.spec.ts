@@ -1,0 +1,49 @@
+import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
+
+test('admin directory: real filters, complete export, accessibility and denied member access', async ({ page, browser }) => {
+  test.skip(process.env.E2E_ADMIN_DIRECTORY !== '1', 'Requires disposable Dev admin/member fixtures.');
+  test.setTimeout(90000);
+  const tag = process.env.E2E_ADMIN_TAG!;
+  const origin = `http://127.0.0.1:${process.env.E2E_PORT || 3000}`;
+  const anonymous = await page.request.get(`${origin}/api/admin/users`);
+  expect(anonymous.status()).toBe(403);
+  await page.context().addCookies(JSON.parse(process.env.E2E_ADMIN_COOKIES!).map((cookie: { name: string; value: string }) => ({ ...cookie, url: origin })));
+  await page.goto(`/admin/users?search=${tag}`);
+  await expect(page.getByRole('heading', { name: 'Users and activity' })).toBeVisible();
+  await expect(page.getByText(/2 results from/)).toBeVisible();
+  await expect(page.getByRole('cell', { name: `${tag}_0`, exact: false }).first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: `${tag}_1`, exact: false }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const a11y = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa']).analyze();
+  expect(a11y.violations.filter(item => ['serious','critical'].includes(item.impact ?? ''))).toEqual([]);
+  await page.screenshot({ path: `artifacts/dev26/admin-users-${test.info().project.name}.png`, fullPage: true });
+  await page.getByLabel('Platform · last 30 days').selectOption('app');
+  await expect(page.getByText(/Unapplied changes:/)).toBeVisible();
+  await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(page.getByText(/1 results from/)).toBeVisible();
+  await expect(page.getByRole('cell', { name: `${tag}_0`, exact: false })).toHaveCount(0);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export results · CSV' }).click();
+  const file = await download;
+  const csv = await readFile((await file.path())!, 'utf8');
+  expect(csv).toContain(`${tag}_1`);
+  expect(csv).not.toContain(`${tag}_0`);
+  expect(csv).toContain('"Matching users","1"');
+  expect(csv).toContain('"Filter: source","app"');
+  await page.getByLabel('Email confirmation').selectOption('unconfirmed');
+  await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(page.getByText('No users match these filters.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('No users match these filters.')).toBeVisible();
+  const member = await browser.newContext();
+  try {
+    await member.addCookies(JSON.parse(process.env.E2E_MEMBER_COOKIES!).map((cookie: { name: string; value: string }) => ({ ...cookie, url: origin })));
+    const denied = await member.request.get(`${origin}/api/admin/users?format=csv`);
+    expect(denied.status()).toBe(403);
+    const memberPage = await member.newPage();
+    await memberPage.goto(`${origin}/admin/users`);
+    await expect(memberPage).toHaveURL(/\/dashboard$/);
+  } finally { await member.close(); }
+});

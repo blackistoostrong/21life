@@ -369,6 +369,11 @@ export default function DashboardPage() {
             <span className="max-w-[16rem] truncate text-sm text-muted-foreground hidden sm:block" title={user?.email}>{user?.email}</span>
             {adminMode && (
               <>
+              <Link href="/admin/users">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label={t({ it: 'Utenti e report', en: 'Users and reports' })}>
+                  <Users className="h-5 w-5" />
+                </Button>
+              </Link>
               <Link href="/admin/operations">
                 <Button
                   variant="ghost"

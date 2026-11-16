@@ -9,6 +9,8 @@ export interface RateLimitConfig {
 }
 
 export const API_RATE_LIMITS = {
+  adminUsers: { maxRequests: 60, windowSeconds: 60, failClosed: true },
+  adminUsersExport: { maxRequests: 3, windowSeconds: 60 * 60, failClosed: true },
   deckImport: { maxRequests: 200, windowSeconds: 10 * 60 },
   archidektUserDecks: { maxRequests: 10, windowSeconds: 60 * 60 },
   arenaArchidektSync: { maxRequests: 30, windowSeconds: 60 * 60, failClosed: true },

@@ -39,8 +39,18 @@ test('wizard layout previews represent every pod size and remain visually stable
   await page.getByRole('button', { name: /Next|Avanti/ }).click();
   const layoutStep = page.getByText(/The preview matches the game table|L’anteprima rispecchia il tavolo di gioco/)
     .locator('xpath=ancestor::section[1]');
+  // Capture the preview without sticky navigation covering its lower labels.
+  // The original golden and its tolerance remain unchanged.
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width >= 900) await page.setViewportSize({ ...viewport, height: 1200 });
+  await page.mouse.move(0, 0);
   await expect(layoutStep).toHaveScreenshot('wizard-layouts-4-players.png', {
     animations: 'disabled',
     maxDiffPixelRatio: 0.04,
   });
+  if (viewport) await page.setViewportSize(viewport);
+  const next = page.getByRole('button', { name: /Next|Avanti/ });
+  await expect(next).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('button', { name: /^(Seat|Posto) 1/ })).toBeVisible();
 });

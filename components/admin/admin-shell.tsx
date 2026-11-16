@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ManaLogo } from '@/components/ui/mana-logo';
@@ -15,6 +16,7 @@ interface AdminShellProps {
 
 export function AdminShell({ title, description, children }: AdminShellProps) {
   const { copy: t } = useLanguage();
+  const pathname = usePathname();
 
   return (
     <div className="web-page min-h-screen min-w-0">
@@ -38,6 +40,13 @@ export function AdminShell({ title, description, children }: AdminShellProps) {
       </header>
 
       <main className="web-container mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8">
+        <nav aria-label={t({ it: 'Sezioni amministrazione', en: 'Admin sections' })} className="mb-6 flex flex-wrap gap-2">
+          {[
+            ['/admin/users', t({ it: 'Utenti e report', en: 'Users and reports' })],
+            ['/admin/access-logs', t({ it: 'Log accessi', en: 'Access logs' })],
+            ['/admin/operations', t({ it: 'Operazioni', en: 'Operations' })],
+          ].map(([href, label]) => <Button key={href} asChild variant={pathname === href ? 'default' : 'outline'} size="sm"><Link href={href} aria-current={pathname === href ? 'page' : undefined}>{label}</Link></Button>)}
+        </nav>
         <div className="web-section-heading mb-6 sm:mb-8">
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{title}</h1>
           {description ? (

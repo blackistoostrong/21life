@@ -321,6 +321,16 @@ Integrare anche test nuovi di script/SQL e nucleo Android nel percorso quality/C
 
 ## 4. Ripresa, blocchi e rollback
 
+### Estensione PM 2026-11-16 — DEV26-13, amministrazione web
+
+Integrare i fix intervenuti su Dev (9.2.1, recupero offline PR246 e rinomina account GitHub) preservando candidata9.3.0. Non riaprire difetti già risolti né sovrascrivere le correzioni.
+
+Realizzare `/admin/users` entro l'area admin esistente: stessa autenticazione, autorizzazione server obbligatoria, navigazione tra utenti/accessi/operazioni. Directory in sola lettura con ricerca username/nome/email, conferma email, registrazione dal/al (UTC esplicito), attività recente/assenza di log e piattaforma. Filtri applicati sul server all'intero dataset, ordinamento stabile e paginazione; riepiloghi calcolati sul filtro completo, non sulla pagina caricata. Esplicitare retention30giorni e che log assenti non provano inattività storica (gli amministratori possono essere esclusi dai log).
+
+Report CSV volontario dell'intero insieme filtrato: snapshot SQL unico, limite5000utenti/8MiB, rifiuto esplicito se ecceduto, protezione formula injection, nessun export parziale presentato come completo. Non esportare password, token, IP o metadati Auth grezzi. Nessuna cancellazione/blocco utente, email o azione distruttiva. Nuove RPC solo service_role; pagina e API negano anon/non-admin. Dev soltanto per schema; autorizzazione produzione esclusa.
+
+Accettazione: controlli API auth/input/no-store/limiti/errori; confronto SQL conteggi e pagine oltre cap API su fixture sintetiche; permessi anon/authenticated/service_role reali; responsive desktop/mobile, IT/EN, tastiera/lettore schermo; filtri e CSV verificati in browser. Estrarre contratti, query e componenti per evitare un nuovo monolite. Questa estensione si aggiunge ai punti1–6 ancora vincolanti; non li sostituisce.
+
 - Alla ripresa leggere PROJECT_CHECKLIST, verificare worktree e remoto; proseguire dal primo sottopasso non provato. Non ripetere migrazioni, fixture o operazioni remote già confermate.
 - Un problema ambientale non autorizza a cambiare target in produzione, rilassare il controllo o ricreare risorse condivise. Tentare una soluzione locale/CI/clone isolato; registrare l'evidenza se non disponibile.
 - Rollback codice con revert dei commit della tranche su Dev dopo verifica delle dipendenze, mai reset/force push. Non includere cambi estranei nel revert.

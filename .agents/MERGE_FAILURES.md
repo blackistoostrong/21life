@@ -74,3 +74,10 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 - Merge locale di origin/fix/dev-offline-recovery65843c20 nel branch improvement/dev26-foundation3e2cecb5: conflitti su versioni9.3.0 contro hotfix9.2.1 e relativi lockfile/User-Agent/README. PR241 e246 remote OPEN verificati; nessuna integrazione remota o deploy.
 - Recupero: preservare versione candidata9.3.0/90300 e regole/toolchain del foundation, incorporare correzioni9.2.1 e patchSDK; rigenerare lock coerenti e verificare marker/file unmerged prima di quality. Nessun cambio DB o buildAPK/IPA.
 - Prevenzione: distinguere versione candidata dalle versioni dei rami hotfix durante il riallineamento; validare insieme manifest/lock/config nativi.
+
+
+## 2026-11-16 — PR241, snapshot wizard desktop dopo riallineamento9.2.1
+- CI43839202153: web rosso al solo screenshot wizard desktop; Expo/CodeQL verdi. Nessun merge o deploy tentato.
+- Artifact expected/actual ispezionati: nuova barra sticky Back/Next copre le etichette inferiori nella cattura del componente a viewport corto. Fix applicativo9.2.1 preservato.
+- Recupero candidato: cattura preview desktop con altezza sufficiente, golden/tolleranza invariati; ripristino viewport originale e verifica Next→scelta posti. Test locale e nuova CI necessari prima del merge.
+- Prevenzione: screenshot di componenti non deve includere overlay esterni; azioni sticky vanno verificate funzionalmente alla viewport reale. Nessun aggiornamento cieco snapshot o bypass.
