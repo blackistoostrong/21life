@@ -16,7 +16,7 @@ test('analytics v2 refuses incomplete data and retries without a facts fallback'
   valid=true;
   await page.getByRole('button',{ name: 'Retry',exact: true }).click();
   const section=page.getByRole('heading',{ name: 'Personal Analytics',exact: true }).locator('xpath=ancestor::section[1]');
-  await expect(section.getByText('50%',{ exact: true }).first()).toBeVisible();
+  await expect(section.getByText('50% win',{ exact: true })).toBeVisible();
   await expect(page.getByText('Statistics unavailable. Partial results are not displayed.',{ exact: true })).toHaveCount(0);
   expect(legacyCalls).toEqual([]);
 });
@@ -36,7 +36,7 @@ test('analytics v2 cancels its owned request when navigating away',async({ page 
   try {
     await fixtureLogin(page);
     await expect.poll(()=>requests).toBeGreaterThan(0);
-    await page.getByRole('link',{ name: 'Open profile and decks' }).click();
+    await page.getByRole('banner').getByRole('button',{ name: 'Profile',exact: true }).click();
     await expect(page).toHaveURL(/\/profile$/);
     await expect.poll(()=>cancelled).toBe(requests);
   } finally { releases.forEach(release=>release()); }

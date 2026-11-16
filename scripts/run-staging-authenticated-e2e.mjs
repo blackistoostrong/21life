@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { runMaestro } from '../expo/scripts/maestro-command.mjs';
 
 const envRoot = resolve(process.env.E2E_ENV_ROOT || '.');
@@ -59,6 +59,8 @@ try {
     if (error || !data.user) throw new Error(`Could not provision staging E2E user: ${error?.code ?? 'no user returned'}`);
     userIds.push(data.user.id);
     usernames.push(username);
+    mkdirSync(resolve('artifacts/dev26'),{ recursive: true });
+    writeFileSync(resolve(`artifacts/dev26/staging-e2e-${groupId}.json`),JSON.stringify({ groupId,userIds,usernames,email }));
   }
   const check = ({ error }) => { if (error) throw new Error(`Staging E2E seed failed: ${error.code}`); };
   check(await supabase.from('groups').insert({ id: groupId, name: 'IMP synthetic playgroup', created_by: userIds[0] }));
@@ -116,6 +118,7 @@ try {
     console.log('Staging finalization idempotency verified: exactly 2 matches for 2 browser flows.');
   }
 } finally {
+  let cleanupVerified=true;
   // Playwright error context can include entered passwords; redact before retaining evidence.
   const redact = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -131,28 +134,31 @@ try {
   try { redact(resolve('artifacts/e2e/maestro')); } catch (error) { if (error.code !== 'ENOENT') exitCode = 1; }
   if (userIds.length) {
     const { error: groupError } = await supabase.from('groups').delete().eq('id', groupId);
-    if (groupError) { console.error('Could not clean up disposable staging E2E group.'); exitCode = 1; }
+    if (groupError) { console.error('Could not clean up disposable staging E2E group.'); exitCode = 1; cleanupVerified=false; }
   }
   for (const userId of userIds) {
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) {
       console.error('Could not clean up the disposable staging E2E user.');
       exitCode = 1;
+      cleanupVerified=false;
     }
   }
   const { count, error: cleanupError } = await supabase.from('groups').select('id', { count: 'exact', head: true }).eq('id', groupId);
   if (cleanupError || count !== 0) {
     console.error('Disposable staging group cleanup verification failed.');
     exitCode = 1;
+    cleanupVerified=false;
   }
   for (const userId of userIds) {
     const { data, error } = await supabase.auth.admin.getUserById(userId);
     if (data?.user || (error && error.status !== 404 && error.code !== 'user_not_found')) {
       console.error('Disposable staging user cleanup verification failed.');
       exitCode = 1;
+      cleanupVerified=false;
     }
   }
-  console.log(`Staging fixture cleanup ${exitCode === 0 ? 'verified' : 'finished with failures'}.`);
+  console.log(`Staging fixture cleanup ${cleanupVerified ? 'verified' : 'FAILED'}.`);
 }
 
 process.exitCode = exitCode;
