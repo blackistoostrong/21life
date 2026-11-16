@@ -20,6 +20,8 @@ Responsibilities:
 
 Unit invariants cover account/group isolation, migration ordering, retained legacy data on quota failure, future/corrupt envelopes, operation validation, pending-game replacement refusal, late acknowledgements and unavailable storage. The live browser flow additionally injects real Storage quota failures, checks the warning and durable snapshot, then restores storage/network and verifies that the in-memory action reaches the server exactly once.
 
+Verified commit `b8cd22fa`: 17 dedicated unit tests and full web quality (445 tests, 53 script tests, 107-file coverage ratchet) pass. Journal coverage floors increased from zero; no existing floor was lowered. Next build passes with 54 routes. Real Dev desktop/mobile E2E passes with four players and two clients, including offline/reload, simulated expired session, concurrent mutations, injected quota failure and recovery, lost finalization response, exactly two saved matches for two flows, and verified fixture cleanup. Evidence: `artifacts/dev26/quality-web-journal-candidate.log`, `web-journal-build.log`, `web-journal-e2e.log`. Integration on Dev remains pending with draft PR241.
+
 Still required for DEV26-05: a shared web/native presentation model, explicit authentication-required state, account-change/in-flight cancellation, same-browser multi-tab queue ownership, the full recovery interaction for retained incompatible journals, and telemetry/retention documentation. Native shadow copies/outbox and recent PR246 fixes remain intact. No database migration is introduced by this journal change.
 
 ## Existing response-listener warning

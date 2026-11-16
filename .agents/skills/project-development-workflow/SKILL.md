@@ -45,6 +45,7 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 - Admin user reports: `/admin/users` uses the existing login/administrator role; `hooks/use-admin-users.ts` owns URL/filter/request lifecycle, `components/admin/admin-users-panel.tsx` presentation, `/api/admin/users` session/role/rate limits and export, `lib/admin-users-server.ts` service-only aggregate RPC. See `docs/ADMIN_USER_REPORTS.md`; no privileged client in browser code.
 - `lib/`: web domain logic, authentication, data access, validation, and security utilities.
 - `packages/domain/`: pure shared rules for win rate, participant identity and provisional rankings; legacy web/mobile import paths remain compatibility adapters. Both quality gates enforce platform-free imports and acyclic dependencies.
+- Web game journal: `lib/live-game-journal-types.ts` owns types, `lib/live-game-journal-contract.ts` validation, `lib/live-game-offline.ts` account/group storage and acknowledgement-scoped removal; `components/live-game/web-journal-warning.tsx` renders persistent errors. Native outbox/shadow copies remain separate pending lifecycle refactoring. See `docs/DEV26_WEB_JOURNAL.md`.
 - `tests/`: web unit, integration, security, end-to-end tests, and snapshots.
 - `expo/`: Expo SDK 57 / React Native client.
   - `expo/app/`: Expo Router screens and navigation.
