@@ -37,6 +37,9 @@ test('admin directory: real filters, complete export, accessibility and denied m
   await expect(page.getByText('No users match these filters.')).toBeVisible();
   await page.reload();
   await expect(page.getByText('No users match these filters.')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText(/1 results from/)).toBeVisible();
+  await expect(page.getByLabel('Email confirmation')).toHaveValue('all');
   const member = await browser.newContext();
   try {
     await member.addCookies(JSON.parse(process.env.E2E_MEMBER_COOKIES!).map((cookie: { name: string; value: string }) => ({ ...cookie, url: origin })));

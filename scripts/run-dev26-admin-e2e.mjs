@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
@@ -24,6 +25,7 @@ try {
     check(result);
     if (!result.data.user) throw new Error('Missing synthetic user');
     created.push({ id: result.data.user.id, email });
+    writeFileSync(resolve('artifacts/dev26/admin-e2e-fixtures.json'), JSON.stringify({ tag, created }));
   }
   adminEmail = created[0].email;
   check(await admin.from('platform_admin_emails').insert({ email: adminEmail }));
@@ -53,11 +55,19 @@ try {
   exitCode = run.status ?? 1;
 } finally {
   let cleaned = true;
+  const cleanupFailure = (stage, error) => {
+    cleaned = false;
+    console.error(`Synthetic cleanup failed at ${stage}: ${error?.code || error?.status || 'verification'}`);
+  };
   if (adminEmail) {
-    const result = await admin.from('platform_admin_emails').delete().eq('email', adminEmail);
-    if (result.error) cleaned = false;
-    const verify = await admin.from('platform_admin_emails').select('email').eq('email', adminEmail);
-    if (verify.error || verify.data?.length) cleaned = false;
+    let verified = false;
+    for (let attempt = 0; attempt < 3 && !verified; attempt += 1) {
+      const result = await admin.from('platform_admin_emails').delete().eq('email', adminEmail);
+      const verify = await admin.from('platform_admin_emails').select('email').eq('email', adminEmail);
+      verified = !result.error && !verify.error && verify.data?.length === 0;
+      if (!verified) console.error(`Synthetic allowlist cleanup retry: ${result.error?.code || verify.error?.code || 'row remains'}`);
+    }
+    if (!verified) cleanupFailure('allowlist');
   }
   for (const user of created) {
     // Revoke the synthetic sessions before deleting their accounts.
@@ -66,15 +76,15 @@ try {
     if (!login.error) await client.auth.signOut({ scope: 'global' });
     const result = await admin.auth.admin.deleteUser(user.id);
     const verify = await admin.auth.admin.getUserById(user.id);
-    if (result.error || verify.data?.user || (verify.error && verify.error.status !== 404 && verify.error.code !== 'user_not_found')) cleaned = false;
+    if (result.error || verify.data?.user || (verify.error && verify.error.status !== 404 && verify.error.code !== 'user_not_found')) cleanupFailure('account', result.error || verify.error);
   }
   if (created.length) {
     const keys = created.flatMap(user => [`adminUsers:user:${user.id}`, `adminUsersExport:user:${user.id}`]);
     const remove = await admin.from('api_rate_limits').delete().in('bucket_key', keys);
     const verify = await admin.from('api_rate_limits').select('bucket_key').in('bucket_key', keys);
-    if (remove.error || verify.error || verify.data?.length) cleaned = false;
+    if (remove.error || verify.error || verify.data?.length) cleanupFailure('rate buckets', remove.error || verify.error);
     const logs = await admin.from('access_logs').select('id', { count: 'exact', head: true }).in('user_id', created.map(user => user.id));
-    if (logs.error || logs.count !== 0) cleaned = false;
+    if (logs.error || logs.count !== 0) cleanupFailure('logs', logs.error);
   }
   console.log(`Synthetic admin/member and allowlist cleanup: ${cleaned ? 'verified' : 'FAILED'}`);
   if (!cleaned) exitCode = 1;

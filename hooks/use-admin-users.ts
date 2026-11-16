@@ -24,7 +24,7 @@ export function useAdminUsers() {
 
   const apply = useCallback((next: AdminUserFilters) => {
     setFilters(next);
-    window.history.replaceState(null, '', `/admin/users?${adminUserQuery(next)}`);
+    window.history.pushState(null, '', `/admin/users?${adminUserQuery(next)}`);
   }, []);
   useEffect(() => {
     if (!ready) return;

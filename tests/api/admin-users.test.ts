@@ -61,6 +61,13 @@ describe('admin user directory boundary', () => {
     mocks.rpcError = false; mocks.client = false;
     expect((await GET(new Request('https://example.test/api/admin/users'))).status).toBe(503);
   });
+  it('refuses exports above the byte limit even when the matching count is small', async () => {
+    const fixture = fixtureReport();
+    mocks.data = { ...fixture, pageSize: 5001, users: [{ ...fixture.users[0], displayName: 'x'.repeat(8 * 1024 * 1024) }] };
+    const response = await GET(new Request('https://example.test/api/admin/users?format=csv'));
+    expect(response.status).toBe(413);
+    expect(response.headers.get('content-disposition')).toBeNull();
+  });
   it('preserves fail-closed rate limiting and Retry-After', async () => {
     mocks.limited = true;
     const response = await GET(new Request('https://example.test/api/admin/users?format=csv'));
