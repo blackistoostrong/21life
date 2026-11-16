@@ -64,3 +64,8 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 - Root cause reproduced locally: desktop transition-property override removed transform/translate/scale animation. Existing active translate-y-px jumps a centered counter button away from pointer before mouseup; its rotated wrapper intercepts clicks. Without override the same real click changes40to41; with override timeout/life40.
 - Recovery: remove only transition-property override, retaining Button default transition-all; phone and gameplay logic unchanged. Verify existing desktop/mobile life-feedback tests on fresh build and remote required checks before merge.
 - Prevention: desktop restyle changes to shared Button must run actual quick-game life-feedback E2E, including normal/system/app reduced motion; setup-only smoke is insufficient.
+
+## 2026-11-16 — PR246 conflitto documentale dopo PR248
+- Stato remoto OPEN/DIRTY verificato prima del recupero. Merge locale origin/Dev30ad2a90 fallito esclusivamente su .agents/PROJECT_CHECKLIST.md: append concorrenti dei registri offline e rename.
+- Risoluzione: preservate entrambe le sezioni; nessuna scelta ours/theirs sull'intero file. Verifica assenza file unmerged/marker, quindi nuova CI obbligatoria prima del merge Dev. Nessun deploy/tag/APK/IPA.
+- Prevenzione: controllare base e HEAD dopo aggiornamenti concorrenti della checklist; registrare la causa prima di riprendere compilazioni dipendenti.
