@@ -35,7 +35,7 @@ Open [**app.21life.win**](https://app.21life.win) in a modern browser. The web a
 
 ### Android
 
-Download the signed APK from the [**official download page**](https://21life.win/download/) or [GitHub Releases](https://github.com/marco201091-glitch/21life/releases/latest). Each new release includes a SHA-256 checksum.
+Download the signed APK from the [**official download page**](https://21life.win/download/) or [GitHub Releases](https://github.com/blackistoostrong/21life/releases/latest). Each new release includes a SHA-256 checksum.
 
 For automatic update checks with [Obtainium](https://obtainium.imranr.dev/):
 
@@ -43,7 +43,7 @@ For automatic update checks with [Obtainium](https://obtainium.imranr.dev/):
 2. Paste the repository URL:
 
    ```text
-   https://github.com/marco201091-glitch/21life
+   https://github.com/blackistoostrong/21life
    ```
 
 3. Confirm the detected release and install its APK.
@@ -52,7 +52,7 @@ Use the standard production APK when updating an existing production installatio
 
 ### iPhone and iPad
 
-The web app works in the browser. [**Unsigned IPA builds**](https://github.com/marco201091-glitch/21life/releases) are provided for compatible **TrollStore Lite** installations. They are built on Expo from the production release source, include iPad support and need a compatible sideloading setup. They are not App Store releases.
+The web app works in the browser. [**Unsigned IPA builds**](https://github.com/blackistoostrong/21life/releases) are provided for compatible **TrollStore Lite** installations. They are built on Expo from the production release source, include iPad support and need a compatible sideloading setup. They are not App Store releases.
 
 The website's download page lists Android and Web only.
 
@@ -100,7 +100,7 @@ See the [guide](https://21life.win/guida/) and [FAQ](https://21life.win/supporto
 - Improved guest management on iPad, including form recovery on errors and safer claim sharing.
 - Updated web/mobile tooling and expanded automated regression checks.
 
-Read the [release notes](docs/releases/9.1.1.md) and [official releases](https://github.com/marco201091-glitch/21life/releases).
+Read the [release notes](docs/releases/9.1.1.md) and [official releases](https://github.com/blackistoostrong/21life/releases).
 
 ## Domains and compatibility
 
@@ -117,7 +117,7 @@ Existing accounts and data are preserved. Previous production endpoints remain a
 ## Support, privacy and legal
 
 - [Support and FAQ](https://21life.win/supporto/)
-- [Report a bug or request a feature](https://github.com/marco201091-glitch/21life/issues)
+- [Report a bug or request a feature](https://github.com/blackistoostrong/21life/issues)
 - Email: [support@21life.win](mailto:support@21life.win)
 - [Privacy policy](https://app.21life.win/legal/privacy)
 - [Terms of service](https://app.21life.win/legal/terms)
