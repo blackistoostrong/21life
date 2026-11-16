@@ -86,6 +86,7 @@ import {
   clearLiveGameOfflineSession,
   clearLiveGameOfflineSessionIfMatches,
   loadLiveGameOutbox,
+  prepareLiveGameReplacement,
   loadLiveGameOfflineSession,
   saveLiveGameOutbox,
   saveLiveGameOfflineSession,
@@ -204,6 +205,7 @@ export default function LiveGameScreen() {
   const needsCreateRef = useRef(false);
   const pendingFinalizationRef = useRef<PendingLiveGameFinalization | null>(null);
   const pendingCancelRef = useRef(false);
+  const bootstrappingRef = useRef(true);
   const sessionClosedRef = useRef(false);
   const syncRunningRef = useRef(false);
   const syncPromiseRef = useRef<Promise<void> | null>(null);
@@ -502,6 +504,9 @@ export default function LiveGameScreen() {
   }, []);
 
   const syncJournal = useCallback(() => {
+    // Bootstrap owns journal/outbox replacement; reconnect must not sync the
+    // old session concurrently while its operations are being archived.
+    if (bootstrappingRef.current) return Promise.resolve();
     if (syncTimerRef.current) {
       clearTimeout(syncTimerRef.current);
       syncTimerRef.current = null;
@@ -619,6 +624,7 @@ export default function LiveGameScreen() {
   // mid-game, tearing down the live table when the lookup was transiently empty.
   useEffect(() => {
     if (!groupId || !currentUserId) return;
+    bootstrappingRef.current = true;
     let mounted = true;
     void (async () => {
       let cached = await withLiveGameTimeout(
@@ -655,20 +661,18 @@ export default function LiveGameScreen() {
         );
         if (!mounted) return;
         if (remote && (!cached || !cached.needsCreate || remote.id === cached.record.id)) {
-          if (cached && !cached.needsCreate && remote.id !== cached.record.id
-            && (cached.mutations.length > 0 || cached.pendingFinalization || cached.pendingCancel)) {
-            // The cached game is no longer the active one, but it may still
-            // hold unsynced work. Archive it to the durable outbox instead of
-            // silently overwriting the journal; Recovery Center can retry or
-            // discard it explicitly.
-            await archiveAndClearLiveGameSession(groupId, {
-              id: cached.record.id,
-              serverRecord: cached.serverRecord,
-              needsCreate: false,
-              mutations: cached.mutations,
-              finalization: cached.pendingFinalization,
-              cancel: cached.pendingCancel,
-            }).catch(() => undefined);
+          if (cached && remote.id !== cached.record.id) {
+            const replacement = await prepareLiveGameReplacement(
+              groupId, cached, remote, journalWriteRef.current,
+            );
+            if (!mounted) return;
+            // Terminal flags and undo history belong to the archived game.
+            // Clear them before installing the new server record or syncing it.
+            pendingFinalizationRef.current = replacement.pendingFinalization;
+            pendingCancelRef.current = replacement.pendingCancel;
+            historyRef.current = replacement.history;
+            setUndoDepth(0);
+            setRedoDepth(0);
           }
           sessionClosedRef.current = false;
           serverRecordRef.current = remote;
@@ -692,11 +696,14 @@ export default function LiveGameScreen() {
         } else if (!remote && !cached) {
           setOptimisticRecord(null);
         }
-        void syncJournal();
       } catch {
         // Cached session remains fully playable while offline.
       } finally {
-        if (mounted) setBooting(false);
+        if (mounted) {
+          bootstrappingRef.current = false;
+          setBooting(false);
+          void syncJournal();
+        }
       }
     })();
     return () => { mounted = false; };
@@ -717,7 +724,7 @@ export default function LiveGameScreen() {
   // player busy in an active game: resume was unavailable and a new game was
   // rejected. Retry the authoritative lookup while no local game is loaded.
   const resumeRemoteGame = useCallback(async () => {
-    if (!groupId || !currentUserId || liveGameRef.current) return;
+    if (bootstrappingRef.current || !groupId || !currentUserId || liveGameRef.current) return;
     // Never resurrect a game that is being finalized or discarded, or one
     // that already produced a recap: the server may still report it active
     // until the queued terminal operation is flushed.

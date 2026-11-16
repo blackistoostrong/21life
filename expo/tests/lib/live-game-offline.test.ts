@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLiveGamePlayer, type LiveGameRecord } from '@/lib/live-game';
 
@@ -20,8 +21,10 @@ import {
   clearLiveGameOfflineSessionIfMatches,
   loadLiveGameOfflineSession,
   loadLiveGameOutbox,
+  prepareLiveGameReplacement,
   saveLiveGameOfflineSession,
   saveLiveGameOutbox,
+  type LiveGameOfflineSession,
 } from '@/lib/live-game-offline';
 
 const sessionKey = 'phyrexian-arena:live-game:v2:group-1';
@@ -128,5 +131,107 @@ describe('live game offline persistence', () => {
     await saveLiveGameOfflineSession('group-1', session(record('new')));
     await clearLiveGameOfflineSessionIfMatches('group-1', 'old');
     expect((await loadLiveGameOfflineSession('group-1'))?.record.id).toBe('new');
+  });
+});
+
+describe('replacement of an offline live game', () => {
+  beforeEach(() => storage.clear());
+
+  function previous(): LiveGameOfflineSession {
+    return {
+      record: record('old'), serverRecord: record('old'), needsCreate: false,
+      mutations: [{ id: 'move-1', mutation: { type: 'eliminate', targetKey: 'user:user-1', eliminatedAt: '2026-11-16T09:00:00Z' } }],
+      pendingCancel: true, pendingFinalization: null,
+      history: { undo: [{ forward: { type: 'last_standing', winnerKey: 'user:user-1' }, inverse: { type: 'last_standing', winnerKey: 'user:user-1' } }], redo: [] },
+      savedAt: '2026-11-16T09:00:00Z',
+    };
+  }
+
+  it('preserves the original journal and queue when archiving fails', async () => {
+    const old = previous();
+    await saveLiveGameOfflineSession('group-1', old);
+    const before = new Map(storage);
+    vi.mocked(AsyncStorage.multiSet).mockRejectedValueOnce(new Error('storage unavailable'));
+    await expect(prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve()))
+      .rejects.toThrow('storage unavailable');
+    expect(storage).toEqual(before);
+    expect(old.mutations).toHaveLength(1);
+    expect(old.pendingCancel).toBe(true);
+    expect(await loadLiveGameOutbox()).toEqual([]);
+  });
+
+  it('keeps cancellation and mutations on A while B gets a clean journal', async () => {
+    const old = previous();
+    const next = await prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve());
+    await saveLiveGameOfflineSession('group-1', next);
+    expect(await loadLiveGameOutbox()).toEqual([{
+      id: 'old', serverRecord: old.serverRecord, needsCreate: false,
+      mutations: old.mutations, cancel: true, finalization: null,
+    }]);
+    expect(await loadLiveGameOfflineSession('group-1')).toMatchObject({
+      record: { id: 'new' }, serverRecord: { id: 'new' }, needsCreate: false,
+      mutations: [], pendingCancel: false, pendingFinalization: null,
+      history: { undo: [], redo: [] },
+    });
+  });
+
+  it('archives pending finalization exclusively against the old game ID', async () => {
+    const old = previous();
+    old.pendingCancel = false;
+    old.mutations = [];
+    old.pendingFinalization = {
+      winnerKey: 'user:user-1', isDraw: false, winCondition: 'last_standing',
+      endedAt: '2026-11-16T09:00:00Z', players: [],
+    };
+    const next = await prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve());
+    expect((await loadLiveGameOutbox())[0]).toMatchObject({
+      id: 'old', serverRecord: { id: 'old' }, finalization: old.pendingFinalization,
+    });
+    expect(next.pendingFinalization).toBeNull();
+    expect(next.pendingCancel).toBe(false);
+    expect(next.history).toEqual({ undo: [], redo: [] });
+  });
+
+  it('waits for a delayed journal write before archiving and installing B', async () => {
+    const old = previous();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const lateWrite = gate.then(() => saveLiveGameOfflineSession('group-1', old));
+    let prepared = false;
+    const replacement = prepareLiveGameReplacement('group-1', old, record('new'), lateWrite)
+      .then(next => { prepared = true; return next; });
+    await Promise.resolve();
+    expect(prepared).toBe(false);
+    expect(await loadLiveGameOutbox()).toEqual([]);
+    release();
+    await saveLiveGameOfflineSession('group-1', await replacement);
+    expect((await loadLiveGameOfflineSession('group-1'))?.record.id).toBe('new');
+    expect((await loadLiveGameOutbox())[0].id).toBe('old');
+  });
+
+  it('still archives after an earlier journal write rejected', async () => {
+    const next = await prepareLiveGameReplacement('group-1', previous(), record('new'), Promise.reject(new Error('old write failed')));
+    expect(next.record.id).toBe('new');
+    expect((await loadLiveGameOutbox())[0].id).toBe('old');
+  });
+
+  it('keeps A recoverable if saving the new journal fails after archiving', async () => {
+    const old = previous();
+    const next = await prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve());
+    vi.mocked(AsyncStorage.multiSet).mockRejectedValueOnce(new Error('new journal failed'));
+    await expect(saveLiveGameOfflineSession('group-1', next)).rejects.toThrow('new journal failed');
+    expect((await loadLiveGameOutbox())[0]).toMatchObject({
+      id: 'old', serverRecord: { id: 'old' }, mutations: old.mutations, cancel: true,
+    });
+  });
+
+  it('does not queue a clean old game for replay', async () => {
+    const old = previous();
+    old.mutations = [];
+    old.pendingCancel = false;
+    const next = await prepareLiveGameReplacement('group-1', old, record('new'), Promise.resolve());
+    expect(await loadLiveGameOutbox()).toEqual([]);
+    expect(next.record.id).toBe('new');
+    expect(next.history.undo).toEqual([]);
   });
 });
