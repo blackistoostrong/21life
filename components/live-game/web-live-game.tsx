@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useWebTrackerDisplay } from '@/hooks/use-web-tracker-display';
 import {
   ArrowLeft,
   Check,
@@ -171,30 +172,6 @@ function secureRandom() {
   return value[0]! / 0x1_0000_0000;
 }
 
-type LockableScreenOrientation = ScreenOrientation & {
-  lock?: (orientation: 'landscape-primary') => Promise<void>;
-  unlock?: () => void;
-};
-
-async function lockTrackerLandscapeOrientation() {
-  const orientation = screen.orientation as LockableScreenOrientation | undefined;
-  if (!orientation?.lock) return;
-  try {
-    await orientation.lock('landscape-primary');
-  } catch {
-    // Safari and some embedded browsers do not expose orientation locking.
-  }
-}
-
-function unlockTrackerOrientation() {
-  const orientation = screen.orientation as LockableScreenOrientation | undefined;
-  try {
-    orientation?.unlock?.();
-  } catch {
-    // Ignore unsupported orientation APIs.
-  }
-}
-
 function replay(record: LiveGameRecord, queue: QueuedLiveGameMutation[]) {
   return queue.reduce(
     (current, item) => ({ ...current, state: applyLiveGameMutation(current.state, item.mutation) }),
@@ -214,13 +191,6 @@ function formatDuration(startedAt: string | null, endedAt?: string) {
     : `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
-
-function restoreDefaultTrackerDisplay() {
-  unlockTrackerOrientation();
-  if (document.fullscreenElement) {
-    void document.exitFullscreen().catch(() => undefined);
-  }
-}
 
 export function WebLiveGame({
   groupId,
@@ -303,9 +273,8 @@ export function WebLiveGame({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [exitChoiceOpen, setExitChoiceOpen] = useState(false);
   const previousActivePlayerCountRef = useRef<number | null>(null);
-  const tableRef = useRef<HTMLDivElement | null>(null);
-  const [tableSize, setTableSize] = useState({ width: 390, height: 760 });
-  const [fullscreen, setFullscreen] = useState(false);
+  const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTrackerDisplay } =
+    useWebTrackerDisplay(record, recordRef, copy, toast);
 
   useEffect(() => {
     seats.forEach((seat) => {
@@ -318,65 +287,6 @@ export function WebLiveGame({
       }
     });
   }, [participants, seats]);
-
-  const enterTrackerLandscape = useCallback(() => {
-    const standalone = window.matchMedia('(display-mode: standalone)').matches
-      || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-    if (standalone) {
-      void lockTrackerLandscapeOrientation();
-      return;
-    }
-    if (document.fullscreenElement) {
-      void lockTrackerLandscapeOrientation();
-      return;
-    }
-    if (document.fullscreenEnabled && document.documentElement.requestFullscreen) {
-      void document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-        .then(() => lockTrackerLandscapeOrientation())
-        .catch(() => {
-          toast({
-            title: copy({
-              it: 'Il browser non ha consentito lo schermo intero. Riprova dal pulsante del tracker.',
-              en: 'The browser did not allow fullscreen. Try again from the tracker button.',
-            }),
-            variant: 'destructive',
-          });
-        });
-      return;
-    }
-    void lockTrackerLandscapeOrientation();
-    toast({
-      title: copy({
-        it: 'Per il vero schermo intero su iPad, aggiungi MTG: Commander alla schermata Home.',
-        en: 'For true fullscreen on iPad, add MTG: Commander to your Home Screen.',
-      }),
-    });
-  }, [copy, toast]);
-
-  useEffect(() => {
-    const updateFullscreen = () => {
-      const isFullscreen = Boolean(document.fullscreenElement);
-      setFullscreen(isFullscreen);
-      if (recordRef.current) {
-        void lockTrackerLandscapeOrientation();
-      }
-    };
-    updateFullscreen();
-    document.addEventListener('fullscreenchange', updateFullscreen);
-    return () => {
-      document.removeEventListener('fullscreenchange', updateFullscreen);
-      restoreDefaultTrackerDisplay();
-    };
-  }, []);
-
-  const activeOrientationRecordId = record?.id ?? null;
-  useEffect(() => {
-    if (activeOrientationRecordId) {
-      void lockTrackerLandscapeOrientation();
-      return;
-    }
-    restoreDefaultTrackerDisplay();
-  }, [activeOrientationRecordId]);
 
   const setOptimisticRecord = useCallback((next: LiveGameRecord | null) => {
     recordRef.current = next;
@@ -712,16 +622,6 @@ export function WebLiveGame({
     const timer = window.setInterval(() => setDuration(formatDuration(record.started_at)), 1000);
     return () => window.clearInterval(timer);
   }, [record?.started_at]);
-
-  useEffect(() => {
-    const element = tableRef.current;
-    if (!element) return;
-    const update = () => setTableSize({ width: element.clientWidth, height: element.clientHeight });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [record]);
 
   const changePlayerCount = (next: number) => {
     if (occasionalCreationBusy) return;

@@ -102,3 +102,10 @@ flowchart TD
 | Catalogo/membership web | Route tavolo (da estrarre) | Lifecycle e traversamento completo ancora da completare |
 
 Misura intermedia della tranche editor, contro01faad78: route3934→3801righe non vuote, useState70→64; editor194righe non vuote con6stati e1cleanup. Il route effect aggiunto per azzerare l'apertura contestuale è intenzionale. Il candidato0fa75a83 ha superato buildweb56route e browser desktop/mobile12/12, inclusi annullamento e navigazione/back con PATCH sospesa e abort osservato. Il limite800rimane ampiamente non raggiunto: il punto6 resta aperto.
+
+
+## Web tracker display boundary
+
+`hooks/use-web-tracker-display.ts` owns the table ref/size, fullscreen state/listener, orientation entry/restore and ResizeObserver cleanup. It receives only the current record identity/reference plus copy/notification functions; it cannot access Supabase, journal or game commands. `WebLiveGame` consumes that display contract. Mechanical extraction preserves full-record observer dependencies and existing fullscreen timing. Any observer churn or late fullscreen completion fixes require their own regression and behavior commit.
+
+Characterization before extraction on candidatee23efe2e passed the real4player/2client critical flow desktop/mobile2/2: offline recovery, simultaneous commands,401, quota failure, lost finalization response and exactly2saved matches with verified cleanup. Typecheck/lint and the expanded runtime graph gate pass after extraction; build and browser verification remain required. This does not complete game lifecycle/sync separation or prove physical orientation behavior.

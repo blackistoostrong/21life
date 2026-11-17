@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Partitaweb/display11b: caratterizzazione reale4giocatori/2client PRIMA PASS desktop/mobile2/2, idempotenza esattamente2partite e cleanupDev PASS. Estratto useWebTrackerDisplay, singolo owner di fullscreenlistener/orientation/ResizeObserver e2stati; record/journal/sync restano nel controller esistente. Estrazione meccanica conserva dipendenza ResizeObserver da record e gestione fullscreen preesistenti; ottimizzazioni/correzioni lifecycle saranno commit distinti. Typecheck/lint/grafo e build/browser dopo ancora da certificare.
+
 - [x] Candidatoe23efe2e: buildweb56route, exportAndroid/iOS e budgetAndroid9.31/12MiB PASS; E2Edesktop/mobile14/14 (editor cancel/navigazione, storico completo/APIautorizzata, guestUI con errore report, archivio profilo) e cleanupDev PASS. Qualityweb699+3skip/66script/ratchet128, Expo490/ratchet120 PASS. PR241sempredraft→Dev, push verificato. Nessun merge/deploy/dispositivo. Prossima tranche11b: display lifecycle partitaweb; caratterizzare flusso reale prima dell’estrazione, poi owner singolo di fullscreen/orientamento/ResizeObserver.
 
 - [x] Tranche confini/ciclo11c: qualityweb699+3skip/66script/ratchet128 e qualityExpo490/ratchet120 PASS con tutti i payloadSQL forniti; otto regressioni guardPASS. Nessuna soglia ridotta: aggiunti due floorweb e un floorExpo100% per i nuovi moduli. TestES5corretto e perdite percentuali post-estrazione risolte con regressioni cache/cap/dedup reali. Build/export del candidato con nuovi import di dominio ancora da verificare; punto6 e intero piano restano aperti.
