@@ -160,3 +160,10 @@ A local oracle loads the actual old engine0f40a647 and the extracted implementat
 
 
 Pre-build verification for the engine extraction: web quality707+3skip/67script and native quality511PASS. Ten new reviewed per-file floors per client preserve the measured extracted implementations; existing floors are unchanged. Ratchets138web/130native PASS. Shared tests cover injected recursive clocks, atomic group/drain versioning, RNG consumption, default compatibility, bounded undo/redo and legacy recovery; the original web API rule tests also execute through the native resolver. Build/export and browser checks still pending at this checkpoint.
+
+
+## Engine checkpoint752667a1 verified
+
+Web quality707+3skip/67script and native511PASS; expanded ratchets138/130PASS with existing floors unchanged. Clean web56route build and Android/iOS exports PASS; web2.85/18MiB and Android9.32/12MiB budgets PASS. Browser desktop/mobile12/12PASS: unchanged wizard goldens, real4player/2client recovery/finalization, observer/fullscreen/new-owner checks and complete history/null/revision/export. Exactly2matches and fixture cleanup were verified. Engine source modules range8–214nonempty lines; API/defaults are preserved, backed by1382oracle comparisons and shared conformance tests.
+
+This closes the current shared-engine tranche. Point6 and the original plan remain open: four entrypoints still exceed800lines, the complete account/group/sync/journal/finalization owners, profile/table decomposition and final maintenance-path proofs remain required. Physical device checks are deferred to the final candidate per PM. Resume from the sole ledger `.agents/PROJECT_CHECKLIST.md`; worktree/branch and remaining tickets are recorded there. PM requested PC shutdown after closing/saving the current task near the context margin; no further feature tranche starts in this shutdown window.
