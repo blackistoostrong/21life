@@ -499,6 +499,16 @@
       "version": "20261116150922",
       "name": "20261116150922_profile_catalog_metrics_v2.sql",
       "checksum": "34ad64ed1a1c154dbcb72b5d0b5076a3d3d10e96ab7e5e40fb1f442d3ab9df15"
+    },
+    {
+      "version": "20261117075535",
+      "name": "20261117075535_arena_history_pages_v2.sql",
+      "checksum": "16bb98bb68da141dc41f351a1f645b7c492bea89fea1e7c6f3cb30aeca76e3df"
+    },
+    {
+      "version": "20261117082649",
+      "name": "20261117082649_scope_admin_row_security_setting.sql",
+      "checksum": "d5cff62fe23cd65ffc8d24347574128dcd848aa8adbe7a57df39b0d240d5b52e"
     }
   ]
 }

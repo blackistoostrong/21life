@@ -46,7 +46,9 @@ jobs:
         run: |
           node scripts/profile-catalog-qa.mjs | docker exec -i supabase_db_phyrexian-arena psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d postgres > "$RUNNER_TEMP/analytics-qa.log"
           node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/analytics-payload.json"
+          node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/history-payload.json" history
           echo "ANALYTICS_SQL_PAYLOAD_PATH=$RUNNER_TEMP/analytics-payload.json" >> "$GITHUB_ENV"
+          echo "HISTORY_SQL_PAYLOAD_PATH=$RUNNER_TEMP/history-payload.json" >> "$GITHUB_ENV"
       - name: Verify self-hosted migration atomicity against disposable CI database
         run: npm run test:selfhosted-db-runner
         env:

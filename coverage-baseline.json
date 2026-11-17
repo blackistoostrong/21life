@@ -725,10 +725,28 @@
     "functions": 100,
     "statements": 100
   },
+  "lib/arena-history-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/data/arena-history-query.ts": {
+    "lines": 100,
+    "branches": 93.75,
+    "functions": 100,
+    "statements": 100
+  },
   "packages/data/request-deadline.ts": {
     "lines": 100,
     "branches": 91.66,
     "functions": 100,
     "statements": 100
+  },
+  "packages/domain/arena-history.ts": {
+    "lines": 100,
+    "branches": 96.34,
+    "functions": 100,
+    "statements": 99.02
   }
 }

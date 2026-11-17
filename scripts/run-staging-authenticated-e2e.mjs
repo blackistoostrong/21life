@@ -79,9 +79,16 @@ try {
     auth: { storageKey: 'sb-supabase-staging-auth-token' },
     cookies: { getAll: () => sessionCookies, setAll: (values) => sessionCookies.push(...values) },
   });
-  const { error: sessionError } = await authClient.auth.signInWithPassword({ email, password });
-  if (sessionError) throw new Error(`Staging fixture login failed: ${sessionError.code}`);
+  const { data:sessionData,error: sessionError } = await authClient.auth.signInWithPassword({ email, password });
+  if (sessionError || !sessionData.session) throw new Error(`Staging fixture login failed: ${sessionError?.code ?? 'no session'}`);
+  process.env.E2E_ACCESS_TOKEN=sessionData.session.access_token;
   process.env.E2E_SESSION_COOKIES = JSON.stringify(sessionCookies.map(({ name, value }) => ({ name, value })));
+  let initialHistoryRevision=null;
+  if(driver==='playwright' && (!process.env.E2E_GREP || /wizard → damage|history v2/.test(process.env.E2E_GREP))) {
+    const {data,error}=await authClient.rpc('get_arena_history_page_v2',{p_group_id:groupId});
+    if(error || data?.schemaVersion!==2 || data.complete!==true || data.total!==0)throw new Error('Staging history v2 seed contract failed');
+    initialHistoryRevision=data.revision;
+  }
   exitCode = 0;
   if (driver === 'maestro') {
     for (const flow of ['authenticated-live-game', 'authenticated-archive']) {
@@ -107,6 +114,7 @@ try {
       'tests/e2e/live-game-wizard.spec.ts',
       'tests/e2e/deck-ranking-filter.spec.ts',
       'tests/e2e/analytics-v2.spec.ts',
+      'tests/e2e/history-v2.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
     ], { stdio: 'inherit' });
@@ -115,6 +123,11 @@ try {
   if (driver === 'playwright' && exitCode === 0 && (!process.env.E2E_GREP || process.env.E2E_GREP.includes('wizard → damage'))) {
     const { count, error } = await supabase.from('matches').select('id', { count: 'exact', head: true }).eq('group_id', groupId);
     if (error || count !== 2) throw new Error('Expected exactly one saved match per browser project after finalization retries.');
+    const history=await authClient.rpc('get_arena_history_page_v2',{p_group_id:groupId});
+    const days=await authClient.rpc('get_arena_match_day_summaries_v2',{p_group_id:groupId});
+    if(history.error || days.error || history.data?.schemaVersion!==2 || history.data.total!==2
+      || history.data.matches?.length!==2 || history.data.next!==null || history.data.revision===initialHistoryRevision
+      || days.data?.days?.reduce((sum,day)=>sum+day.matchCount,0)!==2)throw new Error('Staging finalized history v2 counts/revision failed');
     console.log('Staging finalization idempotency verified: exactly 2 matches for 2 browser flows.');
   }
 } finally {
@@ -126,7 +139,7 @@ try {
       if (entry.isDirectory()) redact(path);
       else if (/\.(md|txt|json)$/.test(entry.name)) {
         const original = readFileSync(path, 'utf8');
-        writeFileSync(path, original.replaceAll(password, '[redacted]'));
+        writeFileSync(path, [password,process.env.E2E_ACCESS_TOKEN].filter(Boolean).reduce((value,secret)=>value.replaceAll(secret,'[redacted]'),original));
       }
     }
   };
