@@ -11,7 +11,7 @@ export default defineConfig({
       provider: 'v8',
       // Shared domain lives outside the native app; retain its coverage floors.
       allowExternal: true,
-      include: ['lib/**/*.ts', path.resolve(__dirname, '../packages/domain/**/*.ts').replaceAll('\\', '/')],
+      include: ['lib/**/*.ts', path.resolve(__dirname, '../packages/domain/**/*.ts').replaceAll('\\', '/'), path.resolve(__dirname, '../packages/data/**/*.ts').replaceAll('\\', '/')],
       exclude: ['lib/types/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {

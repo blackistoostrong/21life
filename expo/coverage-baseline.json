@@ -682,5 +682,11 @@
     "branches": 84,
     "functions": 100,
     "statements": 100
+  },
+  "../packages/data/request-deadline.ts": {
+    "lines": 100,
+    "branches": 91.66,
+    "functions": 100,
+    "statements": 100
   }
 }

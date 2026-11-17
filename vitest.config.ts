@@ -11,7 +11,7 @@ export default defineConfig({
       provider: 'v8',
       // This isomorphic query adapter is consumed by both clients; count its
       // actual implementation rather than only the web compatibility export.
-      include: ['lib/**/*.ts', 'packages/domain/**/*.ts', 'expo/lib/analytics-dashboard-query.ts', 'expo/lib/profile-catalog-query.ts', 'expo/lib/profile-catalog-pages.ts'],
+      include: ['lib/**/*.ts', 'packages/domain/**/*.ts', 'packages/data/**/*.ts', 'expo/lib/analytics-dashboard-query.ts', 'expo/lib/profile-catalog-query.ts', 'expo/lib/profile-catalog-pages.ts'],
       exclude: ['lib/types/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {
