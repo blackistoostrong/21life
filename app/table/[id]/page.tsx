@@ -1,4 +1,5 @@
 'use client';
+import { ArenaSettingsEditor } from '@/components/arena/arena-settings-editor';
 import {GuestDirectory} from '@/components/arena/guest-directory';
 import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
 import {useArenaDayExport} from '@/hooks/use-arena-day-export';
@@ -99,9 +100,7 @@ import { isLeaveArenaConfirmationValid } from '@/lib/leave-arena-confirm';
 import {
   formatArenaSeasonDate,
   formatArenaSeasonLabel,
-  setArenaSeasonSettings,
 } from '@/lib/arena-seasons';
-import { ArenaSeasonSettings } from '@/components/arena-season-settings';
 import { PlayerAwards } from '@/components/arena/player-awards';
 import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import {
@@ -131,7 +130,6 @@ import {
   Calendar,
   ChevronDown,
   Download,
-  ExternalLink,
   User,
   UserPlus,
   Target,
@@ -521,12 +519,6 @@ export default function TablePage() {
 
   // Edit arena modal state
   const [showEditArenaModal, setShowEditArenaModal] = useState(false);
-  const [editArenaName, setEditArenaName] = useState('');
-  const [editArenaDescription, setEditArenaDescription] = useState('');
-  const [editArenaIsPublic, setEditArenaIsPublic] = useState(false);
-  const [editArenaSeasonsEnabled, setEditArenaSeasonsEnabled] = useState(true);
-  const [editArenaResetMonth, setEditArenaResetMonth] = useState(1);
-  const [savingArena, setSavingArena] = useState(false);
   const [showDeleteArenaModal, setShowDeleteArenaModal] = useState(false);
   const [showLeaveArenaModal, setShowLeaveArenaModal] = useState(false);
   const [leaveArenaConfirmation, setLeaveArenaConfirmation] = useState('');
@@ -2023,52 +2015,6 @@ export default function TablePage() {
     }
   };
 
-  const openEditArena = () => {
-    if (!group) return;
-    setEditArenaName(group.name);
-    setEditArenaDescription(group.description || '');
-    setEditArenaIsPublic(Boolean(group.is_public));
-    setEditArenaSeasonsEnabled(group.seasons_enabled ?? true);
-    setEditArenaResetMonth(group.season_reset_month ?? seasonContext?.resetMonth ?? 1);
-    setShowEditArenaModal(true);
-  };
-
-  const handleSaveArena = async () => {
-    if (!group || !editArenaName.trim()) return;
-    setSavingArena(true);
-    try {
-      const { error } = await supabase
-        .from('groups')
-        .update({
-          name: editArenaName.trim(),
-          description: editArenaDescription.trim() || null,
-          is_public: editArenaIsPublic,
-        })
-        .eq('id', group.id);
-      if (error) throw error;
-      const seasonSettingsChanged = editArenaSeasonsEnabled !== (group.seasons_enabled ?? true)
-        || editArenaResetMonth !== (seasonContext?.resetMonth ?? group.season_reset_month ?? 1);
-      if (seasonSettingsChanged) {
-        await setArenaSeasonSettings(supabase, group.id, editArenaSeasonsEnabled, editArenaResetMonth);
-        await season.reload();
-      }
-      toast({ title: t({ it: 'Playgroup aggiornato!', en: 'Playgroup updated!' }) });
-      setShowEditArenaModal(false);
-      setGroup((currentGroup) => currentGroup ? {
-        ...currentGroup,
-        name: editArenaName.trim(),
-        description: editArenaDescription.trim() || null,
-        is_public: editArenaIsPublic,
-        seasons_enabled: editArenaSeasonsEnabled,
-        season_reset_month: editArenaResetMonth,
-      } : currentGroup);
-    } catch (error: unknown) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : t({ it: 'Impossibile aggiornare il playgroup', en: 'Failed to update playgroup' }), variant: 'destructive' });
-    } finally {
-      setSavingArena(false);
-    }
-  };
-
   const openEditMatch = (match: Match) => {
     setOccasionalChoices(match.match_participants.flatMap((p) =>
       p.deck_id && p.user_id && p.decks?.source_type === 'occasional'
@@ -2331,7 +2277,7 @@ export default function TablePage() {
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="break-words text-2xl font-bold text-foreground">{group.name}</h1>
               {canManageGroup && (
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" onClick={openEditArena} aria-label={t({ it: 'Modifica playgroup', en: 'Edit playgroup' })}>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { if (group) setShowEditArenaModal(true); }} aria-label={t({ it: 'Modifica playgroup', en: 'Edit playgroup' })}>
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
@@ -3441,101 +3387,17 @@ export default function TablePage() {
         </ModalOverlay>
       )}
 
-      {/* Edit Arena Modal */}
-      {showEditArenaModal && (
-        <ModalOverlay>
-          <ModalCard>
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Pencil className="w-5 h-5" /> {t({ it: 'Modifica playgroup', en: 'Edit Playgroup' })}
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">{t({ it: 'Aggiorna nome e descrizione del playgroup', en: 'Update the playgroup name and description' })}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">{t({ it: 'Nome playgroup', en: 'Playgroup Name' })}</label>
-                  <Input
-                    value={editArenaName}
-                    onChange={(e) => setEditArenaName(e.target.value)}
-                    placeholder={t({ it: 'Il mio playgroup', en: 'My Playgroup' })}
-                    className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">{t({ it: 'Descrizione (opzionale)', en: 'Description (optional)' })}</label>
-                  <Textarea
-                    value={editArenaDescription}
-                    onChange={(e) => setEditArenaDescription(e.target.value)}
-                    placeholder={t({ it: 'Descrizione del playgroup...', en: 'A description of this playgroup...' })}
-                    className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground resize-none"
-                    rows={3}
-                  />
-                </div>
-                <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-background/30 p-3">
-                  <Checkbox
-                    id="arena-is-public"
-                    checked={editArenaIsPublic}
-                    onCheckedChange={(checked) => setEditArenaIsPublic(checked === true)}
-                  />
-                  <div className="space-y-1">
-                    <label htmlFor="arena-is-public" className="text-sm font-medium text-foreground">
-                      {t({ it: 'Profilo playgroup pubblico', en: 'Public playgroup profile' })}
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      {t({
-                        it: 'Chi ha il link puo vedere statistiche e partite in sola lettura.',
-                        en: 'Anyone with the link can view read-only stats and match history.',
-                      })}
-                    </p>
-                    {editArenaIsPublic && group?.invite_code && (
-                      <a
-                        href={`/arena/${group.invite_code}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-emerald-200"
-                      >
-                        {t({ it: 'Apri pagina pubblica', en: 'Open public page' })}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <ArenaSeasonSettings
-                  enabled={editArenaSeasonsEnabled}
-                  resetMonth={editArenaResetMonth}
-                  locale={language === 'it' ? 'it-IT' : 'en-US'}
-                  labels={{
-                    enabled: t({ it: 'Abilita le season', en: 'Enable seasons' }),
-                    enabledHint: t({
-                      it: 'Classifiche e statistiche ripartono ogni anno. Disabilitando, l’Arena usa tutto lo storico.',
-                      en: 'Leaderboards and stats restart yearly. When disabled, the Arena uses its full history.',
-                    }),
-                    startMonth: t({ it: 'Mese di inizio season', en: 'Season start month' }),
-                    resetHint: t({
-                      it: 'La season dura un anno. Cambiare mese ricalcola gli archivi senza eliminare partite o score personali.',
-                      en: 'A season lasts one year. Changing the month rebuilds archives without deleting matches or personal scores.',
-                    }),
-                  }}
-                  onEnabledChange={setEditArenaSeasonsEnabled}
-                  onResetMonthChange={setEditArenaResetMonth}
-                />
-                <div className="flex gap-3 pt-2">
-                  <Button variant="outline" className="flex-1 border-border text-foreground" onClick={() => setShowEditArenaModal(false)}>
-                    {t({ it: 'Annulla', en: 'Cancel' })}
-                  </Button>
-                  <Button
-                    className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                    onClick={handleSaveArena}
-                    disabled={savingArena || !editArenaName.trim()}
-                  >
-                    {savingArena ? t({ it: 'Salvataggio...', en: 'Saving...' }) : t({ it: 'Salva modifiche', en: 'Save Changes' })}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </ModalCard>
-        </ModalOverlay>
+      {showEditArenaModal && group && (
+        <ArenaSettingsEditor
+          group={group}
+          seasonResetMonth={seasonContext?.resetMonth}
+          reloadSeason={season.reload}
+          onClose={() => setShowEditArenaModal(false)}
+          onSaved={(update) => {
+            setShowEditArenaModal(false);
+            setGroup((currentGroup) => currentGroup ? { ...currentGroup, ...update } : currentGroup);
+          }}
+        />
       )}
 
       {showLeaveArenaModal && group && (

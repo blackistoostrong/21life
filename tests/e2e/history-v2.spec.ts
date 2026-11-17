@@ -106,3 +106,58 @@ test('history UI pages exact totals, retries failures and restarts changed revis
   await expect.poll(()=>sharedText.length).toBeGreaterThan(0);
   expect(sharedText.match(/Export match /g)?.length).toBe(200);
 });
+
+
+test('arena settings editor preserves drafts, dropdown, save errors and command scope', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const groupId = process.env.E2E_GROUP_ID!;
+  const updates: Array<Record<string, unknown>> = [];
+  const seasonUpdates: Array<Record<string, unknown>> = [];
+  let failMetadata = true;
+  await page.route('**/rest/v1/groups?*', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    expect(new URL(route.request().url()).searchParams.get('id')).toBe(`eq.${groupId}`);
+    updates.push(route.request().postDataJSON());
+    return route.fulfill({ status: failMetadata ? 403 : 204,
+      ...(failMetadata ? { json: { message: 'Synthetic settings rejection', code: '42501' } } : {}) });
+  });
+  await page.route('**/rest/v1/rpc/set_arena_season_settings', (route) => {
+    seasonUpdates.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, json: { enabled: false } });
+  });
+  await fixtureLogin(page);
+  await page.goto(`/table/${groupId}`);
+  const open = page.getByRole('button', { name: 'Edit playgroup', exact: true });
+  const name = page.getByPlaceholder('My Playgroup', { exact: true });
+  await open.click();
+  const originalName = await name.inputValue();
+  await name.fill('Discarded settings draft');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await open.click();
+  await expect(name).toHaveValue(originalName);
+  await name.fill('   ');
+  const save = page.getByRole('button', { name: 'Save Changes', exact: true });
+  await expect(save).toBeDisabled();
+  await name.fill('  Edited playgroup  ');
+  await page.getByPlaceholder('A description of this playgroup...', { exact: true }).fill('  New description  ');
+  await page.getByLabel('Enable seasons', { exact: true }).check();
+  await page.getByLabel('Season start month', { exact: true }).click();
+  await page.getByRole('option', { name: 'September', exact: true }).click();
+  await save.click();
+  await expect(page.getByRole('heading', { name: 'Edit Playgroup', exact: true })).toBeVisible();
+  await expect(save).toBeEnabled();
+  expect(updates).toHaveLength(1);
+  expect(seasonUpdates).toHaveLength(0);
+  await expect(name).toHaveValue('  Edited playgroup  ');
+  failMetadata = false;
+  await save.click();
+  await expect(page.getByRole('heading', { name: 'Edit Playgroup', exact: true })).toHaveCount(0);
+  expect(updates).toHaveLength(2);
+  expect(updates[1]).toMatchObject({ name: 'Edited playgroup', description: 'New description' });
+  expect(seasonUpdates).toEqual([{ p_group_id: groupId, p_enabled: true, p_reset_month: 9 }]);
+  await open.click();
+  await expect(name).toHaveValue('Edited playgroup');
+  await expect(page.getByLabel('Season start month', { exact: true })).toContainText('September');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
