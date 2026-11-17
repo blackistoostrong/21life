@@ -81,3 +81,9 @@ describe('arena participants', () => {
     })).toBe('guest:flagged');
   });
 });
+
+it('orders null-dated deck selections behind known match dates',()=>{
+  const rows=[{played_at:null,match_participants:[{user_id:'a',deck_id:'unknown'}]},
+    {played_at:'2026-01-01T00:00:00Z',match_participants:[{user_id:'a',deck_id:'known'}]}];
+  expect(getLastDeckSelectionForParticipant('user:a',rows as Parameters<typeof getLastDeckSelectionForParticipant>[1])).toBe('known');
+});

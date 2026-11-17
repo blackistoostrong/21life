@@ -951,6 +951,8 @@ export default function TableScreen() {
 
         {false && (canManage || guests.length > 0) ? (
           <TableGuestsSection
+              key={`${user?.id}:${groupId}`}
+              language={language}
             guests={guests}
             canManage={canManage}
             labels={{
@@ -1043,6 +1045,8 @@ export default function TableScreen() {
         manager={<>
             <Text style={styles.modalTitle}>{copy('guestManagement')}</Text>
             <TableGuestsSection
+              key={`${user?.id}:${groupId}`}
+              language={language}
               guests={guests}
               canManage={canManage}
               labels={{ guestManagement: copy('guestManagement'), addGuest: copy('addGuest'), noGuestsBody: copy('noGuestsBody'), guestBadge: copy('guestBadge'), upgradeGuest: copy('upgradeGuest'), addDeckToGuest: copy('addDeckToGuest'), deleteGuest: copy('deleteGuest') }}

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -30,6 +31,7 @@ export function ArenaSeasonSettings({
   onEnabledChange: (enabled: boolean) => void;
   onResetMonthChange: (month: number) => void;
 }) {
+  const monthId = useId();
   return (
     <>
       <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-background/30 p-3">
@@ -47,9 +49,9 @@ export function ArenaSeasonSettings({
       </div>
       {enabled ? (
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">{labels.startMonth}</label>
+          <label htmlFor={monthId} className="text-sm font-medium text-foreground">{labels.startMonth}</label>
           <Select value={String(resetMonth)} onValueChange={(value) => onResetMonthChange(Number(value))}>
-            <SelectTrigger className="border-border bg-background/50 text-foreground">
+            <SelectTrigger id={monthId} className="border-border bg-background/50 text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-border bg-card">

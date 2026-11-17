@@ -1,6 +1,6 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {fetchArenaHistoryDaySummaries,fetchArenaHistoryPage,fetchCompleteArenaHistoryDay} from '@/lib/arena-history-query';
-import {arenaHistoryScope} from '@/packages/domain/arena-history';
+import {arenaHistoryScope} from '../../packages/domain/arena-history';
 import {historyDaysFixture,historyGroup,historyPageFixture,historyRevision,historyMatch} from '../fixtures/arena-history';
 
 describe('scoped history transport',()=>{

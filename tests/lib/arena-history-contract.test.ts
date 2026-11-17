@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
-import {arenaHistoryScope,compareArenaHistoryCursor,parseArenaHistoryDaySummaries,parseArenaHistoryPage} from '@/packages/domain/arena-history';
+import {arenaHistoryScope,compareArenaHistoryCursor,parseArenaHistoryDaySummaries,parseArenaHistoryPage} from '../../packages/domain/arena-history';
 import {historyDaysFixture,historyGroup,historyId,historyMatch,historyPageFixture,historyRevision} from '../fixtures/arena-history';
 
 describe('arena history complete-page contract',()=>{

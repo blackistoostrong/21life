@@ -41,3 +41,13 @@ describe('arena sessions', () => {
     expect(groups[1]?.matches.map((match) => match.id)).toEqual(['old-a', 'old-b']);
   });
 });
+
+it('uses authoritative group-wide day keys on partial pages and keeps null dates unknown',()=>{
+  const groups=groupMatchesByDay([
+    {played_at:'2026-07-11T02:00:00Z',arena_day_key:'2026-07-10'},
+    {played_at:null,arena_day_key:'undated'},
+  ],{unknownDateLabel:'Unknown'});
+  expect(groups.map(group=>group.dayKey)).toEqual(['2026-07-10','undated']);
+  expect(groups.at(-1)?.label).toBe('Unknown');
+  expect(getArenaDayKey(null)).toBe('undated');
+});

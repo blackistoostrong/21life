@@ -748,5 +748,11 @@
     "branches": 96.34,
     "functions": 100,
     "statements": 99.02
+  },
+  "packages/domain/guest-directory.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
   }
 }

@@ -1,4 +1,5 @@
 'use client';
+import {GuestDirectory} from '@/components/arena/guest-directory';
 import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
 import {useArenaDayExport} from '@/hooks/use-arena-day-export';
 import {useArenaAnalytics} from '@/hooks/use-arena-analytics';
@@ -509,7 +510,7 @@ export default function TablePage() {
   const [matchPlayedAt, setMatchPlayedAt] = useState(() => toMatchDateValue());
   const [savingMatch, setSavingMatch] = useState(false);
   const [showGuestModal, setShowGuestModal] = useState(false);
-  const [guestModalMode, setGuestModalMode] = useState<'pick-existing' | 'create' | 'add-deck'>('pick-existing');
+  const [guestModalMode, setGuestModalMode] = useState<'pick-existing' | 'create' | 'manage-create' | 'add-deck'>('pick-existing');
   const [guestDeckTargetId, setGuestDeckTargetId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [guestDeckName, setGuestDeckName] = useState('');
@@ -1322,6 +1323,7 @@ export default function TablePage() {
     commander: CommanderSearchResult,
     deckName?: string,
     partnerCommander?: CommanderSearchResult | null,
+    options?: { addToMatch?: boolean },
   ) => {
     const normalized = normalizeGuestName(displayName);
     if (!normalized) throw new Error('Guest name is required');
@@ -1343,7 +1345,7 @@ export default function TablePage() {
       guest = { ...createdGuest, arena_guest_decks: [] } as ArenaGuest;
     }
 
-    const createdDeck = await addGuestDeck(guest.id, commander, deckName, partnerCommander);
+    const createdDeck = await addGuestDeck(guest.id, commander, deckName, partnerCommander, options);
 
     return {
       guestId: guest.id,
@@ -1410,11 +1412,11 @@ export default function TablePage() {
 
     setSavingGuest(true);
     try {
-      await upsertGuestWithDeck(guestName, guestSelectedCommander, guestDeckName, guestSelectedPartnerCommander);
+      await upsertGuestWithDeck(guestName, guestSelectedCommander, guestDeckName, guestSelectedPartnerCommander, {addToMatch:guestModalMode!=='manage-create'});
       resetGuestModal();
       toast({
         title: t({ it: 'Guest aggiunto', en: 'Guest added' }),
-        description: t({ it: 'Il guest è stato aggiunto alla partita', en: 'Guest added to this battle' }),
+        description: guestModalMode==='manage-create' ? t({it:'Guest e mazzo aggiunti al playgroup',en:'Guest and deck added to playgroup'}) : t({ it: 'Il guest è stato aggiunto alla partita', en: 'Guest added to this battle' }),
       });
     } catch (error: unknown) {
       toast({
@@ -2748,18 +2750,9 @@ export default function TablePage() {
 </TabsContent>
 
           <TabsContent value="players">
-            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
-              onRetry={season.error ? season.reload : reportAnalytics.reload}>
-            {playerStats.length === 0 && !canManageGroup ? (
-              <Card className="bg-card/50 border-border">
-                <CardContent className="py-12 text-center">
-                  <User className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">{t({ it: 'Nessuna statistica giocatore', en: 'No player stats yet' })}</h3>
-                  <p className="text-muted-foreground">{t({ it: 'Gioca qualche partita per vedere le statistiche', en: 'Play some battles to see player statistics' })}</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
+            <div className="space-y-6">
+              <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
+                onRetry={season.error ? season.reload : reportAnalytics.reload}>
                 {playerStats.length === 0 && (
                   <Card className="bg-card/50 border-border">
                     <CardContent className="py-8 text-center">
@@ -2884,6 +2877,7 @@ export default function TablePage() {
                 </Card>
                 </>
                 )}
+              </ArenaDataStatus>
 
                 <Card className="bg-card/50 border-border">
                   <CardHeader>
@@ -2953,79 +2947,16 @@ export default function TablePage() {
 
                 {canManageGroup && (
                   <Card className="bg-card/50 border-border">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-foreground">
-                        <UserPlus className="h-5 w-5" />
-                        {t({ it: 'Guest del playgroup', en: 'Playgroup guests' })}
-                      </CardTitle>
-                      <CardDescription>
-                        {t({
-                          it: 'Crea un link monouso per trasformare un guest in utente senza perdere mazzi, partite o vittorie.',
-                          en: 'Create a one-time link to turn a guest into a user without losing decks, matches, or wins.',
-                        })}
-                      </CardDescription>
+                    <CardHeader><CardTitle>{t({it:'Guest e mazzi del playgroup',en:'Playgroup guests and decks'})}</CardTitle>
+                      <CardDescription>{t({it:'Trova un guest o un comandante e gestisci i mazzi associati.',en:'Find a guest or commander and manage their decks.'})}</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      {guests.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          {t({ it: 'Nessun guest registrato in questo playgroup.', en: 'No guests registered in this playgroup.' })}
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {guests.map((guest) => (
-                            <div
-                              key={guest.id}
-                              className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2.5"
-                            >
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-medium text-foreground">{guest.display_name}</p>
-                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
-                                    Guest
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {guest.arena_guest_decks?.length || 0} {t({ it: 'mazzi', en: 'decks' })}
-                                  {guest.last_played_at && (
-                                    <> · {t({ it: 'Ultima partita', en: 'Last played' })} {format(new Date(guest.last_played_at), 'PP')}</>
-                                  )}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-9 w-9 text-muted-foreground hover:text-emerald-300"
-                                  onClick={() => openAddGuestDeckModal(guest)}
-                                  title={t({ it: 'Aggiungi mazzo', en: 'Add deck' })}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-9 w-9 text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleDeleteGuest(guest)}
-                                  disabled={deletingGuestIds.includes(guest.id)}
-                                  title={t({ it: 'Elimina guest', en: 'Delete guest' })}
-                                >
-                                  <Trash2 className={`h-4 w-4 ${deletingGuestIds.includes(guest.id) ? 'animate-pulse' : ''}`} />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
+                    <CardContent><GuestDirectory key={`${user?.id}:${groupId}`} guests={guests} deletingIds={deletingGuestIds}
+                      onAdd={()=>{resetGuestModal();setGuestModalMode('manage-create');setShowGuestModal(true);}}
+                      onAddDeck={openAddGuestDeckModal} onDelete={handleDeleteGuest} /></CardContent>
                   </Card>
                 )}
-              </div>
-            )}
-
-            </ArenaDataStatus>
-</TabsContent>
+            </div>
+          </TabsContent>
 
           <TabsContent value="commanders">
             <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
@@ -4199,9 +4130,9 @@ export default function TablePage() {
                 </div>
               )}
 
-              {(guestModalMode === 'create' || guestModalMode === 'add-deck' || guests.length === 0) && (
+              {(guestModalMode === 'create' || guestModalMode === 'manage-create' || guestModalMode === 'add-deck' || guests.length === 0) && (
                 <div className="space-y-4">
-                  {guests.length > 0 && guestModalMode !== 'add-deck' && (
+                  {guests.length > 0 && guestModalMode !== 'add-deck' && guestModalMode !== 'manage-create' && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -4250,7 +4181,7 @@ export default function TablePage() {
                 </div>
               )}
             </CardContent>
-            {(guestModalMode === 'create' || guestModalMode === 'add-deck' || guests.length === 0) && (
+            {(guestModalMode === 'create' || guestModalMode === 'manage-create' || guestModalMode === 'add-deck' || guests.length === 0) && (
               <div className="border-t border-border/70 px-6 py-4">
                 <div className="flex gap-3">
                   <Button
