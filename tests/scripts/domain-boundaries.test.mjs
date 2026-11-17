@@ -18,3 +18,16 @@ test('domain gate rejects runtime imports, ambient platform access and cycles', 
     }
   } finally { rmSync(dir, { recursive: true }); }
 });
+
+test('domain gate rejects ambient clocks and random generators but accepts injected inputs', () => {
+  const dir = mkdtempSync(join(tmpdir(), '21life-domain-time-'));
+  try {
+    for (const source of ['export const x = new Date();', 'export const x = Date.now();',
+      'export const random = Math.random;', 'export const x = Date();']) {
+      writeFileSync(join(dir, 'a.ts'), source);
+      assert.ok(verifyDomainBoundaries(dir, ts).some(error => error.includes('ambient clock/random')));
+    }
+    writeFileSync(join(dir, 'a.ts'), "export const parse = (value: string) => new Date(value); export const choose = (random: () => number) => Math.floor(random() * 4);");
+    assert.deepEqual(verifyDomainBoundaries(dir, ts), []);
+  } finally { rmSync(dir, { recursive: true }); }
+});

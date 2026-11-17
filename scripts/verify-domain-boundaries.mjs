@@ -36,6 +36,13 @@ export function verifyDomainBoundaries(root, ts) {
       if (ts.isIdentifier(node) && ['window', 'document', 'localStorage', 'sessionStorage', 'process', 'fetch'].includes(node.text)) {
         errors.push(`${file}: platform global ${node.text}`);
       }
+      const ambientProperty = ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+        && ((node.expression.text === 'Date' && node.name.text === 'now')
+          || (node.expression.text === 'Math' && node.name.text === 'random'));
+      const ambientDate = (ts.isNewExpression(node) && ts.isIdentifier(node.expression)
+        && node.expression.text === 'Date' && !node.arguments?.length)
+        || (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date');
+      if (ambientProperty || ambientDate) errors.push(`${file}: ambient clock/random must be supplied by an adapter`);
       ts.forEachChild(node, walk);
     }
     walk(source);

@@ -5,7 +5,7 @@ function pad(value: number) {
 }
 
 /** Value for HTML `date` inputs in the user's local timezone. */
-export function toMatchDateValue(date: Date = new Date()): string {
+export function toMatchDateValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
@@ -43,11 +43,11 @@ export function matchDateToIso(value: string, originalIso?: string | null): stri
   return parsed.toISOString();
 }
 
-export function isoToMatchDateValue(iso: string | null): string {
+export function isoToMatchDateValue(iso: string | null, clock: () => Date): string {
   if (iso === null) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
-    return toMatchDateValue();
+    return toMatchDateValue(clock());
   }
 
   return toMatchDateValue(date);

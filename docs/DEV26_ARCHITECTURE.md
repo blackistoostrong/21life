@@ -148,3 +148,15 @@ Setup extraction checks before build: full web quality699+3skip/66script/128ratc
 
 
 Setup/wizard84ad4a05 verified: clean56route build and browser desktop/mobile10/10, including unchanged pod2–6goldens, real4player/2client recovery/finalization and observer/fullscreen/new-owner cases. Exactly2saved matches and fixture cleanup passed. No golden/tolerance changes. Next shared-domain boundary is the existing single engine in expo/lib/live-game: split models/events/mutations/results, leaving clock/RNG defaults in compatibility adapters. This is still partial point6; WebLiveGame1270and the other targets remain above limits.
+
+
+## Shared live engine, history and clock boundary
+
+The existing single engine is split into `packages/domain/live-game-types`, `live-game-events`, `live-game-players`, `live-game-mutations`, `live-game-results` and `live-game-state`; the scoped `live-game` facade preserves the public feature contract. Models own the canonical layout variant type, re-exported by the old geometry path. Pure history moves to `packages/domain/live-game-history`. Clock and RNG are required inputs to pure mutations/selection, including recursive group/drain/last-standing calls. `packages/data/live-game-runtime` preserves installed clients' ambient defaults and both platform import paths delegate to it. This is a shared IO adapter, not pure domain logic.
+
+The purity gate now rejects ambient Date construction/Date.now/Math.random; explicit date parsing and injected providers remain valid. The previously shared datetime helper still hid a current-date fallback: its domain input is now explicit and `match-datetime-runtime` retains the existing platform API/defaults, including null-history behavior. Existing clock behavior is preserved rather than silently replacing KO time with mutation time.
+
+A local oracle loads the actual old engine0f40a647 and the extracted implementation under the same controlled clock/RNG.1382comparisons passed across21public functions,26runtime exports,2/4/6players, mutations/recursion/drain/counters/emblems/normalization, history and dates; outputs, ambient call counts and input immutability match. Original source/report remain ignored local QA artifacts, not a second product implementation. Committed deterministic conformance tests execute the same rules under both resolvers; a frozen public API fixture checks compatibility. Typecheckweb,27targeted tests and import gates pass; complete quality, reviewed coverage floors and real build/export/browser checks remain required.
+
+
+Pre-build verification for the engine extraction: web quality707+3skip/67script and native quality511PASS. Ten new reviewed per-file floors per client preserve the measured extracted implementations; existing floors are unchanged. Ratchets138web/130native PASS. Shared tests cover injected recursive clocks, atomic group/drain versioning, RNG consumption, default compatibility, bounded undo/redo and legacy recovery; the original web API rule tests also execute through the native resolver. Build/export and browser checks still pending at this checkpoint.

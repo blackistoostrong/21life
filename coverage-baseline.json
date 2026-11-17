@@ -766,5 +766,65 @@
     "statements": 100,
     "functions": 100,
     "branches": 100
+  },
+  "packages/data/live-game-runtime.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/data/match-datetime-runtime.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/live-game-events.ts": {
+    "lines": 88.88,
+    "branches": 81.42,
+    "functions": 100,
+    "statements": 83.58
+  },
+  "packages/domain/live-game-history.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/live-game-mutations.ts": {
+    "lines": 83.05,
+    "branches": 73.52,
+    "functions": 76.92,
+    "statements": 76.38
+  },
+  "packages/domain/live-game-players.ts": {
+    "lines": 90.56,
+    "branches": 76.78,
+    "functions": 100,
+    "statements": 84.84
+  },
+  "packages/domain/live-game-results.ts": {
+    "lines": 95.83,
+    "branches": 62.16,
+    "functions": 100,
+    "statements": 83.33
+  },
+  "packages/domain/live-game-state.ts": {
+    "lines": 89.47,
+    "branches": 67.21,
+    "functions": 77.77,
+    "statements": 77.27
+  },
+  "packages/domain/live-game-types.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/domain/live-game.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
   }
 }

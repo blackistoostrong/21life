@@ -1,1 +1,1 @@
-export * from '@/expo/lib/live-game-history';
+export * from '@/packages/domain/live-game-history';
