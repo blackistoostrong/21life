@@ -5,6 +5,8 @@ import AxeBuilder from '@axe-core/playwright';
 declare global {
   interface Window {
     trackerDisplayMonitor?: { created: number; active: number };
+    trackerFullscreenMonitor?: { requests: number; locks: number; exits: number };
+    settleTrackerFullscreen?: (outcome: 'resolve' | 'reject') => void;
   }
 }
 
@@ -185,3 +187,86 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   await expect(page.getByRole('button', { name: /Share|Condividi/ })).toBeVisible();
   if (checkDisplay) await expect.poll(() => page.evaluate(() => window.trackerDisplayMonitor?.active)).toBe(0);
 });
+
+for (const { outcome, resume } of [
+  { outcome: 'resolve', resume: false }, { outcome: 'reject', resume: false },
+  { outcome: 'resolve', resume: true },
+] as const) {
+  test(`tracker display fullscreen ${outcome} after pause respects ${resume ? 'new owner' : 'unmount'}`, async ({ page }) => {
+    test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+    const groupId = process.env.E2E_GROUP_ID!;
+    let gameId: string | null = null;
+    await page.addInitScript(() => {
+      const monitor = { requests: 0, locks: 0, exits: 0 };
+      window.trackerFullscreenMonitor = monitor;
+      let fullscreen: Element | null = null;
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => true });
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreen });
+      Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: () => {
+        monitor.requests++;
+        return new Promise<void>((resolve, reject) => {
+          window.settleTrackerFullscreen = (result) => {
+            if (result === 'reject') reject(new Error('Synthetic fullscreen rejection'));
+            else { fullscreen = document.documentElement; resolve(); }
+          };
+        });
+      } });
+      Object.defineProperty(document, 'exitFullscreen', { configurable: true, value: async () => {
+        monitor.exits++; fullscreen = null;
+      } });
+      Object.defineProperty(screen.orientation, 'lock', { configurable: true, value: async () => { monitor.locks++; } });
+      Object.defineProperty(screen.orientation, 'unlock', { configurable: true, value: () => {} });
+    });
+    try {
+      await fixtureLogin(page);
+      await page.goto(`/table/${groupId}/play`);
+      await page.getByRole('button', { name: '2', exact: true }).click();
+      await page.getByRole('button', { name: /Step 4|Passaggio 4/ }).click();
+      for (let seat = 1; seat <= 2; seat++) {
+        await page.getByRole('button', { name: new RegExp(`^(Seat|Posto) ${seat}`) }).click();
+        const select = page.getByTestId('live-player-select');
+        const option = select.locator('option:not([disabled])').filter({ hasNotText: /Choose player|Scegli giocatore/ }).first();
+        await select.selectOption((await option.getAttribute('value'))!);
+        await page.getByTestId('live-deck-option').first().click();
+      }
+      await page.evaluate(() => localStorage.setItem('live-onboarding-v1', 'done'));
+      await page.getByTestId('live-start').click();
+      await expect(page.getByTestId('live-end')).toBeVisible();
+      const journal = () => page.evaluate(({ group, user }) => {
+        const raw = localStorage.getItem(`phyrexian-arena:web-live-game:v2:${user}:${group}`);
+        return raw ? JSON.parse(raw).journal : null;
+      }, { group: groupId, user: process.env.E2E_USER_ID });
+      await expect.poll(async () => (await journal())?.needsCreate).toBe(false);
+      gameId = (await journal()).record.id;
+      await expect.poll(() => page.evaluate(() => window.trackerFullscreenMonitor?.requests)).toBe(1);
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await page.getByRole('button', { name: /^Pause game|^Pausa partita/ }).click();
+      await expect(page).toHaveURL(new RegExp(`/table/${groupId}$`));
+      if (resume) {
+        await page.getByRole('button', { name: /Live game in progress|Partita live in corso/ }).click();
+        await expect(page.getByTestId('live-end')).toBeVisible();
+      }
+      const before = await page.evaluate(() => window.trackerFullscreenMonitor!.locks);
+      await page.evaluate((result) => window.settleTrackerFullscreen!(result), outcome);
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      expect(await page.evaluate(() => window.trackerFullscreenMonitor!.locks)).toBe(before);
+      expect(await page.evaluate(() => document.fullscreenElement === null)).toBe(!resume);
+      await expect(page.getByText('The browser did not allow fullscreen. Try again from the tracker button.', { exact: true })).toHaveCount(0);
+      if (resume) {
+        await page.getByRole('button', { name: 'Back', exact: true }).click();
+        await page.getByRole('button', { name: /^Pause game|^Pausa partita/ }).click();
+        await expect(page).toHaveURL(new RegExp(`/table/${groupId}$`));
+        expect(await page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+      }
+    } finally {
+      if (gameId) {
+        // Only the disposable fixture game; use its actual authenticated policy.
+        const response = await page.request.patch(`${process.env.SUPABASE_URL}/rest/v1/live_games?id=eq.${gameId}&group_id=eq.${groupId}`, {
+          headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, Authorization: `Bearer ${process.env.E2E_ACCESS_TOKEN}` },
+          data: { status: 'cancelled', ended_at: new Date().toISOString() },
+        });
+        expect(response.ok()).toBe(true);
+      }
+    }
+  });
+}

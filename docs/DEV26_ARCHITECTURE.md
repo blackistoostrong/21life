@@ -115,3 +115,10 @@ Extracted display candidate2c78542d passed its clean56route build and the same r
 
 
 Observer fix candidatefb8df020 passed a clean56route build and the instrumented real4player/2client flow desktop/mobile2/2: observer stable on mutation, active after reload/cache recovery and detached in recap. Exactly2matches and fixture cleanup were verified. This is a DOM resource ownership check; pending fullscreen/unmount and full account/group controller lifecycle remain open.
+
+
+## Fullscreen asynchronous ownership
+
+A browser regression onfb8df020 proved a late completion bug: after pausing and unmounting the tracker, resolving its pending fullscreen request still increased orientation locks1→2. The next behavior fix adds document-scoped opaque display leases, a single pending fullscreen request and guarded continuations. A late rejection cannot notify a departed tracker; a late success restores document fullscreen only when no newer tracker claims display. Late orientation locks release when their owner is gone and no newer owner needs them. The WeakMap contains only a boolean resource lease per Document, never actor/game data. It coordinates one browser-wide resource rather than sharing business state across accounts.
+
+The actual React/browser tests defer fullscreen resolution/rejection at the browser API boundary, pause through the existing UI and assert no new lock/fullscreen/error toast after departure. Their live games use disposable Dev users; authenticated fixture cancellation follows the same policy as normal cancellation. Physical browser/PWA orientation behavior, full account/group reset and all four entrypoint structural targets remain final/open gates.
