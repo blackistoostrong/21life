@@ -1,3 +1,4 @@
+import {getArenaAnalyticsSince} from '@/lib/arena-analytics-bundle';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildArenaAnalyticsView,
@@ -107,4 +108,12 @@ describe('arena analytics bundle', () => {
     });
     expect(new Date(getAnalyticsSince('30d')!).getHours()).toBe(0);
   });
+});
+
+it('uses the same normalized date boundary for history export and native aggregates',()=>{
+  expect(getArenaAnalyticsSince('all')).toBeNull();
+  expect(getArenaAnalyticsSince('all',null)).toBeNull();
+  expect(getArenaAnalyticsSince('all','2026-01-01')).toBe('2026-01-01T00:00:00.000Z');
+  const lower=getArenaAnalyticsSince('7d');expect(lower).not.toBeNull();
+  expect(new Date(lower!).getHours()).toBe(0);
 });

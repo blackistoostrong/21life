@@ -9,7 +9,7 @@ export interface ArenaShareParticipant {
 }
 
 export interface ArenaShareMatch {
-  playedAt: string;
+  playedAt: string | null;
   notes?: string | null;
   winnerName: string;
   participants: ArenaShareParticipant[];
@@ -56,7 +56,8 @@ interface ArenaShareLabels {
   noComment: string;
 }
 
-function formatShareDate(iso: string, locale: string) {
+function formatShareDate(iso: string | null, locale: string) {
+  if (iso === null) return '—';
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',

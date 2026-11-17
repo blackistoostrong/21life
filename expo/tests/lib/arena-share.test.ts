@@ -48,3 +48,8 @@ describe('arena share', () => {
     expect(text).not.toContain('Public page');
   });
 });
+
+it('does not invent a date for undated historical matches',()=>{
+  const text=buildArenaShareText({arenaName:'Group',periodLabel:'All',totalMatches:1,topPlayers:[],topDecks:[],topColors:[],recentMatches:[{playedAt:null,winnerName:'Draw',participants:[]}]},labels);
+  expect(text).toContain('—');expect(text).not.toContain('1970');
+});

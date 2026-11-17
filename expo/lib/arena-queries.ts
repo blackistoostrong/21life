@@ -1,52 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ArenaGuest } from '@/lib/arena-participants';
-import { ARENA_MATCHES_PAGE_SIZE } from '@/lib/arena-matches';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
-import type { ArenaDetail, ArenaMatch, MemberDeck } from '@/lib/types/arena';
-
-export const MATCHES_SELECT = `
-  *,
-  winner:winner_id (id, username, display_name),
-  winner_guest:arena_guests!matches_winner_guest_id_fkey (id, display_name),
-  match_participants (
-    id,
-    user_id,
-    guest_id,
-    participant_name_snapshot,
-    deck_id,
-    guest_deck_id,
-    is_winner,
-    tracked_event_count,
-    life_lost,
-    life_gained,
-    life_damage_dealt,
-    unattributed_life_lost,
-    commander_damage_taken,
-    commander_damage_dealt,
-    infect_received,
-    infect_dealt,
-    eliminations,
-    eliminations_caused,
-    revives,
-    corrections,
-    placement,
-    eliminated_at,
-    was_starting_player,
-    group_damage_dealt,
-    group_damage_events,
-    deck_name_snapshot,
-    commander_snapshot,
-    commander_image_snapshot,
-    deck_bracket_snapshot,
-    color_identity_snapshot,
-    final_life,
-    final_infect,
-    profiles (id, username, display_name),
-    arena_guests (id, display_name),
-    decks (name, commander, commander_image, bracket, color_identity, source_type),
-    arena_guest_decks (name, commander, commander_image, bracket, color_identity)
-  )
-`;
+import type { ArenaDetail, MemberDeck } from '@/lib/types/arena';
 
 const DECK_PICKER_COLUMNS = `
   id,
@@ -65,49 +20,6 @@ const DECK_PICKER_COLUMNS = `
 
 const MEMBER_DECK_LIMIT = 120;
 const MEMBER_FETCH_CONCURRENCY = 4;
-
-export type ArenaMatchesPage = {
-  matches: ArenaMatch[];
-  hasMore: boolean;
-};
-
-export type ArenaMatchesCursor = {
-  playedAt: string;
-  id: string;
-};
-
-export async function fetchArenaMatches(
-  supabase: SupabaseClient,
-  groupId: string,
-  cursor?: ArenaMatchesCursor | null,
-): Promise<ArenaMatchesPage> {
-  let query = supabase
-    .from('matches')
-    .select(MATCHES_SELECT)
-    .eq('group_id', groupId)
-    .order('played_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(ARENA_MATCHES_PAGE_SIZE + 1);
-
-  if (cursor) {
-    query = query.or(
-      `played_at.lt.${cursor.playedAt},and(played_at.eq.${cursor.playedAt},id.lt.${cursor.id})`,
-    );
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('Error fetching matches:', getSupabaseErrorMessage(error, 'Failed to fetch matches'));
-    return { matches: [], hasMore: false };
-  }
-
-  const rows = (data as ArenaMatch[]) || [];
-  return {
-    matches: rows.slice(0, ARENA_MATCHES_PAGE_SIZE),
-    hasMore: rows.length > ARENA_MATCHES_PAGE_SIZE,
-  };
-}
 
 export async function fetchArenaGroup(supabase: SupabaseClient, groupId: string) {
   const { data, error } = await supabase

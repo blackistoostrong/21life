@@ -42,3 +42,8 @@ describe('match share text', () => {
     expect(text).toContain('Comment:\nNo comment');
   });
 });
+
+it('shares an unknown historical date explicitly',()=>{
+  const text=buildMatchShareText(makeMatch({played_at:null}),'Group',labels,'en-US');
+  expect(text).toContain('—');expect(text).not.toContain('1970');
+});

@@ -16,7 +16,7 @@ function subDays(date: Date, days: number) {
   return next;
 }
 
-export function filterMatchesByDate<T extends { played_at: string }>(
+export function filterMatchesByDate<T extends { played_at: string | null }>(
   matches: T[],
   dateFilter: ArenaDateFilter,
   seasonStart?: string | null,
@@ -26,7 +26,7 @@ export function filterMatchesByDate<T extends { played_at: string }>(
     : Number.NEGATIVE_INFINITY;
   if (dateFilter === 'all') {
     if (!seasonStart) return matches;
-    return matches.filter((match) => new Date(match.played_at).getTime() >= seasonThreshold);
+    return matches.filter((match) => (match.played_at === null ? Number.NEGATIVE_INFINITY : new Date(match.played_at).getTime()) >= seasonThreshold);
   }
 
   const now = new Date();
@@ -48,9 +48,9 @@ export function filterMatchesByDate<T extends { played_at: string }>(
 
   const relativeThreshold = startOfDay(startDate).getTime();
   if (seasonThreshold > relativeThreshold) {
-    return matches.filter((match) => new Date(match.played_at).getTime() >= seasonThreshold);
+    return matches.filter((match) => (match.played_at === null ? Number.NEGATIVE_INFINITY : new Date(match.played_at).getTime()) >= seasonThreshold);
   }
-  return matches.filter((match) => new Date(match.played_at).getTime() > relativeThreshold);
+  return matches.filter((match) => (match.played_at === null ? Number.NEGATIVE_INFINITY : new Date(match.played_at).getTime()) > relativeThreshold);
 }
 
 export function filterMatchesByBracket<T extends ArenaMatch>(matches: T[], bracket: string): T[] {

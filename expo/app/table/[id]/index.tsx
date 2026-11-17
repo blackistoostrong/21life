@@ -1,3 +1,7 @@
+import {useArenaDayExport} from '@/hooks/use-arena-day-export';
+import {arenaHistoryScope} from '../../../../packages/domain/arena-history';
+import {getArenaAnalyticsSince} from '@/lib/arena-analytics-bundle';
+import {ArenaHistoryStatus} from '@/components/table/arena-history-status';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -123,6 +127,7 @@ export default function TableScreen() {
     matches,
     hasMoreMatches,
     loadingMoreMatches,
+    historyTotal,historyLoading,historyError,historyCached,retryHistory,arenaError,
     guests,
     decks,
     loading,
@@ -171,8 +176,8 @@ export default function TableScreen() {
   }, [matchId, loading, matches, hasMoreMatches, loadingMoreMatches, loadMoreMatches, router]);
   const [detailsLiveGame, setDetailsLiveGame] = useState<LiveGameRecord | null>(null);
   const [detailsRecapLoading, setDetailsRecapLoading] = useState(false);
-  const [exportDayKey, setExportDayKey] = useState<string | null>(null);
-  const [exportIntro, setExportIntro] = useState('');
+  const [exportSelection,setExportSelection]=useState<{id:number;owner:string;dayKey:string;since:string|null;intro:string}|null>(null);
+  const exportSequence=useRef(0);
   const [savingMatch, setSavingMatch] = useState(false);
   const [savingEditMatch, setSavingEditMatch] = useState(false);
   const [savingArena, setSavingArena] = useState(false);
@@ -190,6 +195,16 @@ export default function TableScreen() {
   const [analyticsPayload, setAnalyticsPayload] = useState<ArenaAnalyticsPayload | null>(null);
   const [allTimeAnalyticsPayload, setAllTimeAnalyticsPayload] = useState<ArenaAnalyticsPayload | null>(null);
   const [seasonContext, setSeasonContext] = useState<ArenaSeasonContext | null>(null);
+  const exportOwner=JSON.stringify([user?.id,groupId]);
+  const activeExport=exportSelection?.owner===exportOwner?exportSelection:null;
+  const exportDayKey=activeExport?.dayKey??null;
+  const exportIntro=activeExport?.intro??'';
+  const hasExport=activeExport!==null;
+  const exportSince=activeExport?.since??null;
+  const exportScope=useMemo(()=>hasExport && groupId?arenaHistoryScope(groupId,{since:exportSince}):null,[hasExport,exportSince,groupId]);
+  const dayExport=useArenaDayExport(user?.id,exportScope,exportDayKey);
+  const setExportIntro=(intro:string)=>{if(activeExport)setExportSelection(current=>current?.id===activeExport.id?{...current,intro}:current);};
+
   const [editResetMonth, setEditResetMonth] = useState(1);
 
   const refreshSeasonContext = useCallback(async () => {
@@ -339,6 +354,7 @@ export default function TableScreen() {
   const matchDayGroups = useMemo(() => {
     const locale = language === 'it' ? 'it-IT' : 'en-US';
     return groupMatchesByDay(filteredMatches, {
+      unknownDateLabel:language==='it'?'Data non disponibile':'Date unavailable',
       formatLabel: (dayKey) => {
         const [year, month, day] = dayKey.split('-').map(Number);
         return new Intl.DateTimeFormat(locale, {
@@ -383,15 +399,11 @@ export default function TableScreen() {
     });
   }, []);
 
-  const closeExportModal = useCallback(() => {
-    setExportDayKey(null);
-    setExportIntro('');
-  }, []);
-
+  const closeExportModal = useCallback(() => {setExportSelection(null);}, []);
   const openDayExportModal = useCallback((dayKey: string) => {
-    setExportDayKey(dayKey);
-    setExportIntro('');
-  }, []);
+    setExportSelection({id:++exportSequence.current,owner:exportOwner,dayKey,
+      since:getArenaAnalyticsSince(dateFilter,seasonContext?.currentSeasonStart),intro:''});
+  }, [dateFilter,exportOwner,seasonContext?.currentSeasonStart]);
 
   const exportDayGroup = useMemo(
     () => matchDayGroups.find((entry) => entry.dayKey === exportDayKey) ?? null,
@@ -528,9 +540,9 @@ export default function TableScreen() {
   });
 
   const handleExportDayMatches = useCallback(async () => {
-    if (!group || !exportDayGroup) return;
+    if (!group || !activeExport || !dayExport.ready || !dayExport.matches.length) return;
 
-    const exportMatches = [...exportDayGroup.matches]
+    const exportMatches = [...dayExport.matches as unknown as ArenaMatch[]]
       .reverse()
       .map((match) => buildSessionExportMatch(match));
     const text = buildArenaSessionExportText(exportIntro, exportMatches);
@@ -538,15 +550,15 @@ export default function TableScreen() {
 
     try {
       await Share.share({
-        title: exportDayGroup.label,
+        title: exportDayGroup?.label ?? activeExport.dayKey,
         message: text,
       });
-      closeExportModal();
+      setExportSelection(current=>current?.id===activeExport.id?null:current);
       showToast(copy('exportCopied'));
     } catch {
       showAppAlert(copy('error'), copy('shareStatsFailed'));
     }
-  }, [closeExportModal, copy, exportDayGroup, exportIntro, group, showToast]);
+  }, [activeExport,dayExport.matches,dayExport.ready,copy, exportDayGroup, exportIntro, group, showToast]);
 
   const handleShareMatch = useCallback(
     (match: ArenaMatch) => {
@@ -714,7 +726,8 @@ export default function TableScreen() {
     return (
       <Screen safeBottom>
         <PhyrexianPanel style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>{copy('arenaNotFound')}</Text>
+          <Text style={styles.emptyTitle}>{arenaError ? (language==='it'?'Playgroup non disponibile':'Playgroup unavailable'):copy('arenaNotFound')}</Text>
+          {arenaError?<Button label={language==='it'?'Riprova':'Retry'} onPress={()=>void refresh()}/>:null}
           <Button label={copy('goToDashboard')} onPress={() => router.replace('/(tabs)')} />
         </PhyrexianPanel>
       </Screen>
@@ -734,6 +747,7 @@ export default function TableScreen() {
           <Text style={styles.backLabel}>{copy('back')}</Text>
         </Pressable>
 
+        {arenaError?<View style={{gap:10}}><Text accessibilityRole="alert" style={{color:colors.destructive}}>{language==='it'?'Dati del playgroup non aggiornati. Riprova.':'Playgroup data is not current. Retry.'}</Text><Button label={language==='it'?'Riprova':'Retry'} onPress={()=>void refresh()}/></View>:null}
         {activeLiveGameId ? (
           <PhyrexianPanel style={styles.resumePanel}>
             <Text style={styles.resumeTitle}>{copy('gameInProgress')}</Text>
@@ -805,10 +819,12 @@ export default function TableScreen() {
 
         {activeTab === 'matches' ? (
           <View style={styles.matchesContent}>
-            <TableMatchesList
+            <ArenaHistoryStatus loaded={matches.length} total={historyTotal} loading={historyLoading} error={historyError}
+              cached={historyCached} language={language} onRetry={retryHistory}/>
+            {(!historyLoading && !historyError || matches.length>0) ? <TableMatchesList
               dayGroups={matchDayGroups}
               expandedDayKeys={expandedDayKeys}
-              emptyTitle={copy('noMatchesTitle')}
+              emptyTitle={hasMoreMatches || historyCached ? (language==='it'?'Nessuna partita tra quelle caricate':'No matches among loaded pages'):copy('noMatchesTitle')}
               emptyBody={copy('noMatchesBody')}
               recordBattleLabel={copy('recordBattle')}
               matchCountLabel={(count) => copy(count === 1 ? 'matchSingular' : 'matchPlural')}
@@ -821,12 +837,12 @@ export default function TableScreen() {
               exportDayLabel={copy('exportDay')}
               drawLabel={copy('liveGameDraw')}
               onExportDay={openDayExportModal}
-              hasMore={hasMoreMatches}
+              hasMore={hasMoreMatches && !historyError}
               loadingMore={loadingMoreMatches}
               loadMoreLabel={copy('loadOlderMatches')}
               loadingMoreLabel={copy('loadingOlderMatches')}
               onLoadMore={loadMoreMatches}
-            />
+            /> : null}
             {seasonContext ? <PreviousSeasonsPanel archives={seasonContext.archives} /> : null}
           </View>
         ) : null}
@@ -1421,9 +1437,11 @@ export default function TableScreen() {
           <Text style={styles.modalBody}>
             {exportDayGroup.label}
             {' · '}
-            {exportDayGroup.matchCount} {copy(exportDayGroup.matchCount === 1 ? 'matchSingular' : 'matchPlural')}
+            {dayExport.ready?dayExport.matches.length:'—'} {copy('matchPlural')}
           </Text>
         ) : null}
+        {dayExport.loading?<Text style={styles.modalBody}>{language==='it'?'Caricamento giornata completa…':'Loading complete day…'}</Text>:null}
+        {dayExport.error?<View><Text accessibilityRole="alert" style={styles.modalBody}>{language==='it'?'Export non disponibile. Nessun risultato parziale.':'Export unavailable. No partial results.'}</Text><Button label={language==='it'?'Riprova':'Retry'} onPress={dayExport.retry}/></View>:null}
         <RichTextInput
           label={copy('exportIntro')}
           value={exportIntro}
@@ -1433,7 +1451,7 @@ export default function TableScreen() {
         />
         <View style={styles.modalActions}>
           <Button label={copy('cancel')} variant="outline" onPress={closeExportModal} style={styles.modalButton} />
-          <Button label={copy('generateExport')} onPress={handleExportDayMatches} style={styles.modalButton} />
+          <Button label={copy('generateExport')} disabled={!dayExport.ready || !dayExport.matches.length} onPress={handleExportDayMatches} style={styles.modalButton} />
         </View>
       </Modal>
     </Screen>

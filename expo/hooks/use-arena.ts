@@ -1,10 +1,10 @@
+import {useArenaHistory} from '@/hooks/use-arena-history';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseParticipantKey } from '@/lib/participant-keys';
 import type { ArenaGuest } from '@/lib/arena-participants';
 import {
   fetchArenaGroup,
   fetchArenaGuests,
-  fetchArenaMatches,
   fetchArenaMemberDecks,
 } from '@/lib/arena-queries';
 import { getParticipantDeckSnapshot } from '@/lib/arena-participants';
@@ -24,79 +24,61 @@ import {
   saveArenaCache,
   type ArenaCacheSnapshot,
 } from '@/lib/arena-cache';
-import { ARENA_MATCHES_PAGE_SIZE } from '@/lib/arena-matches';
 
 export function useArena(groupId: string | undefined, userId: string | undefined) {
+  const contextKey=groupId && userId?`${userId}:${groupId}`:null;
+  const activeContext=useRef<string|null>(null);
+  const [loadedContext,setLoadedContext]=useState<string|null>(null);
+  const [readError,setReadError]=useState<string|null>(null);
+  const isCurrent=useCallback(()=>contextKey!==null && activeContext.current===contextKey,[contextKey]);
+  useEffect(()=>{activeContext.current=contextKey;return()=>{activeContext.current=null;};},[contextKey]);
   const [group, setGroup] = useState<ArenaDetail | null>(null);
   const [members, setMembers] = useState<ArenaProfile[]>([]);
-  const [matches, setMatches] = useState<ArenaMatch[]>([]);
+  const history=useArenaHistory(groupId,userId);
+  const {matches,seed:seedHistory,reload:reloadHistory,loadMore:loadMoreMatches}=history;
   const [guests, setGuests] = useState<ArenaGuest[]>([]);
   const [decks, setDecks] = useState<MemberDeck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMoreMatches, setLoadingMoreMatches] = useState(false);
-  const [hasMoreMatches, setHasMoreMatches] = useState(false);
   const memberIdsRef = useRef<string[]>([]);
 
   const applySnapshot = useCallback((snapshot: ArenaCacheSnapshot) => {
+    if(!isCurrent())return;
+    setLoadedContext(contextKey);
     setGroup(snapshot.group);
     setMembers(snapshot.members);
-    setMatches(snapshot.matches);
-    setHasMoreMatches(snapshot.matches.length >= ARENA_MATCHES_PAGE_SIZE);
+    seedHistory(snapshot.matches);
     setGuests(snapshot.guests);
     setDecks(snapshot.decks);
     memberIdsRef.current = snapshot.members.map((member) => member.id);
-  }, []);
+  }, [contextKey,isCurrent,seedHistory]);
 
   const refreshMatches = useCallback(async () => {
-    if (!groupId) return [] as ArenaMatch[];
-    const page = await fetchArenaMatches(supabase, groupId);
-    setMatches(page.matches);
-    setHasMoreMatches(page.hasMore);
-    if (userId) {
-      const cached = await loadArenaCache(groupId, userId);
-      if (cached) await saveArenaCache({ ...cached, matches: page.matches });
+    const rows=await reloadHistory();
+    if(rows && groupId && userId && isCurrent()){
+      const cached=await loadArenaCache(groupId,userId);
+      if(cached)await saveArenaCache({...cached,matches:rows});
     }
-    return page.matches;
-  }, [groupId, userId]);
-
-  const loadMoreMatches = useCallback(async () => {
-    if (!groupId || loadingMoreMatches || !hasMoreMatches) return;
-    const oldestMatch = matches.at(-1);
-    if (!oldestMatch) {
-      setHasMoreMatches(false);
-      return;
-    }
-    setLoadingMoreMatches(true);
-    try {
-      const page = await fetchArenaMatches(supabase, groupId, {
-        playedAt: oldestMatch.played_at,
-        id: oldestMatch.id,
-      });
-      setMatches((current) => {
-        const knownIds = new Set(current.map((match) => match.id));
-        return [...current, ...page.matches.filter((match) => !knownIds.has(match.id))];
-      });
-      setHasMoreMatches(page.hasMore);
-    } finally {
-      setLoadingMoreMatches(false);
-    }
-  }, [groupId, hasMoreMatches, loadingMoreMatches, matches]);
+    return rows??[];
+  },[groupId,userId,reloadHistory,isCurrent]);
 
   const loadMemberDecks = useCallback(async (memberIds: string[]) => {
     if (!groupId) return [] as MemberDeck[];
     const loadedDecks = await fetchArenaMemberDecks(supabase, groupId, memberIds);
-    setDecks(loadedDecks);
+    if(isCurrent())setDecks(loadedDecks);
     return loadedDecks;
-  }, [groupId]);
+  }, [groupId,isCurrent]);
 
   const refreshMemberDecks = useCallback(async (memberId: string) => {
     if (!groupId) throw new Error('ARENA_DECKS_READ_FAILED');
     const loaded = await fetchArenaMemberDecks(supabase, groupId, [memberId], { strict: true });
+    if(!isCurrent())throw new Error('ARENA_CONTEXT_CHANGED');
     setDecks((current) => [...current.filter((deck) => deck.user_id !== memberId), ...loaded]);
     return loaded.length >= 120;
-  }, [groupId]);
+  }, [groupId,isCurrent]);
 
   const refresh = useCallback(async (showLoading = true) => {
+    if(!isCurrent())return null;
+    setReadError(null);
     if (!groupId || !userId) {
       setLoading(false);
       return null;
@@ -106,16 +88,16 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     try {
       const [groupData, matchesPage, guestData] = await Promise.all([
         fetchArenaGroup(supabase, groupId),
-        fetchArenaMatches(supabase, groupId),
+        reloadHistory(),
         fetchArenaGuests(supabase, groupId),
       ]);
-      const loadedMatches = matchesPage.matches;
+      if(!isCurrent())return null;
+      const loadedMatches = matchesPage ?? [];
 
       if (!groupData) {
+        setLoadedContext(contextKey);
         setGroup(null);
         setMembers([]);
-        setMatches([]);
-        setHasMoreMatches(false);
         setGuests([]);
         setDecks([]);
         await clearArenaCache(groupId, userId);
@@ -124,20 +106,21 @@ export function useArena(groupId: string | undefined, userId: string | undefined
 
       setGroup(groupData);
       setMembers(groupData.group_members.map((member) => member.profiles));
-      setMatches(loadedMatches);
-      setHasMoreMatches(matchesPage.hasMore);
-      setGuests(guestData);
+      if(isCurrent())setGuests(guestData);
 
       const memberIds = groupData.group_members.map((member) => member.user_id);
       memberIdsRef.current = memberIds;
       const loadedDecks = await loadMemberDecks(memberIds);
+      if(!isCurrent())return null;
+      setLoadedContext(contextKey);
 
+      const cacheMatches=matchesPage ?? (await loadArenaCache(groupId,userId))?.matches ?? [];
       await saveArenaCache({
         groupId,
         userId,
         group: groupData,
         members: groupData.group_members.map((member) => member.profiles),
-        matches: loadedMatches,
+        matches: cacheMatches,
         guests: guestData,
         decks: loadedDecks,
       });
@@ -163,6 +146,7 @@ export function useArena(groupId: string | undefined, userId: string | undefined
       ], { background: true });
 
       void refreshMissingImportedDeckImages(loadedDecks).then(async () => {
+        if(!isCurrent())return;
         const repairedDecks = await loadMemberDecks(memberIds);
         const cached = await loadArenaCache(groupId, userId);
         if (cached) await saveArenaCache({ ...cached, decks: repairedDecks });
@@ -170,12 +154,13 @@ export function useArena(groupId: string | undefined, userId: string | undefined
 
       return groupData;
     } catch (error) {
+      if(isCurrent()){setLoadedContext(contextKey);setReadError('ARENA_READ_UNAVAILABLE');}
       console.error('Error fetching arena:', getSupabaseErrorMessage(error, 'Failed to fetch arena'));
       return null;
     } finally {
-      setLoading(false);
+      if(isCurrent())setLoading(false);
     }
-  }, [groupId, loadMemberDecks, userId]);
+  }, [contextKey,isCurrent,groupId, loadMemberDecks, reloadHistory, userId]);
 
   useEffect(() => {
     if (!groupId || !userId) {
@@ -183,10 +168,9 @@ export function useArena(groupId: string | undefined, userId: string | undefined
       return;
     }
     let cancelled = false;
+    memberIdsRef.current=[];
     setGroup(null);
     setMembers([]);
-    setMatches([]);
-    setHasMoreMatches(false);
     setGuests([]);
     setDecks([]);
     setLoading(true);
@@ -205,17 +189,18 @@ export function useArena(groupId: string | undefined, userId: string | undefined
   useEffect(() => {
     if (!groupId || !userId) return;
     return subscribeToArenaCatalog(supabase, groupId, (event) => {
+      if(!isCurrent())return;
       if (event.entity === 'deck') {
         void loadMemberDecks(memberIdsRef.current);
         return;
       }
       if (event.entity === 'guest' || event.entity === 'guest_deck') {
-        void fetchArenaGuests(supabase, groupId).then(setGuests);
+        void fetchArenaGuests(supabase, groupId).then(rows=>{if(isCurrent())setGuests(rows);});
         return;
       }
       void refresh(false);
     });
-  }, [groupId, loadMemberDecks, refresh, userId]);
+  }, [groupId, loadMemberDecks, refresh, userId,isCurrent]);
 
   const playerStats = useMemo(() => calculatePlayerStats(matches), [matches]);
 
@@ -289,9 +274,9 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     await refreshMatches();
     if (guestIds.length > 0) {
       const guestData = await fetchArenaGuests(supabase, groupId);
-      setGuests(guestData);
+      if(isCurrent())setGuests(guestData);
     }
-  }, [groupId, refreshMatches, userId]);
+  }, [groupId, refreshMatches, userId,isCurrent]);
 
   const updateGroup = useCallback(async (name: string, description: string, isPublic?: boolean) => {
     if (!groupId) return;
@@ -323,7 +308,7 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     winnerKey: string | null;
     isDraw: boolean;
     participantDecks: Record<string, string>;
-    matchPlayedAtIso: string;
+    matchPlayedAtIso: string | null;
     matchNotes: string;
     winCondition: import('@/lib/types/arena').ArenaMatch['win_condition'];
     isArenaManager: boolean;
@@ -466,8 +451,8 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     });
 
     const guestData = await fetchArenaGuests(supabase, groupId);
-    setGuests(guestData);
-  }, [groupId, guests]);
+    if(isCurrent())setGuests(guestData);
+  }, [groupId, guests,isCurrent]);
 
   const addGuestDeck = useCallback(async (input: {
     guestId: string;
@@ -488,8 +473,8 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     });
 
     const guestData = await fetchArenaGuests(supabase, groupId);
-    setGuests(guestData);
-  }, [groupId]);
+    if(isCurrent())setGuests(guestData);
+  }, [groupId,isCurrent]);
 
   const removeGuest = useCallback(async (guestId: string) => {
     if (!groupId) return;
@@ -503,20 +488,27 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     if (error) throw error;
 
     const guestData = await fetchArenaGuests(supabase, groupId);
-    setGuests(guestData);
+    if(isCurrent())setGuests(guestData);
     await refreshMatches();
-  }, [groupId, refreshMatches]);
+  }, [groupId, refreshMatches,isCurrent]);
 
+  const visible=contextKey!==null && loadedContext===contextKey;
   return {
-    group,
-    members,
+    arenaError:visible?readError:null,
+    group:visible?group:null,
+    members:visible?members:[],
     matches,
-    hasMoreMatches,
-    loadingMoreMatches,
-    guests,
-    decks,
+    hasMoreMatches:history.hasMore,
+    loadingMoreMatches:history.loadingMore,
+    historyTotal:history.total,
+    historyLoading:history.loading,
+    historyError:history.error,
+    historyCached:history.cached,
+    retryHistory:history.reload,
+    guests:visible?guests:[],
+    decks:visible?decks:[],
     playerStats,
-    loading,
+    loading:Boolean(groupId && userId) && (!visible || loading),
     refresh,
     refreshMemberDecks,
     loadMoreMatches,

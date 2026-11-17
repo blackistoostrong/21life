@@ -60,13 +60,13 @@ export function TableMatchesList({
 }: TableMatchesListProps) {
   if (dayGroups.length === 0) {
     return (
-      <EmptyState
+      <View style={{gap:12}}><EmptyState
         icon="trophy-outline"
         title={emptyTitle}
         body={emptyBody}
         actionLabel={recordBattleLabel}
         onAction={onRecordBattle}
-      />
+      />{hasMore?<Button label={loadingMore?loadingMoreLabel:loadMoreLabel} variant="outline" disabled={loadingMore} onPress={onLoadMore}/>:null}</View>
     );
   }
 
