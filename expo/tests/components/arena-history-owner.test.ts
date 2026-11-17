@@ -27,7 +27,7 @@ import {historyGroup,historyId,historyPageFixture} from '../../../tests/fixtures
 import {arenaHistoryScope,parseArenaHistoryPage} from '../../../packages/domain/arena-history';
 const rpc=vi.mocked(fetchArenaHistoryPage);
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
-function render(group:string|undefined=historyGroup,user:string|undefined=historyId(900),flush=true){
+function RenderHistory(group:string|undefined=historyGroup,user:string|undefined=historyId(900),flush=true){
   hooks.cursor=0;hooks.effects=[];const result=useArenaHistory(group,user);
   if(flush)hooks.effects.splice(0).forEach(effect=>effect());return result;
 }
@@ -35,46 +35,46 @@ const page=()=>parseArenaHistoryPage(historyPageFixture(),arenaHistoryScope(hist
 beforeEach(()=>{hooks.values=[];hooks.cursor=0;hooks.effects=[];rpc.mockReset();});
 describe('native history ownership',()=>{
   it('labels cached rows without deriving a total or a continuation cursor',async()=>{
-    render().seed(page().matches as never);
-    expect(render()).toMatchObject({cached:true,total:null,hasMore:false});
+    RenderHistory().seed(page().matches as never);
+    expect(RenderHistory()).toMatchObject({cached:true,total:null,hasMore:false});
     rpc.mockRejectedValueOnce(new Error('ARENA_HISTORY_UNAVAILABLE'));
-    await render().reload();
-    expect(render()).toMatchObject({cached:true,total:null,error:'ARENA_HISTORY_UNAVAILABLE'});
-    expect(render().matches).toHaveLength(4);
-    rpc.mockResolvedValueOnce(page());await render().reload();
-    expect(render()).toMatchObject({cached:false,total:4,error:null,hasMore:false});
+    await RenderHistory().reload();
+    expect(RenderHistory()).toMatchObject({cached:true,total:null,error:'ARENA_HISTORY_UNAVAILABLE'});
+    expect(RenderHistory().matches).toHaveLength(4);
+    rpc.mockResolvedValueOnce(page());await RenderHistory().reload();
+    expect(RenderHistory()).toMatchObject({cached:false,total:4,error:null,hasMore:false});
   });
   it('does not turn a first-page backend failure into confirmed empty history',async()=>{
     rpc.mockRejectedValueOnce(new Error('ARENA_HISTORY_FORBIDDEN'));
-    await render().reload();expect(render()).toMatchObject({total:null,error:'ARENA_HISTORY_FORBIDDEN'});
+    await RenderHistory().reload();expect(RenderHistory()).toMatchObject({total:null,error:'ARENA_HISTORY_FORBIDDEN'});
   });
   it('masks previous account data before effects and ignores late results after switching groups',async()=>{
     const pending=deferred<ReturnType<typeof page>>();rpc.mockReturnValueOnce(pending.promise);
-    const old=render();const read=old.reload();const oldSignal=rpc.mock.calls[0][4]!;
-    expect(render(historyId(800),historyId(901),false).matches).toEqual([]);
-    render(historyId(800),historyId(901));expect(oldSignal.aborted).toBe(true);
+    const old=RenderHistory();const read=old.reload();const oldSignal=rpc.mock.calls[0][4]!;
+    expect(RenderHistory(historyId(800),historyId(901),false).matches).toEqual([]);
+    RenderHistory(historyId(800),historyId(901));expect(oldSignal.aborted).toBe(true);
     await old.reload();expect(rpc).toHaveBeenCalledOnce();
     pending.resolve(page());await read;
-    expect(render(historyId(800),historyId(901)).matches).toEqual([]);
+    expect(RenderHistory(historyId(800),historyId(901)).matches).toEqual([]);
   });
   it('aborts superseded refreshes without publishing their results',async()=>{
     const slow=deferred<ReturnType<typeof page>>();rpc.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(page());
-    const read=render().reload();const signal=rpc.mock.calls[0][4]!;
-    await render().reload();expect(signal.aborted).toBe(true);slow.resolve({...page(),total:999});await read;
-    expect(render().total).toBe(4);
+    const read=RenderHistory().reload();const signal=rpc.mock.calls[0][4]!;
+    await RenderHistory().reload();expect(signal.aborted).toBe(true);slow.resolve({...page(),total:999});await read;
+    expect(RenderHistory().total).toBe(4);
   });
 });
 
 it('appends a revision-bound next page once and preserves explicit failure state',async()=>{
   const first={...page(),total:101,matches:Array.from({length:100},(_,index)=>({...page().matches[0],id:historyId(201-index)})),next:{id:historyId(102),playedAt:page().matches[0].played_at}};
   rpc.mockResolvedValueOnce(first);
-  await render().reload();
+  await RenderHistory().reload();
   const next=deferred<ReturnType<typeof page>>();rpc.mockReturnValueOnce(next.promise);
-  const one=render().loadMore();await render().loadMore();expect(rpc).toHaveBeenCalledTimes(2);
+  const one=RenderHistory().loadMore();await RenderHistory().loadMore();expect(rpc).toHaveBeenCalledTimes(2);
   next.resolve({...page(),total:101,matches:[{...page().matches[0],id:historyId(101)}],next:null});await one;
-  expect(render()).toMatchObject({total:101,hasMore:false});expect(render().matches).toHaveLength(101);
-  rpc.mockRejectedValueOnce(new Error('ARENA_HISTORY_CHANGED'));await render().reload();
-  expect(render()).toMatchObject({total:101,error:'ARENA_HISTORY_CHANGED'});
+  expect(RenderHistory()).toMatchObject({total:101,hasMore:false});expect(RenderHistory().matches).toHaveLength(101);
+  rpc.mockRejectedValueOnce(new Error('ARENA_HISTORY_CHANGED'));await RenderHistory().reload();
+  expect(RenderHistory()).toMatchObject({total:101,error:'ARENA_HISTORY_CHANGED'});
 });
 
 it('never publishes an old export after closing or changing its owner',async()=>{
@@ -82,13 +82,13 @@ it('never publishes an old export after closing or changing its owner',async()=>
   const old=deferred<ReturnType<typeof page>['matches']>();const next=deferred<ReturnType<typeof page>['matches']>();
   api.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
   const scope=arenaHistoryScope(historyGroup);
-  const exportView=(user:string|undefined,day:string|null)=>{
+  const ExportView=(user:string|undefined,day:string|null)=>{
     hooks.cursor=0;hooks.effects=[];const result=useArenaDayExport(user,scope,day);
     hooks.effects.splice(0).forEach(effect=>effect());return result;
   };
-  exportView('old-user','2010-01-01');const signal=api.mock.calls[0][3]!;
-  exportView('new-user','2010-01-01');expect(signal.aborted).toBe(true);
-  old.resolve(page().matches);await Promise.resolve();expect(exportView('new-user','2010-01-01').ready).toBe(false);
-  next.resolve(page().matches);await Promise.resolve();expect(exportView('new-user','2010-01-01').matches).toHaveLength(4);
-  expect(exportView('new-user',null).matches).toEqual([]);
+  ExportView('old-user','2010-01-01');const signal=api.mock.calls[0][3]!;
+  ExportView('new-user','2010-01-01');expect(signal.aborted).toBe(true);
+  old.resolve(page().matches);await Promise.resolve();expect(ExportView('new-user','2010-01-01').ready).toBe(false);
+  next.resolve(page().matches);await Promise.resolve();expect(ExportView('new-user','2010-01-01').matches).toHaveLength(4);
+  expect(ExportView('new-user',null).matches).toEqual([]);
 });

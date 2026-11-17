@@ -509,6 +509,11 @@
       "version": "20261117082649",
       "name": "20261117082649_scope_admin_row_security_setting.sql",
       "checksum": "d5cff62fe23cd65ffc8d24347574128dcd848aa8adbe7a57df39b0d240d5b52e"
+    },
+    {
+      "version": "20261117134213",
+      "name": "20261117134213_arena_analytics_bundle_v2.sql",
+      "checksum": "953c89f6c38c61fd219bc93a08e63bcf68eb2130d15c7c44fc0c3757f9dc1288"
     }
   ]
 }

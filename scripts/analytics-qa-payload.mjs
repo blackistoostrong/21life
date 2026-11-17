@@ -17,9 +17,16 @@ export function extractHistoryQaPayload(output) {
     || value?.summary?.complete!==true || !value?.page?.groupId || value.page.groupId!==value.summary.groupId)throw new Error('Invalid synthetic history envelope');
   return value;
 }
+export function extractArenaBundleQaPayload(output) {
+  const lines=output.split(/\r?\n/).filter(line=>line.startsWith('QA26_ARENA_BUNDLE_PAYLOAD='));
+  if(lines.length!==1)throw new Error('Expected exactly one synthetic arena bundle');
+  const value=JSON.parse(lines[0].slice('QA26_ARENA_BUNDLE_PAYLOAD='.length));
+  if(value?.schemaVersion!==2 || value?.complete!==true || !value?.groupId || !Array.isArray(value.players))throw new Error('Invalid synthetic arena bundle');
+  return value;
+}
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [input,output,kind='analytics'] = process.argv.slice(2);
-  if (!input || !output || !['analytics','history'].includes(kind)) throw new Error('Usage: node scripts/analytics-qa-payload.mjs <qa-log> <payload-file> [analytics|history]');
-  const extract=kind==='history'?extractHistoryQaPayload:extractAnalyticsQaPayload;
+  if (!input || !output || !['analytics','history','arena-bundle'].includes(kind)) throw new Error('Usage: node scripts/analytics-qa-payload.mjs <qa-log> <payload-file> [analytics|history|arena-bundle]');
+  const extract=kind==='history'?extractHistoryQaPayload:kind==='arena-bundle'?extractArenaBundleQaPayload:extractAnalyticsQaPayload;
   writeFileSync(output,JSON.stringify(extract(readFileSync(input,'utf8'))));
 }

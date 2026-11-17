@@ -49,6 +49,8 @@ jobs:
           node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/history-payload.json" history
           echo "ANALYTICS_SQL_PAYLOAD_PATH=$RUNNER_TEMP/analytics-payload.json" >> "$GITHUB_ENV"
           echo "HISTORY_SQL_PAYLOAD_PATH=$RUNNER_TEMP/history-payload.json" >> "$GITHUB_ENV"
+          node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/arena-bundle-payload.json" arena-bundle
+          echo "ARENA_BUNDLE_SQL_PAYLOAD_PATH=$RUNNER_TEMP/arena-bundle-payload.json" >> "$GITHUB_ENV"
       - name: Verify self-hosted migration atomicity against disposable CI database
         run: npm run test:selfhosted-db-runner
         env:

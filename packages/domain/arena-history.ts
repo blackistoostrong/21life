@@ -38,7 +38,7 @@ function timeParts(value:string):[number,number] {
   const fraction=value.match(/\.(\d+)(?:Z|[+-])/im)?.[1]??'';
   return [Date.parse(value),Number(fraction.padEnd(6,'0').slice(3,6))];
 }
-function compareTime(a:string,b:string):number {
+export function compareArenaHistoryTime(a:string,b:string):number {
   const left=timeParts(a),right=timeParts(b);
   return left[0]-right[0] || left[1]-right[1];
 }
@@ -46,7 +46,7 @@ function compareTime(a:string,b:string):number {
 export function compareArenaHistoryCursor(a:ArenaHistoryCursor,b:ArenaHistoryCursor):number {
   if(a.playedAt===null && b.playedAt!==null)return 1;
   if(a.playedAt!==null && b.playedAt===null)return -1;
-  const time=a.playedAt!==null && b.playedAt!==null ? compareTime(b.playedAt,a.playedAt):0;
+  const time=a.playedAt!==null && b.playedAt!==null ? compareArenaHistoryTime(b.playedAt,a.playedAt):0;
   return time || (a.id===b.id?0:a.id>b.id?-1:1);
 }
 export function parseArenaHistoryCursor(value:unknown):ArenaHistoryCursor {
@@ -57,7 +57,7 @@ export function arenaHistoryScope(groupId:string,filters:Partial<Omit<ArenaHisto
     dayKey:filters.dayKey==null?null:dayKey(filters.dayKey),boundaryHour:filters.boundaryHour??ARENA_DAY_BOUNDARY_HOUR,limit:filters.limit??100};
   if(!Number.isInteger(scope.boundaryHour)||scope.boundaryHour<0||scope.boundaryHour>23
     || !Number.isInteger(scope.limit)||scope.limit<1||scope.limit>100
-    || (scope.since!==null && scope.until!==null && compareTime(scope.since,scope.until)>=0))return invalid();
+    || (scope.since!==null && scope.until!==null && compareArenaHistoryTime(scope.since,scope.until)>=0))return invalid();
   return scope;
 }
 
@@ -72,8 +72,8 @@ function match(value:unknown,scope:ArenaHistoryScope) {
   const row=object(value);
   const id=uuid(row.id),groupId=uuid(row.group_id),playedAt=nullableTimestamp(row.played_at),key=dayKey(row.arena_day_key);
   if(groupId!==scope.groupId || (playedAt===null)!==(key==='undated') || (scope.dayKey!==null && key!==scope.dayKey)
-    || (scope.since!==null && (playedAt===null || compareTime(playedAt,scope.since)<0))
-    || (scope.until!==null && (playedAt===null || compareTime(playedAt,scope.until)>=0))
+    || (scope.since!==null && (playedAt===null || compareArenaHistoryTime(playedAt,scope.since)<0))
+    || (scope.until!==null && (playedAt===null || compareArenaHistoryTime(playedAt,scope.until)>=0))
     || !Array.isArray(row.match_participants) || row.match_participants.length>1000
     || (row.is_draw!==null && typeof row.is_draw!=='boolean'))return invalid();
   const participants=Array.from(row.match_participants,item=>participant(item,id));
@@ -84,7 +84,7 @@ function match(value:unknown,scope:ArenaHistoryScope) {
 }
 export type ArenaHistoryMatch=ReturnType<typeof match>;
 function sameTime(actual:string|null,expected:string|null):boolean {
-  return actual===null || expected===null ? actual===expected : compareTime(actual,expected)===0;
+  return actual===null || expected===null ? actual===expected : compareArenaHistoryTime(actual,expected)===0;
 }
 export function parseArenaHistoryPage(value:unknown,scope:ArenaHistoryScope,cursor:ArenaHistoryCursor|null=null,expectedRevision:string|null=null) {
   const row=object(value),filters=object(row.filters);

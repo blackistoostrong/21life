@@ -103,7 +103,7 @@ import {
 } from '@/lib/arena-seasons';
 import { ArenaSeasonSettings } from '@/components/arena-season-settings';
 import { PlayerAwards } from '@/components/arena/player-awards';
-import { buildPlayerAwards } from '@/lib/player-awards';
+import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import {
   isoToMatchDateValue,
   matchDateToIso,
@@ -466,7 +466,7 @@ export default function TablePage() {
   const reportSince=useMemo(()=>getStatsSinceDate()?.toISOString()??null,[getStatsSinceDate]);
   const history=useArenaMatchHistory(season.ready?user?.id:undefined,groupId,reportSince);
   const reportAnalytics=useArenaAnalytics(season.ready?user?.id:undefined,groupId,reportSince,
-    seasonContext ? new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null);
+    seasonContext ? new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null,bracketFilter);
   const analyticsPayload=reportAnalytics.current;
   const allTimeAwardsPayload=reportAnalytics.awards;
   const matches=useMemo(()=>{
@@ -977,7 +977,7 @@ export default function TablePage() {
     () => buildArenaAwards(allTimeAwardsDeckPerformance),
     [allTimeAwardsDeckPerformance],
   );
-  const playerAwards = useMemo(() => buildPlayerAwards(matches), [matches]);
+  const playerAwards = useMemo(() => buildPlayerAwardsFromAggregates(allTimeAwardsPayload.players??[]), [allTimeAwardsPayload.players]);
   const arenaAwardGroups = useMemo(() => {
     const groups = new Map<DeckArenaAward['kind'], DeckArenaAward[]>();
     arenaAwards.forEach((award) => {

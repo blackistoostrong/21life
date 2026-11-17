@@ -13,3 +13,14 @@ describe('player awards', () => {
     expect(awards.find((award) => award.kind === 'beginners_luck')).toMatchObject({ name: 'A', value: 2 });
   });
 });
+
+it('preserves legacy counters for registered winners, guests, draws and missing identities',()=>{
+ const matches=['combo','last_standing','concession','alternate_card','other'].map(win_condition=>({win_condition,match_participants:[
+  player('a','A',{is_winner:true,placement:1,eliminations_caused:2,life_damage_dealt:10}),
+  player('b','B',{placement:2,eliminated_at:'2026-01-01T00:00:00Z'}),
+  player('missing','Unknown',{user_id:null}),
+ ]}));
+ const awards=buildPlayerAwards([...matches,{is_draw:true,match_participants:[player('a','A')]}]);
+ expect(awards.find(row=>row.kind==='arena_king')).toMatchObject({name:'A',value:100});
+ for(const kind of ['combo','last_standing','concession','true_skills','hitman','archenemy','eternal_second'])expect(awards.some(row=>row.kind===kind)).toBe(true);
+});

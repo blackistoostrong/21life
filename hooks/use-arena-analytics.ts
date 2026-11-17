@@ -1,14 +1,15 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {supabase} from '@/lib/supabase';
-import {fetchArenaAnalyticsPayload,type ArenaAnalyticsBundlePayload} from '@/lib/arena-analytics-bundle';
-type State={key:string;status:'ready';current:ArenaAnalyticsBundlePayload;awards:ArenaAnalyticsBundlePayload}
+import {fetchArenaAnalyticsV2} from '@/packages/data/arena-analytics-query';
+import {arenaAnalyticsScope,type ArenaAnalyticsReport} from '@/packages/domain/arena-analytics';
+type State={key:string;status:'ready';current:ArenaAnalyticsReport;awards:ArenaAnalyticsReport}
   |{key:string;status:'loading'|'error'};
-const empty:ArenaAnalyticsBundlePayload={};
+const empty:Partial<ArenaAnalyticsReport>={};
 
 /** One account/group/period owns the current and season-award aggregate requests. */
-export function useArenaAnalytics(userId:string|undefined,groupId:string,since:string|null,seasonStart:string|null) {
-  const key=userId && groupId?JSON.stringify([userId,groupId,since,seasonStart,'arena-aggregate']):null;
+export function useArenaAnalytics(userId:string|undefined,groupId:string,since:string|null,seasonStart:string|null,bracket='all') {
+  const key=userId && groupId?JSON.stringify([userId,groupId,since,seasonStart,bracket,'arena-aggregate-v2']):null;
   const [state,setState]=useState<State|null>(null);
   const request=useRef<AbortController|null>(null),context=useRef<string|null>(null);
   const reload=useCallback(async()=>{
@@ -16,15 +17,15 @@ export function useArenaAnalytics(userId:string|undefined,groupId:string,since:s
     request.current?.abort();const controller=new AbortController();request.current=controller;
     setState({key,status:'loading'});
     try {
-      const currentRequest=fetchArenaAnalyticsPayload(supabase,groupId,since?new Date(since):null,controller.signal);
-      const awardsRequest=since && seasonStart && Date.parse(since)!==Date.parse(seasonStart)
-        ?fetchArenaAnalyticsPayload(supabase,groupId,new Date(seasonStart),controller.signal):currentRequest;
+      const currentRequest=fetchArenaAnalyticsV2(supabase,arenaAnalyticsScope(groupId,{since,bracket:bracket==='all'?null:bracket}),controller.signal);
+      const awardsRequest=bracket!=='all' || since!==seasonStart
+        ?fetchArenaAnalyticsV2(supabase,arenaAnalyticsScope(groupId,{since:seasonStart}),controller.signal):currentRequest;
       const [current,awards]=await Promise.all([currentRequest,awardsRequest]);
       if(!controller.signal.aborted && request.current===controller)setState({key,status:'ready',current,awards});
     } catch {
-      if(!controller.signal.aborted && request.current===controller)setState({key,status:'error'});
+      if(!controller.signal.aborted && request.current===controller){setState({key,status:'error'});controller.abort();}
     }
-  },[key,groupId,since,seasonStart]);
+  },[key,groupId,since,seasonStart,bracket]);
   useEffect(()=>{
     context.current=key;void reload();
     return()=>{context.current=null;request.current?.abort();request.current=null;};

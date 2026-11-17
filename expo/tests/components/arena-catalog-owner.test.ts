@@ -33,7 +33,7 @@ import {loadArenaCache,saveArenaCache,clearArenaCache} from '@/lib/arena-cache';
 import {subscribeToArenaCatalog} from '@/lib/arena-catalog-realtime';
 const history={matches:[],seed:vi.fn(),reload:vi.fn(),loadMore:vi.fn(),hasMore:false,loadingMore:false,total:null,loading:false,error:null,cached:false};
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
-function render(group='group-a',user='user-a',flush=true){
+function RenderCatalog(group='group-a',user='user-a',flush=true){
   hooks.cursor=0;hooks.effects=[];const result=useArena(group,user);
   if(flush)hooks.effects.splice(0).forEach(effect=>effect());return result;
 }
@@ -49,16 +49,16 @@ describe('native catalog context ownership',()=>{
   it('keeps the new group when an old group request resolves late',async()=>{
     const a=deferred<ReturnType<typeof group>>(),b=deferred<ReturnType<typeof group>>();
     vi.mocked(fetchArenaGroup).mockImplementation((_client,id)=>id==='group-a'?a.promise:b.promise);
-    render();await settle();render('group-b','user-b');await settle();
-    b.resolve(group('group-b'));await settle();expect(render('group-b','user-b').group?.id).toBe('group-b');
-    a.resolve(group('group-a'));await settle();expect(render('group-b','user-b').group?.id).toBe('group-b');
+    RenderCatalog();await settle();RenderCatalog('group-b','user-b');await settle();
+    b.resolve(group('group-b'));await settle();expect(RenderCatalog('group-b','user-b').group?.id).toBe('group-b');
+    a.resolve(group('group-a'));await settle();expect(RenderCatalog('group-b','user-b').group?.id).toBe('group-b');
   });
   it('masks a previously loaded catalog synchronously on account change',async()=>{
-    vi.mocked(fetchArenaGroup).mockResolvedValue(group('group-a'));render();await settle();expect(render().group?.id).toBe('group-a');
-    const next=render('group-b','user-b',false);expect(next.group).toBeNull();expect(next.members).toEqual([]);expect(next.decks).toEqual([]);expect(next.guests).toEqual([]);
+    vi.mocked(fetchArenaGroup).mockResolvedValue(group('group-a'));RenderCatalog();await settle();expect(RenderCatalog().group?.id).toBe('group-a');
+    const next=RenderCatalog('group-b','user-b',false);expect(next.group).toBeNull();expect(next.members).toEqual([]);expect(next.decks).toEqual([]);expect(next.guests).toEqual([]);
   });
   it('finishes loading with an explicit retryable error when metadata fails',async()=>{
     vi.spyOn(console,'error').mockImplementation(()=>undefined);vi.mocked(fetchArenaGroup).mockRejectedValue(new Error('private detail'));
-    render();await settle();expect(render()).toMatchObject({loading:false,group:null,arenaError:'ARENA_READ_UNAVAILABLE'});
+    RenderCatalog();await settle();expect(RenderCatalog()).toMatchObject({loading:false,group:null,arenaError:'ARENA_READ_UNAVAILABLE'});
   });
 });
