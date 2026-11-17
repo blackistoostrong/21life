@@ -161,3 +161,75 @@ test('arena settings editor preserves drafts, dropdown, save errors and command 
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+
+for (const departure of ['cancel', 'navigate'] as const) {
+test(`arena settings editor ${departure} aborts its pending command before reopening`, async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const groupId = process.env.E2E_GROUP_ID!;
+  await page.addInitScript(() => {
+    const monitor = { started: 0, aborted: 0 };
+    Object.assign(window, { arenaSettingsMonitor: monitor });
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes('/rest/v1/groups?') && init?.method === 'PATCH') {
+        monitor.started++;
+        init.signal?.addEventListener('abort', () => { monitor.aborted++; }, { once: true });
+      }
+      return originalFetch(input, init);
+    };
+  });
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let completed: () => void = () => {};
+  const routeCompleted = new Promise<void>((resolve) => { completed = resolve; });
+  let seasonWrites = 0;
+  await page.route('**/rest/v1/groups?*', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    await held;
+    try { await route.fulfill({ status: 204 }); } finally { completed(); }
+  });
+  await page.route('**/rest/v1/rpc/set_arena_season_settings', (route) => {
+    seasonWrites++;
+    return route.fulfill({ status: 200, json: { enabled: false } });
+  });
+  const monitor = () => page.evaluate(() =>
+    (window as unknown as { arenaSettingsMonitor: { started: number; aborted: number } }).arenaSettingsMonitor);
+  try {
+    await fixtureLogin(page);
+    await page.goto(`/table/${groupId}`);
+    const open = page.getByRole('button', { name: 'Edit playgroup', exact: true });
+    await open.click();
+    const name = page.getByPlaceholder('My Playgroup', { exact: true });
+    const originalName = await name.inputValue();
+    await name.fill('Abandoned pending command');
+    await page.getByLabel('Enable seasons', { exact: true }).check();
+    await page.getByLabel('Season start month', { exact: true }).click();
+    await page.getByRole('option', { name: 'September', exact: true }).click();
+    await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+    await expect.poll(async () => (await monitor()).started).toBe(1);
+    if (departure === 'cancel') {
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    } else {
+      // Invoke the existing Next Link while the modal covers the navigation chrome.
+      await page.locator('a[href="/profile"]').first().evaluate((link) => (link as HTMLAnchorElement).click());
+      await expect(page).toHaveURL(/\/profile$/);
+    }
+    await expect.poll(async () => (await monitor()).aborted).toBe(1);
+    if (departure === 'navigate') {
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`/table/${groupId}$`));
+    }
+    await open.click();
+    release();
+    await expect(name).toHaveValue(originalName);
+    await expect(page.getByRole('button', { name: 'Save Changes', exact: true })).toBeEnabled();
+    expect(seasonWrites).toBe(0);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  } finally {
+    release();
+    await routeCompleted;
+  }
+});
+}

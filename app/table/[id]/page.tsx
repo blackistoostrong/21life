@@ -518,7 +518,9 @@ export default function TablePage() {
   const [deletingGuestIds, setDeletingGuestIds] = useState<string[]>([]);
 
   // Edit arena modal state
-  const [showEditArenaModal, setShowEditArenaModal] = useState(false);
+  const arenaSettingsContext = user ? JSON.stringify([user.id, groupId]) : null;
+  const [arenaSettingsOwner, setArenaSettingsOwner] = useState<string | null>(null);
+  useEffect(() => { setArenaSettingsOwner(null); }, [arenaSettingsContext]);
   const [showDeleteArenaModal, setShowDeleteArenaModal] = useState(false);
   const [showLeaveArenaModal, setShowLeaveArenaModal] = useState(false);
   const [leaveArenaConfirmation, setLeaveArenaConfirmation] = useState('');
@@ -2277,7 +2279,7 @@ export default function TablePage() {
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="break-words text-2xl font-bold text-foreground">{group.name}</h1>
               {canManageGroup && (
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { if (group) setShowEditArenaModal(true); }} aria-label={t({ it: 'Modifica playgroup', en: 'Edit playgroup' })}>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { if (group?.id === groupId) setArenaSettingsOwner(arenaSettingsContext); }} aria-label={t({ it: 'Modifica playgroup', en: 'Edit playgroup' })}>
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
@@ -3387,15 +3389,16 @@ export default function TablePage() {
         </ModalOverlay>
       )}
 
-      {showEditArenaModal && group && (
+      {arenaSettingsOwner && arenaSettingsOwner === arenaSettingsContext && group?.id === groupId && (
         <ArenaSettingsEditor
+          key={arenaSettingsOwner}
           group={group}
           seasonResetMonth={seasonContext?.resetMonth}
           reloadSeason={season.reload}
-          onClose={() => setShowEditArenaModal(false)}
+          onClose={() => setArenaSettingsOwner(null)}
           onSaved={(update) => {
-            setShowEditArenaModal(false);
-            setGroup((currentGroup) => currentGroup ? { ...currentGroup, ...update } : currentGroup);
+            setArenaSettingsOwner(null);
+            setGroup((currentGroup) => currentGroup?.id === group.id ? { ...currentGroup, ...update } : currentGroup);
           }}
         />
       )}

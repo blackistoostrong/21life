@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { withRequestDeadline } from '@/packages/data/request-deadline';
 import { Pencil, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/components/language-provider';
 import { useToast } from '@/hooks/use-toast';
@@ -49,25 +50,42 @@ export function ArenaSettingsEditor({ group, seasonResetMonth, reloadSeason, onS
   const [editArenaResetMonth, setEditArenaResetMonth] = useState(group.season_reset_month ?? seasonResetMonth ?? 1);
   const [savingArena, setSavingArena] = useState(false);
 
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => { request.current?.abort(); }, []);
+  const close = () => {
+    request.current?.abort();
+    onClose();
+  };
+
   const handleSaveArena = async () => {
-    if (!editArenaName.trim()) return;
+    if (!editArenaName.trim() || request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
+    const current = () => request.current === controller && !controller.signal.aborted;
     setSavingArena(true);
     try {
-      const { error } = await supabase
+      const { error } = await withRequestDeadline(supabase
         .from('groups')
         .update({
           name: editArenaName.trim(),
           description: editArenaDescription.trim() || null,
           is_public: editArenaIsPublic,
         })
-        .eq('id', group.id);
+        .eq('id', group.id), 15000, controller.signal);
+      if (!current()) return;
       if (error) throw error;
       const seasonSettingsChanged = editArenaSeasonsEnabled !== (group.seasons_enabled ?? true)
         || editArenaResetMonth !== (seasonResetMonth ?? group.season_reset_month ?? 1);
       if (seasonSettingsChanged) {
-        await setArenaSeasonSettings(supabase, group.id, editArenaSeasonsEnabled, editArenaResetMonth);
+        const client = {
+          rpc: (name: string, args: Record<string, unknown>) =>
+            withRequestDeadline(supabase.rpc(name, args), 15000, controller.signal),
+        };
+        await setArenaSeasonSettings(client, group.id, editArenaSeasonsEnabled, editArenaResetMonth);
+        if (!current()) return;
         await reloadSeason();
       }
+      if (!current()) return;
       toast({ title: t({ it: 'Playgroup aggiornato!', en: 'Playgroup updated!' }) });
       onSaved({
         name: editArenaName.trim(),
@@ -77,9 +95,11 @@ export function ArenaSettingsEditor({ group, seasonResetMonth, reloadSeason, onS
         season_reset_month: editArenaResetMonth,
       });
     } catch (error: unknown) {
+      if (!current()) return;
       toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : t({ it: 'Impossibile aggiornare il playgroup', en: 'Failed to update playgroup' }), variant: 'destructive' });
     } finally {
-      setSavingArena(false);
+      if (current()) setSavingArena(false);
+      if (request.current === controller) request.current = null;
     }
   };
 
@@ -162,7 +182,7 @@ export function ArenaSettingsEditor({ group, seasonResetMonth, reloadSeason, onS
               onResetMonthChange={setEditArenaResetMonth}
             />
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1 border-border text-foreground" onClick={onClose}>
+              <Button variant="outline" className="flex-1 border-border text-foreground" onClick={close}>
                 {t({ it: 'Annulla', en: 'Cancel' })}
               </Button>
               <Button
