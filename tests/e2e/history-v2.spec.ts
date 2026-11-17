@@ -59,3 +59,50 @@ test('guest directory UI searches decks and keeps actions usable on narrow scree
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`artifacts/dev26/guest-directory-${test.info().project.name}.png`,fullPage:true});
 });
+
+
+test('history UI pages exact totals, retries failures and restarts changed revisions',async({page})=>{
+  test.skip(!process.env.E2E_ACCESS_TOKEN,'Requires disposable Dev authentication.');
+  const groupId=process.env.E2E_GROUP_ID!;
+  let failure:'unavailable'|'changed'|null='unavailable';
+  const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+  let sharedText='';
+  await page.exposeFunction('captureHistoryExport',(value:{text:string})=>{sharedText=value.text;});
+  await page.addInitScript(()=>Object.defineProperty(navigator,'share',{configurable:true,value:(value:unknown)=>(window as unknown as {captureHistoryExport:(value:unknown)=>Promise<void>}).captureHistoryExport(value)}));
+  const rows=Array.from({length:201},(_,index)=>({id:id(201-index),group_id:groupId,created_by:process.env.E2E_USER_ID,
+    played_at:index===200?null:'2026-11-15T21:00:00Z',arena_day_key:index===200?'undated':'2026-11-15',
+    winner_id:null,winner_guest_id:null,is_draw:true,notes:`Export match ${201-index}`,match_participants:[]}));
+  await page.route('**/rest/v1/rpc/get_arena_season_context',route=>route.fulfill({status:200,json:{enabled:false}}));
+  await page.route('**/rest/v1/rpc/get_arena_history_page_v2',route=>{
+    const args=route.request().postDataJSON();
+    if(args.p_before_id && failure)return route.fulfill({status:failure==='changed'?409:503,json:{code:failure==='changed'?'40001':'XX000'}});
+    const filtered=args.p_day_key?rows.filter(row=>row.arena_day_key===args.p_day_key):rows;
+    const start=args.p_before_id?filtered.findIndex(row=>row.id===args.p_before_id)+1:0;
+    const matches=filtered.slice(start,start+args.p_limit);const last=matches.at(-1)!;
+    return route.fulfill({status:200,json:{schemaVersion:2,complete:true,asOf:'2026-11-17T12:00:00Z',groupId,revision:'a'.repeat(32),total:filtered.length,
+      filters:{since:args.p_since,until:args.p_until,dayKey:args.p_day_key,boundaryHour:args.p_boundary_hour},matches,
+      next:start+matches.length<filtered.length?{id:last.id,playedAt:last.played_at}:null}});
+  });
+  await fixtureLogin(page);await page.goto(`/table/${groupId}`);
+  await expect(page.getByRole('status').filter({hasText:'Matches 1–100 of 201'})).toBeVisible();
+  await page.getByRole('button',{name:'Next',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'History unavailable.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'No matches yet',exact:true})).toHaveCount(0);
+  failure=null;await page.getByRole('button',{name:'Retry',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Matches 101–200 of 201'})).toBeVisible();
+  await page.getByRole('button',{name:'Next',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Matches 201–201 of 201'})).toBeVisible();
+  await expect(page.getByText('Date unavailable',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Next',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Previous',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Matches 101–200 of 201'})).toBeVisible();
+  failure='changed';await page.getByRole('button',{name:'Next',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'History changed.'})).toBeVisible();
+  failure=null;await page.getByRole('button',{name:'Retry',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Matches 1–100 of 201'})).toBeVisible();
+  await page.getByRole('button',{name:'Export',exact:true}).click();
+  await expect(page.getByText('200 matches in period · complete export',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Generate export',exact:true}).click();
+  await expect.poll(()=>sharedText.length).toBeGreaterThan(0);
+  expect(sharedText.match(/Export match /g)?.length).toBe(200);
+});
