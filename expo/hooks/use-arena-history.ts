@@ -46,7 +46,7 @@ export function useArenaHistory(groupId:string|undefined,userId:string|undefined
   const reload=useCallback(()=>read(false),[read]);
   const loadMore=useCallback(()=>read(true),[read]);
   const current=state?.key===key?state:null;
-  return {matches:current?.data?.matches??empty,total:current?.data?.total??null,
+  return {revision:current?.data?.revision??null,matches:current?.data?.matches??empty,total:current?.data?.total??null,
     cached:current?.data?.revision===null,loading:Boolean(key) && (!current || current.status==='loading'),
     loadingMore:current?.status==='more',hasMore:current?.data?.next!=null,
     error:current?.status==='error'?current.error??'ARENA_HISTORY_UNAVAILABLE':null,reload,loadMore,seed};

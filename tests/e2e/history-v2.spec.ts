@@ -32,7 +32,7 @@ test('guest directory UI searches decks and keeps actions usable on narrow scree
       {id:randomUUID(),guest_id:guestId,group_id:groupId,name:'Green ramp',commander:'Selvala, Heart of the Wilds',commander_image:null,color_identity:['G'],bracket:null}]},
     {id:randomUUID(),group_id:groupId,display_name:'Guest without decks',last_played_at:null,arena_guest_decks:[]}];
   await page.route('**/rest/v1/arena_guests?*',route=>route.fulfill({status:200,json:guests}));
-  await page.route('**/rest/v1/rpc/get_arena_analytics_bundle',route=>route.fulfill({status:503,json:{message:'Synthetic aggregate outage'}}));
+  await page.route('**/rest/v1/rpc/get_arena_analytics_bundle_v2',route=>route.fulfill({status:503,json:{message:'Synthetic aggregate outage'}}));
   await fixtureLogin(page);
   await page.goto(`/table/${groupId}`);
   await page.getByRole('tab',{name:/Players/}).click();

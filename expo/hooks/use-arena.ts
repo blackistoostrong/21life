@@ -500,6 +500,7 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     matches,
     hasMoreMatches:history.hasMore,
     loadingMoreMatches:history.loadingMore,
+    historyRevision:history.revision,
     historyTotal:history.total,
     historyLoading:history.loading,
     historyError:history.error,

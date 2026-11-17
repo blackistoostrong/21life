@@ -950,9 +950,7 @@ export default function TablePage() {
     return () => window.clearTimeout(timer);
   }, [editingMatch, editMatchPlayerDecks]);
 
-  const bracketOptions = useMemo(() => {
-    return analyticsBundle.brackets;
-  }, [analyticsBundle.brackets]);
+  const bracketOptions = analyticsPayload.bracketOptions??[];
 
 
 

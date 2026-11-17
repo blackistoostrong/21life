@@ -24,7 +24,7 @@ export function useArenaAnalytics(userId:string|undefined,groupId:string,since:s
       if(!controller.signal.aborted && request.current===controller)setState({key,status:'ready',current,awards});
     } catch {
       if(!controller.signal.aborted && request.current===controller){setState({key,status:'error'});controller.abort();}
-    }
+    } finally {if(request.current===controller)request.current=null;}
   },[key,groupId,since,seasonStart,bracket]);
   useEffect(()=>{
     context.current=key;void reload();
