@@ -11,7 +11,7 @@ export const featureOwners = {
     'components/arena/arena-settings-editor.tsx',
     'hooks/use-arena-match-history.ts', 'hooks/use-arena-analytics.ts',
     'hooks/use-arena-season-context.ts', 'hooks/use-arena-day-export.ts',
-    'hooks/use-profile-metrics.ts', 'hooks/use-web-tracker-display.ts',
+    'hooks/use-profile-metrics.ts', 'hooks/use-web-tracker-display.ts', 'hooks/use-web-tracker-setup.ts',
   ],
   native: [
     'expo/app/table/[id]/play.tsx', 'expo/app/table/[id]/index.tsx',
@@ -25,6 +25,7 @@ export const featureOwners = {
     'components/arena/arena-history-pagination.tsx',
     'components/live-game/web-sync-badge.tsx',
     'components/live-game/web-journal-warning.tsx',
+    'components/live-game/web-tracker-wizard.tsx',
     'expo/components/table/table-guests-section.tsx',
     'expo/components/table/arena-analytics-status.tsx',
   ],
@@ -32,6 +33,7 @@ export const featureOwners = {
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
     'expo/components/table/table-guests-section.tsx': ['expo/components/deck/deck-image.tsx'],
+    'components/live-game/web-tracker-wizard.tsx': ['components/arena/occasional-deck-form.tsx'],
   },
 };
 

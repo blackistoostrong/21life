@@ -135,3 +135,13 @@ Fullscreendadecac0 verified: full web quality699+3skip/66script/128ratchet, clea
 | Web display hook |156|2|2|
 
 Measured with TypeScript AST; ignored artifact `architecture-after-display.json`. All four entrypoints still exceed800lines. Next extraction owns setup persistence/draft/catalog additions separately from wizard presentation; preserving rematch and sticky wizard layout is mandatory.
+
+
+## Web setup and wizard extraction
+
+`useWebTrackerSetup` owns the setup draft, nine state cells (including occasional catalog/busy state), existing per-account/group v1 storage, last-deck selection and art preloading. The game controller invokes its persistence command and keeps the existing durability feedback; it owns game creation/journal and does not duplicate setup writes. Rematch reselection uses the same restore command without changing the four-field snapshot or resetting additional UI state. `WebTrackerWizard` renders setup, seats/deck search/layout preview/sticky controls. It receives one feature controller plus scoped context/status/navigation commands, rather than the game/journal controller. The existing `OccasionalDeckForm` remains the authorized HTTP/container owner and is an explicit presentation delegate. Shared tracker view types move to `lib/types/web-tracker` with old component type exports preserved.
+
+This mechanical extraction preserves storage keys, draft initialization, conditional search, occasional-seat guard, classes, labels and action order. Account/group draft reinitialization and stale callbacks require a separate behavior change; moving state is not a claim that those old lifecycle problems are solved. Baseline golden wizard previews2/2 and the real critical/fullscreen8/8 checks passed before extraction; new candidate checks remain required. No native behavior or SQL changes.
+
+
+Setup extraction checks before build: full web quality699+3skip/66script/128ratchet PASS, runtime graph and8guard regressions PASS. The old static occasional contract was updated to follow the extracted owners while retaining automatic-selection/private-catalog assertions and adding wiring checks. AST: WebLiveGame1653→1270nonempty lines and43→34state cells; setup controller81lines/9state/1effect; wizard345lines/0state/0effect. The entrypoint still exceeds800and game sync/finalization/dialog ownership remains unfinished.

@@ -10,7 +10,9 @@ it('offers registered players occasional decks in manual and historical editing'
 });
 it('offers inline live creation while excluding occasional decks from automatic selection', () => {
   const live = read('components/live-game/web-live-game.tsx');
-  expect(live).toContain('<OccasionalDeckForm');
-  expect(live).toContain('!deck.isOccasional');
+  expect(live).toContain('useWebTrackerSetup(groupId, userId, catalogParticipants)');
+  expect(live).toContain('<WebTrackerWizard setup={setup}');
+  expect(read('components/live-game/web-tracker-wizard.tsx')).toContain('<OccasionalDeckForm');
+  expect(read('hooks/use-web-tracker-setup.ts')).toContain('!deck.isOccasional');
   expect(read('app/table/[id]/play/page.tsx')).toContain(".is('group_id', null)");
 });
