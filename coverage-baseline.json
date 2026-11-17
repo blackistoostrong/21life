@@ -718,5 +718,11 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "packages/domain/arena-session.ts": {
+    "lines": 100,
+    "branches": 84,
+    "functions": 100,
+    "statements": 100
   }
 }
