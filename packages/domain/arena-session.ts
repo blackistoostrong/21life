@@ -6,9 +6,10 @@ function pad(value: number) {
 }
 
 export function getArenaDayKey(
-  playedAt: string | Date,
+  playedAt: string | Date | null,
   boundaryHour = ARENA_DAY_BOUNDARY_HOUR,
 ): string {
+  if (playedAt === null) return 'undated';
   const date = typeof playedAt === 'string' ? new Date(playedAt) : new Date(playedAt.getTime());
   const adjusted = new Date(date.getTime());
 
@@ -19,18 +20,20 @@ export function getArenaDayKey(
   return `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth() + 1)}-${pad(adjusted.getUTCDate())}`;
 }
 
-function getCalendarDayKey(playedAt: string | Date): string {
+function getCalendarDayKey(playedAt: string | Date | null): string {
+  if (playedAt === null) return 'undated';
   const date = typeof playedAt === 'string' ? new Date(playedAt) : new Date(playedAt.getTime());
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 }
 
-function getPreviousCalendarDayKey(playedAt: string | Date): string {
+function getPreviousCalendarDayKey(playedAt: string | Date | null): string {
+  if (playedAt === null) return 'undated';
   const date = typeof playedAt === 'string' ? new Date(playedAt) : new Date(playedAt.getTime());
   date.setUTCDate(date.getUTCDate() - 1);
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 }
 
-export interface ArenaMatchDayGroup<T extends { played_at: string }> {
+export interface ArenaMatchDayGroup<T extends { played_at: string | null }> {
   dayKey: string;
   label: string;
   matchCount: number;
@@ -39,26 +42,29 @@ export interface ArenaMatchDayGroup<T extends { played_at: string }> {
   calendarDayKeys: string[];
 }
 
-export function groupMatchesByDay<T extends { played_at: string }>(
+export function groupMatchesByDay<T extends { played_at: string | null; arena_day_key?: string }>(
   matches: T[],
   options?: {
     boundaryHour?: number;
     formatLabel?: (dayKey: string) => string;
+    unknownDateLabel?: string;
   },
 ): ArenaMatchDayGroup<T>[] {
   const boundaryHour = options?.boundaryHour ?? ARENA_DAY_BOUNDARY_HOUR;
   const groups = new Map<string, T[]>();
   const groupCalendarDays = new Map<string, Set<string>>();
-  const calendarDaysWithMatches = new Set(matches.map((match) => getCalendarDayKey(match.played_at)));
+  const calendarDaysWithMatches = new Set(matches.filter((match) => match.played_at !== null).map((match) => getCalendarDayKey(match.played_at)));
 
   matches.forEach((match) => {
-    const date = new Date(match.played_at);
-    const isLateNightMatch = date.getUTCHours() < boundaryHour;
+    const date = match.played_at === null ? null : new Date(match.played_at);
+    const isLateNightMatch = date !== null && date.getUTCHours() < boundaryHour;
     const previousCalendarDayHasMatches = calendarDaysWithMatches.has(getPreviousCalendarDayKey(match.played_at));
     const calendarDay = getCalendarDayKey(match.played_at);
-    const key = isLateNightMatch && previousCalendarDayHasMatches
-      ? getArenaDayKey(match.played_at, boundaryHour)
-      : calendarDay;
+    // A validated server key knows the full group, including previous days
+    // outside this loaded page. Legacy local arrays retain their old rule.
+    const key = match.played_at === null ? 'undated' : match.arena_day_key ?? (
+      isLateNightMatch && previousCalendarDayHasMatches ? getArenaDayKey(match.played_at, boundaryHour) : calendarDay
+    );
     const current = groups.get(key) || [];
     current.push(match);
     groups.set(key, current);
@@ -69,10 +75,10 @@ export function groupMatchesByDay<T extends { played_at: string }>(
   });
 
   return Array.from(groups.entries())
-    .sort(([left], [right]) => right.localeCompare(left))
+    .sort(([left], [right]) => left === 'undated' ? 1 : right === 'undated' ? -1 : right.localeCompare(left))
     .map(([dayKey, groupMatches]) => {
       const cdk = Array.from(groupCalendarDays.get(dayKey) || []).sort();
-      const baseLabel = options?.formatLabel?.(dayKey) ?? dayKey;
+      const baseLabel = dayKey === 'undated' ? options?.unknownDateLabel ?? 'Unknown date' : options?.formatLabel?.(dayKey) ?? dayKey;
       return {
         dayKey,
         label: formatDayGroupLabel(baseLabel, cdk),

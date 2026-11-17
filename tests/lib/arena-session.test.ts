@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { getArenaDayKey, groupMatchesByDay } from '@/lib/arena-session';
 
 describe('arena-session', () => {
+  it('uses a server day key when the preceding calendar day is outside this page',()=>{
+    const groups=groupMatchesByDay([{id:'late',played_at:'2026-07-11T01:30:00Z',arena_day_key:'2026-07-10'}]);
+    expect(groups[0]).toMatchObject({dayKey:'2026-07-10',matchCount:1});
+  });
+  it('keeps unknown chronology explicit and avoids formatting a fabricated epoch date',()=>{
+    const formatLabel=()=>{throw new Error('Unknown date must not reach a date formatter');};
+    expect(getArenaDayKey(null)).toBe('undated');
+    expect(groupMatchesByDay([{id:'legacy',played_at:null}],{formatLabel,unknownDateLabel:'Data non disponibile'}))
+      .toMatchObject([{dayKey:'undated',label:'Data non disponibile',matches:[{id:'legacy',played_at:null}]}]);
+  });
   it('assigns late-night matches to the previous day before 08:00 UTC', () => {
     const key = getArenaDayKey('2026-07-11T01:30:00.000Z');
     expect(key).toBe('2026-07-10');

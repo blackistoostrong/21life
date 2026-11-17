@@ -10,7 +10,7 @@ export interface ArenaShareParticipant {
 }
 
 export interface ArenaShareMatch {
-  playedAt: string;
+  playedAt: string | null;
   notes?: string | null;
   winnerName: string;
   participants: ArenaShareParticipant[];
@@ -88,7 +88,7 @@ export function buildArenaShareText(payload: ArenaSharePayload, labels: ArenaSha
   if (payload.recentMatches.length > 0) {
     lines.push('', labels.recentMatches);
     payload.recentMatches.slice(0, 3).forEach((match) => {
-      lines.push(`• ${format(new Date(match.playedAt), 'PPP')} - ${labels.winner}: ${match.winnerName}`);
+      lines.push(`• ${match.playedAt ? format(new Date(match.playedAt), 'PPP') : '—'} - ${labels.winner}: ${match.winnerName}`);
       match.participants.forEach((participant) => {
         const deckLabel = participant.commander
           ? `${participant.deckName || participant.commander} (${participant.commander})`

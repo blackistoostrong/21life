@@ -25,7 +25,7 @@ export function parseMatchDateValue(value: string): Date | null {
   return parsed;
 }
 
-export function matchDateToIso(value: string, originalIso?: string): string | null {
+export function matchDateToIso(value: string, originalIso?: string | null): string | null {
   const parsed = parseMatchDateValue(value);
   if (!parsed) return null;
 
@@ -43,7 +43,8 @@ export function matchDateToIso(value: string, originalIso?: string): string | nu
   return parsed.toISOString();
 }
 
-export function isoToMatchDateValue(iso: string): string {
+export function isoToMatchDateValue(iso: string | null): string {
+  if (iso === null) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return toMatchDateValue();

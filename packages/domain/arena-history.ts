@@ -105,6 +105,7 @@ export function parseArenaHistoryPage(value:unknown,scope:ArenaHistoryScope,curs
   }
   if(next!==null && (matches.length!==scope.limit || total<=matches.length || previous===null
     || compareArenaHistoryCursor(next,previous)!==0))return invalid();
+  if(cursor===null && next===null && total!==matches.length)return invalid();
   return {schemaVersion:2 as const,complete:true as const,asOf:timestamp(row.asOf),groupId:scope.groupId,
     revision:actualRevision,total,filters:{since:scope.since,until:scope.until,dayKey:scope.dayKey,boundaryHour:scope.boundaryHour},matches,next};
 }

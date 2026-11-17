@@ -10,6 +10,7 @@ describe('arena history complete-page contract',()=>{
     expect(page.total).toBe(4);expect(page.matches.at(-1)?.played_at).toBeNull();
     expect(page.matches.map(match=>match.arena_day_key)).toEqual(['2010-01-05','2010-01-01','2010-01-01','undated']);
     expect(parseArenaHistoryPage({...historyPageFixture(),total:0,matches:[]},scope).matches).toEqual([]);
+    expect(()=>parseArenaHistoryPage({...historyPageFixture(),matches:[]},scope)).toThrow('ARENA_HISTORY_CONTRACT_INVALID');
   });
   it.each(['legacy','partial','group','filter','boundary','revision','total','duplicates','order','undated','date','winner','notes','shape','cursor'])('rejects invalid %s responses',type=>{
     const input=historyPageFixture();

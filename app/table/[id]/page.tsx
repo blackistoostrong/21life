@@ -1,4 +1,10 @@
 'use client';
+import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
+import {useArenaDayExport} from '@/hooks/use-arena-day-export';
+import {useArenaAnalytics} from '@/hooks/use-arena-analytics';
+import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
+import {ArenaHistoryPagination} from '@/components/arena/arena-history-pagination';
+import {ArenaDataStatus} from '@/components/arena/arena-data-status';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -68,13 +74,9 @@ import {
 import { buildPairedCommanderColorFields, buildPairedCommanderName } from '@/lib/commander-partners';
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
-import type { ArenaDaySummary } from '@/lib/arena-day-fetch';
 import {
   buildArenaAnalyticsBundle,
-  fetchArenaAnalyticsPayload,
-  type ArenaAnalyticsBundlePayload,
 } from '@/lib/arena-analytics-bundle';
-import { fetchMatchesForDay, fetchMatchesSince, fetchRecentArenaMatches } from '@/lib/arena-match-fetch';
 import { fetchActiveLiveGame, fetchLiveGameByMatchId } from '@/lib/live-game-service';
 import type { LiveGameRecord } from '@/lib/live-game';
 import { formatGameDuration } from '@/lib/live-game-duration';
@@ -94,11 +96,9 @@ import {
 } from '@/lib/arena-session-export';
 import { isLeaveArenaConfirmationValid } from '@/lib/leave-arena-confirm';
 import {
-  fetchArenaSeasonContext,
   formatArenaSeasonDate,
   formatArenaSeasonLabel,
   setArenaSeasonSettings,
-  type ArenaSeasonContext,
 } from '@/lib/arena-seasons';
 import { ArenaSeasonSettings } from '@/components/arena-season-settings';
 import { PlayerAwards } from '@/components/arena/player-awards';
@@ -302,8 +302,8 @@ interface Match {
   winner_id: string | null;
   winner_guest_id?: string | null;
   is_draw?: boolean;
-  played_at: string;
-  created_by: string;
+  played_at: string | null;
+  created_by: string | null;
   notes: string | null;
   starting_life?: number | null;
   duration_seconds?: number | null;
@@ -419,23 +419,20 @@ function PlayerGuestDeleteButton({
 
 export default function TablePage() {
   const params = useParams();
+  const groupId = typeof params.id==='string'?params.id:'';
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { copy: t, language } = useLanguage();
   const { adminMode } = usePlatformAdmin();
   const [group, setGroup] = useState<Group | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [daySummaries, setDaySummaries] = useState<ArenaDaySummary[]>([]);
-  const [matchesByDay, setMatchesByDay] = useState<Record<string, Match[]>>({});
 
 
   const [decks, setDecks] = useState<Deck[]>([]);
   const [members, setMembers] = useState<Profile[]>([]);
   const [guests, setGuests] = useState<ArenaGuest[]>([]);
-  const [analyticsPayload, setAnalyticsPayload] = useState<ArenaAnalyticsBundlePayload>({});
-  const [allTimeAwardsPayload, setAllTimeAwardsPayload] = useState<ArenaAnalyticsBundlePayload>({});
-  const [seasonContext, setSeasonContext] = useState<ArenaSeasonContext | null>(null);
+  const season=useArenaSeasonContext(user?.id,groupId);
+  const seasonContext=season.data;
   const [loading, setLoading] = useState(true);
   const [decksLoading, setDecksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
@@ -450,6 +447,37 @@ export default function TablePage() {
   const colorSyncInFlightRef = useRef(false);
   const imageRefreshInFlightRef = useRef(false);
   const arenaMetadataSyncInFlightRef = useRef(false);
+  const getStatsSinceDate = useCallback(() => {
+    if(!season.ready)return null;
+    const seasonStart = seasonContext
+      ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`)
+      : null;
+    if (dateFilter === 'all') return seasonStart;
+    const now = new Date();
+    const relativeStart = dateFilter === '7d'
+      ? subDays(now, 7)
+      : dateFilter === '30d'
+        ? subDays(now, 30)
+        : subDays(now, 90);
+    return seasonStart && isAfter(seasonStart, relativeStart) ? seasonStart : relativeStart;
+  }, [dateFilter, seasonContext, season.ready]);
+
+  const reportSince=useMemo(()=>getStatsSinceDate()?.toISOString()??null,[getStatsSinceDate]);
+  const history=useArenaMatchHistory(season.ready?user?.id:undefined,groupId,reportSince);
+  const reportAnalytics=useArenaAnalytics(season.ready?user?.id:undefined,groupId,reportSince,
+    seasonContext ? new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null);
+  const analyticsPayload=reportAnalytics.current;
+  const allTimeAwardsPayload=reportAnalytics.awards;
+  const matches=useMemo(()=>{
+    const byId=new Map(decks.map(deck=>[deck.id,deck]));
+    return (history.matches as unknown as Match[]).map(match=>({...match,match_participants:match.match_participants.map(participant=>{
+      const deck=participant.deck_id?byId.get(participant.deck_id):null;
+      return deck && participant.decks ? {...participant,decks:{...participant.decks,name:deck.name,commander:deck.commander,
+        commander_image:deck.commander_image??participant.decks.commander_image,bracket:deck.bracket??participant.decks.bracket,
+        color_identity:deck.color_identity??participant.decks.color_identity}}:participant;
+    })}));
+  },[history.matches,decks]);
+
   const analyticsBundle = useMemo(
     () => buildArenaAnalyticsBundle(analyticsPayload, bracketFilter, deckStatsSort),
     [analyticsPayload, bracketFilter, deckStatsSort],
@@ -521,8 +549,11 @@ export default function TablePage() {
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [exportDayKey, setExportDayKey] = useState<string | null>(null);
   const [exportIntro, setExportIntro] = useState('');
+  const [exportDayOwner,setExportDayOwner]=useState<string|null>(null);
+  const reportOwnerKey=user?user.id+':'+groupId:null;
+  const activeExportDayKey=exportDayOwner===reportOwnerKey?exportDayKey:null;
+  const dayExport=useArenaDayExport(user?.id,history.scope,activeExportDayKey);
 
-  const groupId = params.id as string;
   const canManageGroup = Boolean(group && user && (group.created_by === user.id || adminMode));
   const currentUserIsMember = isArenaMember(members, user?.id);
   const canLeaveCurrentArena = canLeaveArena(members.length, currentUserIsMember);
@@ -616,25 +647,7 @@ export default function TablePage() {
         return update ? { ...deck, ...update } : deck;
       }));
 
-      setMatches((currentMatches) => currentMatches.map((match) => ({
-        ...match,
-        match_participants: match.match_participants.map((participant) => {
-          const update = participant.deck_id
-            ? successfulUpdates.find((item) => item.id === participant.deck_id)
-            : null;
 
-          return update && participant.decks
-            ? {
-                ...participant,
-                decks: {
-                  ...participant.decks,
-                  commander_image: update.commander_image ?? participant.decks.commander_image,
-                  bracket: update.bracket ?? participant.decks.bracket,
-                },
-              }
-            : participant;
-        }),
-      })));
     } finally {
       arenaMetadataSyncInFlightRef.current = false;
     }
@@ -738,32 +751,6 @@ export default function TablePage() {
     ensureArenaDeckColorsRef.current = ensureArenaDeckColors;
   }, [ensureArenaDeckColors]);
 
-  const initializeMatchHistory = useCallback(async () => {
-    try {
-      const recentRows = await fetchRecentArenaMatches(supabase, groupId) as unknown as Match[];
-      const seasonThreshold = seasonContext
-        ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`).getTime()
-        : Number.NEGATIVE_INFINITY;
-      const recent = recentRows.filter((match) => new Date(match.played_at).getTime() >= seasonThreshold);
-      const grouped = groupMatchesByDay(recent);
-      const summaries = grouped.map((group) => ({
-        dayKey: group.dayKey,
-        matchCount: group.matchCount,
-        latestPlayedAt: group.matches[0]?.played_at ?? '',
-      }));
-
-      setDaySummaries(summaries);
-      setMatchesByDay(Object.fromEntries(
-        grouped.map((group) => [group.dayKey, group.matches as Match[]]),
-      ));
-      setMatches(recent);
-      return recent;
-    } catch (error) {
-      console.error('Error fetching match history:', getSupabaseErrorMessage(error as Error, 'Failed to fetch matches'));
-      return [] as Match[];
-    }
-  }, [groupId, seasonContext]);
-
   const loadArenaDecks = useCallback(async (memberIds: string[]) => {
     if (memberIds.length === 0) {
       setDecks([]);
@@ -808,87 +795,19 @@ export default function TablePage() {
     }
   }, [groupId, user]);
 
-  const getStatsSinceDate = useCallback(() => {
-    const seasonStart = seasonContext
-      ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`)
-      : null;
-    if (dateFilter === 'all') return seasonStart;
-    const now = new Date();
-    const relativeStart = dateFilter === '7d'
-      ? subDays(now, 7)
-      : dateFilter === '30d'
-        ? subDays(now, 30)
-        : subDays(now, 90);
-    return seasonStart && isAfter(seasonStart, relativeStart) ? seasonStart : relativeStart;
-  }, [dateFilter, seasonContext]);
-
-  const refreshMatches = useCallback(async () => {
-    const loadedMatches = await initializeMatchHistory();
-
-    const matchDeckIds = extractMatchDeckIds(loadedMatches);
-    if (matchDeckIds.length > 0) {
-      runWhenIdle(() => ensureArenaDeckColorsRef.current(matchDeckIds), { timeoutMs: 5000 });
-    }
-
-    try {
-      const since = getStatsSinceDate();
-      const currentRequest = fetchArenaAnalyticsPayload(supabase, groupId, since);
-      const seasonStart = seasonContext
-        ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`)
-        : null;
-      const allTimeRequest = since && seasonStart && since.getTime() !== seasonStart.getTime()
-        ? fetchArenaAnalyticsPayload(supabase, groupId, seasonStart)
-        : currentRequest;
-      const [currentPayload, allTimePayload] = await Promise.all([currentRequest, allTimeRequest]);
-      setAnalyticsPayload(currentPayload);
-      setAllTimeAwardsPayload(allTimePayload);
-    } catch (error) {
-      console.error('Error refreshing arena stats:', error);
-    }
-  }, [getStatsSinceDate, groupId, initializeMatchHistory, seasonContext]);
-
-  const loadFilteredMatchHistory = useCallback(async (since: Date) => {
-    try {
-      const loaded = await fetchMatchesSince(supabase, groupId, startOfDay(since));
-      const typed = loaded as unknown as Match[];
-      const grouped = groupMatchesByDay(typed);
-      const nextByDay: Record<string, Match[]> = {};
-      grouped.forEach((group) => {
-        nextByDay[group.dayKey] = group.matches as Match[];
-      });
-      setDaySummaries(grouped.map((group) => ({
-        dayKey: group.dayKey,
-        matchCount: group.matchCount,
-        latestPlayedAt: group.matches[0]?.played_at || '',
-      })));
-      setMatchesByDay(nextByDay);
-      setMatches(typed);
-      setExpandedDayKeys(new Set(grouped.map((group) => group.dayKey)));
-    } catch (error) {
-      console.error('Error fetching filtered matches:', getSupabaseErrorMessage(error as Error, 'Failed to fetch matches'));
-    }
-  }, [groupId]);
-
-  const dateFilterBootRef = useRef(true);
-  useEffect(() => {
-    if (!groupId || !user) return;
-    if (dateFilterBootRef.current) {
-      dateFilterBootRef.current = false;
-      return;
-    }
-    if (dateFilter === 'all') {
-      void refreshMatches();
-      return;
-    }
-    const since = getStatsSinceDate();
-    if (since) void loadFilteredMatchHistory(since);
-  }, [dateFilter, getStatsSinceDate, groupId, loadFilteredMatchHistory, refreshMatches, user]);
+  const reloadHistory=history.reload;
+  const reloadAnalytics=reportAnalytics.reload;
+  const refreshMatches=useCallback(async()=>{
+    const [page]=await Promise.all([reloadHistory(),reloadAnalytics()]);
+    const ids=extractMatchDeckIds((page?.matches??[]) as unknown as Match[]);
+    if(ids.length)runWhenIdle(()=>ensureArenaDeckColorsRef.current(ids),{timeoutMs:5000});
+  },[reloadHistory,reloadAnalytics]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
 
     try {
-      const [{ data: groupData }, loadedMatches, guestResult] = await Promise.all([
+      const [{ data: groupData }, guestResult] = await Promise.all([
         supabase
           .from('groups')
           .select(`
@@ -901,7 +820,6 @@ export default function TablePage() {
           `)
           .eq('id', groupId)
           .maybeSingle(),
-        initializeMatchHistory(),
         supabase
           .from('arena_guests')
           .select(`
@@ -932,7 +850,7 @@ export default function TablePage() {
 
       setGroup(groupData as unknown as Group);
       setMembers((groupData as unknown as Group).group_members.map((gm) => gm.profiles));
-      setMatches(loadedMatches);
+
 
       const { data: guestData, error: guestError } = guestResult;
 
@@ -961,7 +879,7 @@ export default function TablePage() {
     } finally {
       setLoading(false);
     }
-  }, [groupId, initializeMatchHistory, loadArenaDecks, router, user]);
+  }, [groupId, loadArenaDecks, router, user]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -971,14 +889,7 @@ export default function TablePage() {
     if (user) fetchData();
   }, [user, fetchData]);
 
-  useEffect(() => {
-    if (!user || !groupId) return;
-    let active = true;
-    void fetchArenaSeasonContext(supabase, groupId)
-      .then((context) => { if (active) setSeasonContext(context); })
-      .catch((error) => console.error('Error fetching Arena season:', error));
-    return () => { active = false; };
-  }, [groupId, user]);
+
 
   useEffect(() => {
     if (!user) return;
@@ -986,9 +897,6 @@ export default function TablePage() {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== 'visible') return;
       void refreshActiveLiveGame();
-      void fetchArenaSeasonContext(supabase, groupId)
-        .then(setSeasonContext)
-        .catch((error) => console.error('Error refreshing Arena season:', error));
     };
     window.addEventListener('focus', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
@@ -998,59 +906,12 @@ export default function TablePage() {
     };
   }, [groupId, refreshActiveLiveGame, user]);
 
-  const getFilteredMatches = useCallback(() => {
-    const seasonThreshold = seasonContext
-      ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`).getTime()
-      : Number.NEGATIVE_INFINITY;
-    if (dateFilter === 'all') {
-      return matches.filter((match) => new Date(match.played_at).getTime() >= seasonThreshold);
-    }
+  const getFilteredMatches=useCallback(()=>matches,[matches]);
 
-    const now = new Date();
-    let startDate: Date;
-
-    switch (dateFilter) {
-      case '7d':
-        startDate = subDays(now, 7);
-        break;
-      case '30d':
-        startDate = subDays(now, 30);
-        break;
-      case '90d':
-        startDate = subDays(now, 90);
-        break;
-      default:
-        return matches;
-    }
-
-    const threshold = Math.max(startOfDay(startDate).getTime(), seasonThreshold);
-    return matches.filter((match) => new Date(match.played_at).getTime() >= threshold);
-  }, [matches, dateFilter, seasonContext]);
-
-  const matchDayGroups = useMemo(() => {
-    const dateLocale = language === 'it' ? itLocale : enUS;
-    const singleLabel = (dayKey: string) =>
-      format(parse(dayKey, 'yyyy-MM-dd', new Date()), 'd MMM yyyy', { locale: dateLocale });
-
-    if (dateFilter === 'all') {
-      return daySummaries.map((summary) => {
-        const groupMatches = matchesByDay[summary.dayKey] || [];
-        const calKeys = Array.from(new Set(groupMatches.map((m) => {
-          const d = new Date(m.played_at);
-          return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-        }))).sort();
-        return {
-          dayKey: summary.dayKey,
-          label: formatDayGroupLabel(singleLabel(summary.dayKey), calKeys),
-          matchCount: summary.matchCount,
-          matches: groupMatches,
-          calendarDayKeys: calKeys,
-        };
-      });
-    }
-
-    return groupMatchesByDay(getFilteredMatches(), { formatLabel: singleLabel });
-  }, [dateFilter, daySummaries, getFilteredMatches, language, matchesByDay]);
+  const matchDayGroups=useMemo(()=>groupMatchesByDay(matches,{
+    formatLabel:dayKey=>format(parse(dayKey,'yyyy-MM-dd',new Date()),'d MMM yyyy',{locale:language==='it'?itLocale:enUS}),
+    unknownDateLabel:t({it:'Data non disponibile',en:'Date unavailable'}),
+  }),[matches,language,t]);
 
   const latestDayKey = matchDayGroups[0]?.dayKey ?? null;
 
@@ -1092,26 +953,7 @@ export default function TablePage() {
     return analyticsBundle.brackets;
   }, [analyticsBundle.brackets]);
 
-  useEffect(() => {
-    if (!user || loading) return;
-    void (async () => {
-      try {
-        const since = getStatsSinceDate();
-        const currentRequest = fetchArenaAnalyticsPayload(supabase, groupId, since);
-        const seasonStart = seasonContext
-          ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`)
-          : null;
-        const allTimeRequest = since && seasonStart && since.getTime() !== seasonStart.getTime()
-          ? fetchArenaAnalyticsPayload(supabase, groupId, seasonStart)
-          : currentRequest;
-        const [currentPayload, allTimePayload] = await Promise.all([currentRequest, allTimeRequest]);
-        setAnalyticsPayload(currentPayload);
-        setAllTimeAwardsPayload(allTimePayload);
-      } catch (error) {
-        console.error('Error fetching arena stats:', error);
-      }
-    })();
-  }, [getStatsSinceDate, groupId, loading, seasonContext, user]);
+
 
   const deckIdsInMatches = useMemo(() => Array.from(new Set(
     getFilteredMatches().flatMap((match) =>
@@ -1722,27 +1564,7 @@ export default function TablePage() {
       return update ? { ...deck, ...update } : deck;
     }));
 
-    setMatches((currentMatches) => currentMatches.map((match) => ({
-      ...match,
-      match_participants: match.match_participants.map((participant) => {
-        const update = participant.deck_id
-          ? successfulUpdates.find((item) => item.id === participant.deck_id)
-          : null;
 
-        return update && participant.decks
-          ? {
-              ...participant,
-              decks: {
-                ...participant.decks,
-                name: update.name,
-                commander: update.commander,
-                commander_image: update.commander_image,
-                bracket: update.bracket,
-              },
-            }
-          : participant;
-      }),
-    })));
   }, [decks, user]);
 
   useEffect(() => {
@@ -1949,7 +1771,7 @@ export default function TablePage() {
 
     return [
       `${t({ it: 'Partita 21Life', en: '21Life match' })} - ${group?.name || ''}`,
-      format(new Date(match.played_at), 'PPP'),
+      match.played_at ? format(new Date(match.played_at), 'PPP') : t({it:'Data non disponibile',en:'Date unavailable'}),
       match.duration_seconds != null
         ? `${t({ it: 'Durata', en: 'Duration' })}: ${formatGameDuration(match.duration_seconds)}`
         : null,
@@ -1988,13 +1810,13 @@ export default function TablePage() {
   };
 
   const handleShareArenaStats = async () => {
-    if (!group) return;
+    if (!group || !season.ready || !reportAnalytics.ready || history.loading || history.error) return;
 
-    const filteredMatches = getFilteredMatches();
+    const filteredMatches = history.recentMatches as unknown as Match[];
     const text = buildArenaShareText({
       arenaName: group.name,
       periodLabel: getPeriodLabel(),
-      totalMatches: filteredMatches.length,
+      totalMatches: analyticsPayload.totalMatches ?? 0,
       topPlayers: playerStats.slice(0, 5).map((player) => ({
         displayName: player.displayName,
         gamesPlayed: player.gamesPlayed,
@@ -2100,28 +1922,23 @@ export default function TablePage() {
   });
 
   const openDayExportModal = (dayKey: string) => {
+    setExportDayOwner(reportOwnerKey);
     setExportDayKey(dayKey);
     setExportIntro('');
   };
 
   const closeDayExportModal = () => {
+    setExportDayOwner(null);
     setExportDayKey(null);
     setExportIntro('');
   };
 
   const handleExportDayMatches = async () => {
-    if (!exportDayKey) return;
-    let dayMatches = matchesByDay[exportDayKey];
-    if (!dayMatches?.length) {
-      const loaded = await fetchMatchesForDay(supabase, groupId, exportDayKey);
-      dayMatches = loaded as unknown as Match[];
-      if (dayMatches.length > 0) {
-        setMatchesByDay((current) => ({ ...current, [exportDayKey]: dayMatches! }));
-      }
-    }
-    if (!dayMatches?.length) return;
+    if(!activeExportDayKey || !dayExport.ready)return;
+    const dayMatches=dayExport.matches as unknown as Match[];
+    if(!dayMatches.length)return;
 
-    const dayGroup = matchDayGroups.find((entry) => entry.dayKey === exportDayKey);
+    const dayGroup = matchDayGroups.find((entry) => entry.dayKey === activeExportDayKey);
     const exportMatches = [...dayMatches]
       .reverse()
       .map((match) => buildSessionExportMatch(match));
@@ -2130,7 +1947,7 @@ export default function TablePage() {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: dayGroup?.label || exportDayKey,
+          title: dayGroup?.label || activeExportDayKey,
           text,
         });
         closeDayExportModal();
@@ -2231,10 +2048,10 @@ export default function TablePage() {
       if (error) throw error;
       const seasonSettingsChanged = editArenaSeasonsEnabled !== (group.seasons_enabled ?? true)
         || editArenaResetMonth !== (seasonContext?.resetMonth ?? group.season_reset_month ?? 1);
-      const nextSeasonContext = seasonSettingsChanged
-        ? await setArenaSeasonSettings(supabase, group.id, editArenaSeasonsEnabled, editArenaResetMonth)
-        : seasonContext;
-      setSeasonContext(nextSeasonContext);
+      if (seasonSettingsChanged) {
+        await setArenaSeasonSettings(supabase, group.id, editArenaSeasonsEnabled, editArenaResetMonth);
+        await season.reload();
+      }
       toast({ title: t({ it: 'Playgroup aggiornato!', en: 'Playgroup updated!' }) });
       setShowEditArenaModal(false);
       setGroup((currentGroup) => currentGroup ? {
@@ -2313,7 +2130,8 @@ export default function TablePage() {
       return;
     }
     const playedAtIso = matchDateToIso(editMatchPlayedAt, editingMatch?.played_at);
-    if (!playedAtIso) {
+    const preserveUnknownDate = editingMatch?.played_at === null && editMatchPlayedAt.trim() === '';
+    if (!playedAtIso && !preserveUnknownDate) {
       toast({
         title: t({ it: 'Errore', en: 'Error' }),
         description: t({ it: 'Data della partita non valida.', en: 'Invalid battle date.' }),
@@ -2408,7 +2226,7 @@ export default function TablePage() {
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <AppProfileButton />
-              <Button variant="outline" size="sm" onClick={handleShareArenaStats} className="h-11 border-border px-3 text-foreground sm:px-4" title={t({ it: 'Condividi statistiche', en: 'Share stats' })}>
+              <Button variant="outline" size="sm" onClick={handleShareArenaStats} disabled={!season.ready || !reportAnalytics.ready || history.loading || Boolean(history.error)} className="h-11 border-border px-3 text-foreground sm:px-4" title={t({ it: 'Condividi statistiche', en: 'Share stats' })}>
                 <Share2 className="w-4 h-4 sm:mr-2" />
                 <span className="hidden sm:inline">{t({ it: 'Condividi', en: 'Share' })}</span>
               </Button>
@@ -2641,7 +2459,10 @@ export default function TablePage() {
           </div>
 
           <TabsContent value="matches">
-            {daySummaries.length === 0 ? (
+            <ArenaDataStatus loading={season.loading} error={season.error} onRetry={season.reload}>
+            <ArenaHistoryPagination loading={history.loading} error={history.error} total={history.total} from={history.from} to={history.to}
+              canGoNext={history.canGoNext} canGoPrevious={history.canGoPrevious} onNext={history.next} onPrevious={history.previous} onRetry={history.retry} />
+            {!history.loading && !history.error && history.total === 0 ? (
               <Card className="phyrexian-panel">
                 <CardContent className="py-12 text-center">
                   <Skull className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -2792,9 +2613,13 @@ export default function TablePage() {
               </div>
             )}
             {seasonContext ? <PreviousSeasonsPanel archives={seasonContext.archives} /> : null}
-          </TabsContent>
+
+            </ArenaDataStatus>
+</TabsContent>
 
           <TabsContent value="awards">
+            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
+              onRetry={season.error ? season.reload : reportAnalytics.reload}>
             <div className="space-y-5">
               <div>
                 <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
@@ -2918,9 +2743,13 @@ export default function TablePage() {
                 </div>
               )) : <PlayerAwards awards={playerAwards} language={language} />}
             </div>
-          </TabsContent>
+
+            </ArenaDataStatus>
+</TabsContent>
 
           <TabsContent value="players">
+            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
+              onRetry={season.error ? season.reload : reportAnalytics.reload}>
             {playerStats.length === 0 && !canManageGroup ? (
               <Card className="bg-card/50 border-border">
                 <CardContent className="py-12 text-center">
@@ -2970,7 +2799,7 @@ export default function TablePage() {
                         <BarChart3 className="w-5 h-5" />
                         <span className="text-sm font-medium">{t({ it: 'Partite totali', en: 'Total Games' })}</span>
                       </div>
-                      <p className="text-2xl font-bold text-foreground">{getFilteredMatches().length}</p>
+                      <p className="text-2xl font-bold text-foreground">{analyticsPayload.totalMatches ?? '—'}</p>
                       <p className="text-sm text-muted-foreground">{t({ it: 'partite registrate', en: 'battles recorded' })}</p>
                     </CardContent>
                   </Card>
@@ -3194,9 +3023,13 @@ export default function TablePage() {
                 )}
               </div>
             )}
-          </TabsContent>
+
+            </ArenaDataStatus>
+</TabsContent>
 
           <TabsContent value="commanders">
+            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
+              onRetry={season.error ? season.reload : reportAnalytics.reload}>
             {deckStats.length === 0 ? (
               <Card className="bg-card/50 border-border">
                 <CardContent className="py-12 text-center">
@@ -3298,10 +3131,14 @@ export default function TablePage() {
                 </Card>
               </div>
             )}
-          </TabsContent>
+
+            </ArenaDataStatus>
+</TabsContent>
 
           <TabsContent value="meta">
-            {getFilteredMatches().length === 0 ? (
+            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
+              onRetry={season.error ? season.reload : reportAnalytics.reload}>
+            {analyticsPayload.totalMatches === 0 ? (
               <Card className="phyrexian-panel">
                 <CardContent className="py-12 text-center">
                   <Palette className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
@@ -3384,7 +3221,9 @@ export default function TablePage() {
                 </Card>
               </div>
             )}
-          </TabsContent>
+
+            </ArenaDataStatus>
+</TabsContent>
         </Tabs>
 
         {(canLeaveCurrentArena || canManageGroup) && (
@@ -3518,7 +3357,7 @@ export default function TablePage() {
                               onSearchChange={(value) => setParticipantDeckSearches((prev) => ({ ...prev, [participantKey]: value }))}
                               onToggleDeckList={() => setHiddenParticipantDeckLists((prev) => ({ ...prev, [participantKey]: !prev[participantKey] }))}
                               onSelectDeck={(deckId) => { if (!anyOccasionalCreationBusy) setParticipantDecks((prev) => ({ ...prev, [participantKey]: deckId })); }}
-    
+
                             />
                           );
                         })}
@@ -3618,7 +3457,7 @@ export default function TablePage() {
         </ModalOverlay>
       )}
 
-      {exportDayKey && (
+      {activeExportDayKey && (
         <ModalOverlay>
           <ModalCard>
             <CardHeader>
@@ -3631,6 +3470,9 @@ export default function TablePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {dayExport.loading?<p role="status">{t({it:'Caricamento export completo…',en:'Loading complete export…'})}</p>:null}
+              {dayExport.error?<div role="alert"><p>{t({it:'Export non disponibile. Nessun testo parziale viene condiviso.',en:'Export unavailable. Partial text will not be shared.'})}</p><Button variant="outline" onClick={dayExport.retry}>{t({it:'Riprova',en:'Retry'})}</Button></div>:null}
+              {dayExport.ready?<p className="mb-3 text-sm text-muted-foreground">{t({it:dayExport.matches.length+' partite nel periodo · export completo',en:dayExport.matches.length+' matches in period · complete export'})}</p>:null}
               <RichTextEditor
                 label={t({ it: 'Intro', en: 'Intro' })}
                 value={exportIntro}
@@ -3658,6 +3500,7 @@ export default function TablePage() {
                 </Button>
                 <Button
                   type="button"
+                  disabled={!dayExport.ready || dayExport.matches.length===0}
                   onClick={() => void handleExportDayMatches()}
                   className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
                 >
@@ -3897,7 +3740,7 @@ export default function TablePage() {
                   {t({ it: 'Dettagli della partita', en: 'Match details' })}
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {format(new Date(detailsMatch.played_at), 'PPP')} · {group?.name}
+                  {detailsMatch.played_at ? format(new Date(detailsMatch.played_at), 'PPP') : t({it:'Data non disponibile',en:'Date unavailable'})} · {group?.name}
                 </p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setDetailsMatch(null)} aria-label={t({ it: 'Chiudi', en: 'Close' })}>
@@ -3917,7 +3760,7 @@ export default function TablePage() {
               </div>
 
               {detailsRecapLoading ? <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-6 text-center text-sm text-cyan-100">{t({ it: 'Caricamento riepilogo…', en: 'Loading recap…' })}</div> : null}
-              {(detailsLiveGame || (detailsMatch.tracking_version != null ? buildHistoricalLiveGameRecord(detailsMatch) : null)) ? <LiveGameRecapView record={detailsLiveGame ?? buildHistoricalLiveGameRecord(detailsMatch)} labels={{ timeline: t({ it: 'Stato finale', en: 'Final state' }), highlights: t({ it: 'Momenti chiave', en: 'Highlights' }), empty: t({ it: 'Nessun momento chiave registrato.', en: 'No highlights recorded.' }) }} /> : null}
+              {(detailsLiveGame || (detailsMatch.tracking_version != null && detailsMatch.played_at && detailsMatch.created_by)) ? <LiveGameRecapView record={detailsLiveGame ?? buildHistoricalLiveGameRecord({ ...detailsMatch, played_at: detailsMatch.played_at!, created_by: detailsMatch.created_by! })} labels={{ timeline: t({ it: 'Stato finale', en: 'Final state' }), highlights: t({ it: 'Momenti chiave', en: 'Highlights' }), empty: t({ it: 'Nessun momento chiave registrato.', en: 'No highlights recorded.' }) }} /> : null}
 
               <div className="space-y-3">
                 {detailsMatch.match_participants

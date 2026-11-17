@@ -85,3 +85,10 @@ describe('arena-participants', () => {
     expect(deckId).toBe('deck-new');
   });
 });
+
+it('prefers a dated deck selection over unknown historical dates', () => {
+  expect(getLastDeckSelectionForParticipant('user:user-1', [
+    { played_at: null, match_participants: [userParticipant({ deck_id: 'unknown' })] },
+    { played_at: '2026-01-01T00:00:00Z', match_participants: [userParticipant({ deck_id: 'dated' })] },
+  ])).toBe('dated');
+});

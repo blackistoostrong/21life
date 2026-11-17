@@ -1,4 +1,7 @@
 /** One owner for transport deadlines and parent-context cancellation. */
+export interface RpcTransport {
+  rpc(name:string,args:Record<string,unknown>):{abortSignal(signal:AbortSignal):PromiseLike<{data:unknown;error:unknown|null}>};
+}
 export async function withRequestDeadline<T>(
   request:{abortSignal:(signal:AbortSignal)=>PromiseLike<T>},
   timeoutMs=15000,externalSignal?:AbortSignal,timeoutMessage='Operation timed out',
