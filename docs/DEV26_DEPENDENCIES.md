@@ -1,5 +1,11 @@
 # Dev26 — dipendenze e baseline 9.3.0
 
+## Aggiornamento sicurezza 17 novembre 2026
+
+Il build del candidato489618fa ha completato compilazione e pagine, poi è stato fermato da `SecurityFatalError`; non è un build riuscito. Audit registry identifica GHSA-mfr8-8qww-v76h, disclosure fra parametri root con `use cache` attraverso `unstable_cache`, severity moderate, range16.3.0–16.4.4. Nessun high/critical nel report corrente (12nodi moderate prima della patch). La superficie effettiva dipende dall'uso delle API coinvolte: non viene dichiarato un exploit del progetto.
+
+Aggiornati e fissati esattamente `next`, `@next/env` ed `eslint-config-next` a16.4.6, stessa linea16.4. La release16.4.5 contiene le correzioni di sicurezza;16.4.6 aggiunge backport di bugfix. Fonti primarie: [advisory](https://github.com/advisories/GHSA-mfr8-8qww-v76h), [release16.4.5](https://github.com/vercel/next.js/releases/tag/v16.4.5), [release16.4.6](https://github.com/vercel/next.js/releases/tag/v16.4.6). Nessun comando agentico suggerito dal log, retry di aggiramento, eccezione audit o major upgrade. Installazione passa e riporta11moderate; quality/build/colloqui browser da ripetere sul nuovo candidato prima della certificazione.
+
 Verifica del 12 novembre 2026 sul grafo dei lockfile, dopo clean install root/Expo.
 
 ## Ambiente

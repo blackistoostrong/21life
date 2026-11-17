@@ -3,6 +3,7 @@
 - [ ] Se cambiano backup/restore: le query sul sorgente devono essere server-side READ ONLY; SQL di ripristino soltanto emesso nel pacchetto ed eseguito sul clone. Eseguire la regressione backup-source-readonly e verificare che la prova reale rifiuti una mutazione. Incidente Dev documentato in docs/DEV26_BACKUP_INCIDENT.md.
 
 Leggere il [registro dei merge falliti](MERGE_FAILURES.md) prima di iniziare.
+Se Next interrompe il build con `SecurityFatalError`, conservare advisory/report e correggere la versione compatibile prima di riprovare. La compilazione precedente al gate non certifica il build; il suggerimento di ripetere il comando non sostituisce la patch.
 Controllare tutti i punti applicabili PRIMA di lanciare ogni build, creare o
 pubblicare un tag, oppure avviare un deploy. Registrare le prove e gli SHA nella
 voce del task in `PROJECT_CHECKLIST.md`. Un punto non verificato blocca il passo
