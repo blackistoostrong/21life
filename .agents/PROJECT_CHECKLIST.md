@@ -2,6 +2,9 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Display ResizeObserver fix separato: ROSSO browser reale su2c78542d, una mutazione vita ricrea observer (created1→2, active1). Ora callbackref stabile possiede attach/detach della superficie DOM, ignora callback vecchie e non dipende da record/id (evita observer assente quando cache rivela tavolo dopo bootstrap). Test reale include osservazione dopo reload e rilascio nel recap; verde/build da eseguire. Fullscreen pendente dopo unmount e lifecycle complessivo restano da approfondire separatamente.
+- [x] Estrazione display2c78542d: typecheck/lint/grafo PASS, buildweb56route PASS, criticoreale4giocatori/2client desktop/mobile2/2 DOPO PASS, esattamente2match e cleanupDev PASS. Nessuna semantica partita o persistenza cambiata nel commit meccanico.
+
 - [ ] Partitaweb/display11b: caratterizzazione reale4giocatori/2client PRIMA PASS desktop/mobile2/2, idempotenza esattamente2partite e cleanupDev PASS. Estratto useWebTrackerDisplay, singolo owner di fullscreenlistener/orientation/ResizeObserver e2stati; record/journal/sync restano nel controller esistente. Estrazione meccanica conserva dipendenza ResizeObserver da record e gestione fullscreen preesistenti; ottimizzazioni/correzioni lifecycle saranno commit distinti. Typecheck/lint/grafo e build/browser dopo ancora da certificare.
 
 - [x] Candidatoe23efe2e: buildweb56route, exportAndroid/iOS e budgetAndroid9.31/12MiB PASS; E2Edesktop/mobile14/14 (editor cancel/navigazione, storico completo/APIautorizzata, guestUI con errore report, archivio profilo) e cleanupDev PASS. Qualityweb699+3skip/66script/ratchet128, Expo490/ratchet120 PASS. PR241sempredraft→Dev, push verificato. Nessun merge/deploy/dispositivo. Prossima tranche11b: display lifecycle partitaweb; caratterizzare flusso reale prima dell’estrazione, poi owner singolo di fullscreen/orientamento/ResizeObserver.

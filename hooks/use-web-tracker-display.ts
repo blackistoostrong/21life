@@ -44,9 +44,23 @@ export function useWebTrackerDisplay(
   copy: Copy,
   toast: Notify,
 ) {
-  const tableRef = useRef<HTMLDivElement | null>(null);
   const [tableSize, setTableSize] = useState({ width: 390, height: 760 });
   const [fullscreen, setFullscreen] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  // Follow the actual surface, including a cached game revealed after bootstrap.
+  // A record mutation does not replace that surface or its observer.
+  const tableRef = useCallback((element: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!element) return;
+    const update = () => setTableSize({ width: element.clientWidth, height: element.clientHeight });
+    const observer = new ResizeObserver(() => {
+      if (observerRef.current === observer) update();
+    });
+    observerRef.current = observer;
+    update();
+    observer.observe(element);
+  }, []);
 
   const enterTrackerLandscape = useCallback(() => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches
@@ -106,16 +120,6 @@ export function useWebTrackerDisplay(
     }
     restoreDefaultTrackerDisplay();
   }, [activeOrientationRecordId]);
-
-  useEffect(() => {
-    const element = tableRef.current;
-    if (!element) return;
-    const update = () => setTableSize({ width: element.clientWidth, height: element.clientHeight });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [record]);
 
   return { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTrackerDisplay };
 }

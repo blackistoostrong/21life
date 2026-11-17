@@ -2,12 +2,41 @@ import { expect, test } from '@playwright/test';
 import { fixtureLogin } from './fixture-login';
 import AxeBuilder from '@axe-core/playwright';
 
+declare global {
+  interface Window {
+    trackerDisplayMonitor?: { created: number; active: number };
+  }
+}
+
 test('wizard → damage → Last Standing → recap', async ({ page, browser }) => {
   test.setTimeout(90_000);
   test.skip(process.env.E2E_LIVE_GAME_FLOW !== '1', 'Set E2E_LIVE_GAME_FLOW=1 for the state-changing live flow.');
   const identifier = process.env.E2E_USERNAME;
   const password = process.env.E2E_PASSWORD;
   test.skip(!identifier || !password, 'E2E credentials are required.');
+
+  const checkDisplay = process.env.E2E_DISPLAY_LIFECYCLE === '1';
+  if (checkDisplay) await page.addInitScript(() => {
+    const monitor = { created: 0, active: 0 };
+    window.trackerDisplayMonitor = monitor;
+    const NativeResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = class extends NativeResizeObserver {
+      private tracked = false;
+      observe(target: Element, options?: ResizeObserverOptions) {
+        // Identify the real table surface without changing production markup.
+        if (!this.tracked && target.querySelector('button[aria-label^="Reduce life for"], button[aria-label^="Riduci punti vita di"]')) {
+          this.tracked = true;
+          monitor.created++;
+          monitor.active++;
+        }
+        super.observe(target, options);
+      }
+      disconnect() {
+        if (this.tracked) { monitor.active--; this.tracked = false; }
+        super.disconnect();
+      }
+    };
+  });
 
   await fixtureLogin(page);
   await page.getByRole('button', { name: /Open|Apri/ }).first().click();
@@ -38,13 +67,21 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   }, { groupId: process.env.E2E_GROUP_ID, userId: process.env.E2E_USER_ID });
   if (process.env.E2E_GROUP_ID) {
     await expect.poll(async () => (await journal())?.mutations.length).toBe(0);
+    if (checkDisplay) await expect.poll(() => page.evaluate(() => window.trackerDisplayMonitor?.active)).toBe(1);
+    const displayBefore = checkDisplay ? await page.evaluate(() => window.trackerDisplayMonitor!.created) : null;
     const before = (await journal()).record.state.players[0].life;
     await page.route('**/rest/v1/rpc/apply_live_game_mutation*', (route) => route.abort());
     await page.getByRole('button', { name: /Reduce life for|Riduci punti vita di/ }).first().click();
     await expect.poll(async () => (await journal())?.mutations.length).toBe(1);
     await expect.poll(async () => (await journal())?.record.state.players[0].life).toBe(before - 1);
+    if (checkDisplay) {
+      // Let the actual React commit and passive effects settle after the mutation.
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      expect(await page.evaluate(() => window.trackerDisplayMonitor)).toEqual({ created: displayBefore, active: 1 });
+    }
     await page.reload();
     await expect(page.getByTestId('live-end')).toBeVisible();
+    if (checkDisplay) await expect.poll(() => page.evaluate(() => window.trackerDisplayMonitor?.active)).toBe(1);
     await expect.poll(async () => (await journal())?.mutations.length).toBe(1);
     await page.unroute('**/rest/v1/rpc/apply_live_game_mutation*');
     await page.getByRole('button', { name: /Retry sync|Riprova sync/ }).click();
@@ -146,4 +183,5 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   }
   await expect(page.getByText(/Game saved|Partita salvata/).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('button', { name: /Share|Condividi/ })).toBeVisible();
+  if (checkDisplay) await expect.poll(() => page.evaluate(() => window.trackerDisplayMonitor?.active)).toBe(0);
 });
