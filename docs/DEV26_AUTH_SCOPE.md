@@ -1,0 +1,9 @@
+# Dev26 — admin lookup and caller RLS scope
+
+On17November2026, an actual authenticated-write test reproduced a legacy fault: `is_admin(uuid)` executes `SET LOCAL row_security=off` inside its body without a function-level setting for that parameter. The value remains off in the caller transaction; a subsequent ordinary update can fail with `query would be affected by row-level security policy`. The existing deleted-deck QA manually reset the setting before a later read, which did not correct the helper itself.
+
+The red test calls the helper with an ordinary synthetic user from `row_security=on` and checks the caller value immediately after return. It fails on the original Dev function. The green test covers ordinary/admin/null callers and initial on/off settings, then actual authenticated match/participant batch writes, participant corrections and group deletion. Source fixtures and unregistered history DDL are rolled back.
+
+Migration `20261117082649_scope_admin_row_security_setting.sql` adds only `ALTER FUNCTION public.is_admin(uuid) SET row_security=off`. PostgreSQL restores the caller setting on function exit, including the helper's existing `SET LOCAL`; see [function configuration scope](https://www.postgresql.org/docs/current/sql-createfunction.html). The existing body, owner, ACLs, signature and admin allowlist logic are preserved. This grants no additional privilege and does not disable RLS for caller queries.
+
+Applied only on Dev with the SSH-backed migration runner. Read-only verification confirms raw SQL checksum, unchanged function body hash/owner/ACLs, the scoped configuration, and an ordinary lookup that restores caller RLS. No production, main or application deployment. The migration is now immutable. Repeatable synthetic regression: `node scripts/run-dev26-analytics-qa.mjs --admin-scope`; combine with `--history-draft` while history remains unregistered.
