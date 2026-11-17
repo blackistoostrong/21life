@@ -1,6 +1,6 @@
 # DEV26 — Architettura e responsabilità
 
-Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring delle schermate ancora da eseguire**, non attestazione di completamento del punto6.
+Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring delle schermate parziale**, non attestazione di completamento del punto6.
 
 ## Confini già introdotti
 
@@ -17,7 +17,7 @@ Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie all
 | components/live-game/web-live-game.tsx | setup, journal, sync, lifecycle, dialoghi, finalizzazione | controller lifecycle/sync, UI tavolo e dialoghi |
 | expo/app/table/[id]/play.tsx | stato locale, outbox, listener, setup, finalizzazione e rivincita | controller equivalenti con adapter nativi |
 
-Le estrazioni non sono ancora effettuate. Non trasferire ogni riga in un unico useController: ogni query/subscription/journal deve avere un proprietario unico con cleanup e contratto documentati.
+Le estrazioni sono parziali e non soddisfano ancora i quattro target dimensionali. Non trasferire ogni riga in un unico useController: ogni query/subscription/journal deve avere un proprietario unico con cleanup e contratto documentati.
 
 ## Punti di manutenzione già unificati
 
@@ -68,3 +68,37 @@ Remaining pre-existing risks are explicitly separate from this mechanical commit
 The extracted candidate8a699662 passed the same desktop/mobile browser characterization (2/2), a clean web production build (56routes), full web quality (690+7skip;58script;126ratchet files). Optional SQL fixture payloads were absent in this quality invocation; final checks must supply all three. ESLint and Playwright must run sequentially because Playwright recreates test-results.
 
 The following behavior fix is separate: the editor owns one cancellable command at a time, a15second transport deadline per write and a guarded continuation chain. Closing or unmounting aborts transport and suppresses subsequent commands/feedback. The route keys opening by account/group, masks an old editor immediately and only applies returned fields to the same group. Cancellation does not roll back a server-committed write; the old two-command save is still not atomic. Browser red proof on8a699662: cancellation left the pending PATCH signal active. Cancel/reopen and SPA navigation/back regression checks target the actual React editor with interception only at the network boundary.
+
+
+## Confini automatici delle feature (11c)
+
+`scripts/verify-feature-boundaries.mjs` integra il controllo del dominio nei quality web e native. Usa AST TypeScript e resolver del client effettivo: controlla tutti i moduli data, i quattro entrypoint obbligatori, la schermata tavolo native e i controller/pannelli estratti elencati nel manifesto `featureOwners`. Le nuove feature devono estendere quel manifesto. Risolve anche barrel, import dinamici statici e require; rifiuta accessi a moduli calcolati. Il grafo runtime raggiungibile deve essere aciclico, senza runtime Next nel native o Expo/React Native nel web. Le dipendenze locali web→UI native e native→UI web sono vietate; adapter legacy isomorfici in expo/lib rimangono possibili soltanto se la loro chiusura non importa runtime native.
+
+I trasporti data possono importare soltanto domain/data, anche per i tipi. La presentazione non può raggiungere SDK Supabase, proprietari del journal o trasporti data attraverso wrapper locali. I type-only import non allocano risorse e non costituiscono archi runtime. La composizione del pannello guest native delega esplicitamente al container immagini `expo/components/deck/deck-image.tsx`, che già possiede caricamento/cache immagini: questa singola frontiera non consente SDK direttamente nel pannello, come prova una regressione. Il ciclo di vita del container immagini rimane distinto da quello delle query guest. Il controllo non analizza internamente i pacchetti npm e non sostituisce gli export/build reali né l'audit lifecycle.
+
+Il primo controllo ha rilevato un ciclo reale web: `deck-collection-analytics → deck-commander-cmc → deck-collection-analytics`. Ora entrambi dipendono da `lib/deck-commander-names`, mentre la normalizzazione testuale vive in `packages/domain/commander-names`. Gli export precedenti restano compatibili. La diversa vecchia normalizzazione native non è stata cambiata incidentalmente. I test condivisi eseguono la regola pura sotto entrambi i resolver; deduplica dei lookup, priorità opzioni, cache e limiti del batch sono verificati separatamente. Nessuna soglia di copertura ridotta dopo l'estrazione.
+
+```mermaid
+flowchart TD
+  Web[Route web] --> Editor[Container editor impostazioni]
+  Web --> WH[Controller storico / analytics / season]
+  Editor --> SDK[SDK Supabase]
+  WH --> Data[packages/data]
+  Data --> Domain[packages/domain]
+  Native[Route native] --> NH[Controller native]
+  NH --> Data
+  UI[Presentazione] --> Domain
+```
+
+| Risorsa | Proprietario | Uscita / cambio contesto |
+|---|---|---|
+| Draft e comando impostazioni web | ArenaSettingsEditor | Abort su chiusura/unmount; guardia continuazioni, deadline15s e invio unico |
+| Apertura editor / applicazione metadata | Route tavolo | Key account+gruppo, mascheratura immediata e ack per stesso gruppo |
+| Storico web e cursori | useArenaMatchHistory | Abort/epoch; dati mascherati sul cambio scope |
+| Statistiche complete e premi season | useArenaAnalytics web/native | Chiavi account/gruppo/periodo/bracket; abort richieste precedenti |
+| Season web / foreground | useArenaSeasonContext | Abort e rimozione listener/timer; errore esplicito |
+| Storico/cache native | useArenaHistory + coordinamento useArena | Accumulo revisionato, cancellazione e mascheratura contesto |
+| Export giorno | useArenaDayExport di piattaforma | Traversal completo, abort e nessun export parziale; dialogo web ancora nella route |
+| Catalogo/membership web | Route tavolo (da estrarre) | Lifecycle e traversamento completo ancora da completare |
+
+Misura intermedia della tranche editor, contro01faad78: route3934→3801righe non vuote, useState70→64; editor194righe non vuote con6stati e1cleanup. Il route effect aggiunto per azzerare l'apertura contestuale è intenzionale. Il candidato0fa75a83 ha superato buildweb56route e browser desktop/mobile12/12, inclusi annullamento e navigazione/back con PATCH sospesa e abort osservato. Il limite800rimane ampiamente non raggiunto: il punto6 resta aperto.
