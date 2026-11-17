@@ -122,3 +122,16 @@ Observer fix candidatefb8df020 passed a clean56route build and the instrumented 
 A browser regression onfb8df020 proved a late completion bug: after pausing and unmounting the tracker, resolving its pending fullscreen request still increased orientation locks1→2. The next behavior fix adds document-scoped opaque display leases, a single pending fullscreen request and guarded continuations. A late rejection cannot notify a departed tracker; a late success restores document fullscreen only when no newer tracker claims display. Late orientation locks release when their owner is gone and no newer owner needs them. The WeakMap contains only a boolean resource lease per Document, never actor/game data. It coordinates one browser-wide resource rather than sharing business state across accounts.
 
 The actual React/browser tests defer fullscreen resolution/rejection at the browser API boundary, pause through the existing UI and assert no new lock/fullscreen/error toast after departure. Their live games use disposable Dev users; authenticated fixture cancellation follows the same policy as normal cancellation. Physical browser/PWA orientation behavior, full account/group reset and all four entrypoint structural targets remain final/open gates.
+
+
+Fullscreendadecac0 verified: full web quality699+3skip/66script/128ratchet, clean56route build and desktop/mobile browser8/8. Cases include the instrumented critical4player/2client flow, deferred fullscreen success/rejection after pause and remounting a new tracker before old completion. Exactly2matches, authenticated cancellation of disposable pending games and group/Auth fixture cleanup passed. No native build changes or physical certification in this web-only slice.
+
+| Intermediate target after display | Nonempty lines | useState | useEffect |
+|---|---:|---:|---:|
+| Web table |3801|64|11|
+| Web profile |3483|63|11|
+| Web game |1653|43|11|
+| Native game |2227|40|13|
+| Web display hook |156|2|2|
+
+Measured with TypeScript AST; ignored artifact `architecture-after-display.json`. All four entrypoints still exceed800lines. Next extraction owns setup persistence/draft/catalog additions separately from wizard presentation; preserving rematch and sticky wizard layout is mandatory.
