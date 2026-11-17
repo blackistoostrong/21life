@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Display observerfb8df020: buildweb56route PASS, criticoreale4giocatori/2client desktop/mobile2/2 PASS con monitor ResizeObserver reale (stabile sulla mutazione, presente dopo reload/cache, zero nel recap). Idempotenza esattamente2match e cleanupDev PASS. Typecheck/lint/grafo PASS; qualityglobale precedentee23efe2e rimane699web/490Expo, non ripetuto per questa sola ownershipDOM. Nessuna modifica native/dispositivo/deploy. Proseguire fullscreen pendente/unmount e separazione setup/sync/dialoghi, quattro entrypoint ancora sopra soglia; piano non completo.
+
 - [ ] Display ResizeObserver fix separato: ROSSO browser reale su2c78542d, una mutazione vita ricrea observer (created1→2, active1). Ora callbackref stabile possiede attach/detach della superficie DOM, ignora callback vecchie e non dipende da record/id (evita observer assente quando cache rivela tavolo dopo bootstrap). Test reale include osservazione dopo reload e rilascio nel recap; verde/build da eseguire. Fullscreen pendente dopo unmount e lifecycle complessivo restano da approfondire separatamente.
 - [x] Estrazione display2c78542d: typecheck/lint/grafo PASS, buildweb56route PASS, criticoreale4giocatori/2client desktop/mobile2/2 DOPO PASS, esattamente2match e cleanupDev PASS. Nessuna semantica partita o persistenza cambiata nel commit meccanico.
 

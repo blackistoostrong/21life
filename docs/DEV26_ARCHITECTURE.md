@@ -112,3 +112,6 @@ Characterization before extraction on candidatee23efe2e passed the real4player/2
 
 
 Extracted display candidate2c78542d passed its clean56route build and the same real critical flow desktop/mobile2/2, with exactly2saved matches and cleanup verified. A subsequent behavior regression on that built candidate proved observer churn: one life mutation increased created observers1→2 while active remained1. The separate fix binds a stable callback ref to the actual DOM surface and ignores obsolete callbacks after detach. It deliberately does not depend only on record ID, which can be available before a cached game's surface mounts after bootstrap. Browser assertions cover no recreation after mutation, observation after reload and zero live table observers in the recap. Pending fullscreen promises after unmount remain a separate audit item.
+
+
+Observer fix candidatefb8df020 passed a clean56route build and the instrumented real4player/2client flow desktop/mobile2/2: observer stable on mutation, active after reload/cache recovery and detached in recap. Exactly2matches and fixture cleanup were verified. This is a DOM resource ownership check; pending fullscreen/unmount and full account/group controller lifecycle remain open.
