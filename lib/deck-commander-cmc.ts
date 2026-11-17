@@ -1,4 +1,4 @@
-import { getDeckCommanderNames } from '@/lib/deck-collection-analytics';
+import { getDeckCommanderNames } from '@/lib/deck-commander-names';
 import type { DeckColorRecord } from '@/lib/deck-metadata';
 
 export interface DeckCommanderCmcRecord {

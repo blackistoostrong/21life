@@ -1,3 +1,5 @@
+import { expandDeckCommanderNames } from '@/packages/domain/commander-names';
+export { expandDeckCommanderNames } from '@/packages/domain/commander-names';
 import {
   buildDeckColorFields,
   deckHasColorIdentity,
@@ -29,15 +31,6 @@ export interface DeckCommanderColorTarget {
   source_type: string | null;
   source_url: string | null;
   color_identity?: string[] | null;
-}
-
-export function expandDeckCommanderNames(commander: string) {
-  return Array.from(new Set(
-    commander
-      .split('//')
-      .flatMap((part) => part.split('/').map((name) => name.trim()))
-      .filter(Boolean)
-  ));
 }
 
 async function lookupCommanderFromBrowser(name: string) {

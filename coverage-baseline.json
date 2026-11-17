@@ -754,5 +754,17 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "packages/domain/commander-names.ts": {
+    "lines": 100,
+    "statements": 100,
+    "functions": 100,
+    "branches": 100
+  },
+  "lib/deck-commander-names.ts": {
+    "lines": 100,
+    "statements": 100,
+    "functions": 100,
+    "branches": 100
   }
 }
