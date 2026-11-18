@@ -212,3 +212,20 @@ Enrichment now owns the idle scheduler as well as its two job leases. Cleanup on
 AST snapshot `architecture-profile-lifecycle.json`: profile3270nonempty lines/58states/9effects; catalog64lines/1state/1layout effect; enrichment225lines/1state/2layout effects. The four entrypoints still exceed800. Account/admin transition tests for the complete profile and its other commands remain open; this slice does not certify the whole page lifecycle or point6. Typecheck/lint/grafo and full web quality pass; clean build and actual green browser runs are still required at this checkpoint.
 
 Lifecycle47deccc2 verified: web quality725+3skip/67script, ratchet139 unchanged; clean56route build and3.19/18MiB budget PASS. Browserdesktop/mobile12/12PASS with the three reproduced failures now green. Pending CMC and queued idle cases each mount/unmount twice, observe cancellation/no accumulated queue and zero late PATCH; complete251deck traversal/retry, successful CMC enrichment, aggregate metrics and archive/restore+Axe remain green. Fixture cleanup verified. Account/admin transitions beyond this catalog owner and all other profile commands still require their own ownership/tests. No native/SQL/device/distribution changes.
+
+## Profile account credentials extraction (2026-11-18)
+
+`useProfileAccountCredentials` owns seven existing draft/busy/panel states, nickname orchestration and password commands. It is called unconditionally by the route, preserving the old root component lifetime even while AppLoader temporarily replaces the rendered UI. `ProfileAccountPanel` is presentation only, with typed controls and a child slot for existing Archidekt settings. The parent profile directory still persists display names and owns admin nickname edits; Auth SDK calls stay in the named hook owner. No credentials or account state are moved to a singleton. Input styling remains a scoped feature export. Password validation imports the same canonical isStrongPassword implementation previously reached through a UI wrapper.
+
+AST bodies of save-own-nickname, change-password and panel-toggle match the prior page after newline normalization. Header/form markup, labels/classes, validation, reauth/update order and feedback are preserved. Existing credential cancellation/double-submit/account-transition risks are not solved by this mechanical commit; the global Auth reauthentication step needs a separate review before complete lifecycle certification.
+
+Before browser characterization on47deccc2 passed desktop/mobile2/2: nickname failure preserves whitespace draft, successful trim updates header/closes editor; weak/mismatching passwords block submission; failed current-password verification preserves all fields and sends no Auth user update. Auth and profile writes are intercepted, so no password or real nickname changes/email are sent. Disposable fixture cleanup verified.
+
+| Owner | Nonempty lines | State | Effects |
+|---|---:|---:|---:|
+| Profile before |3270|58|9|
+| Profile after |3000|51|8|
+| Credential hook |115|7|1|
+| Account presentation |206|0|0|
+
+Snapshot: `artifacts/dev26/architecture-profile-account.json`. Runtime gates inventory the hook as a container and the panel as presentation; type-only contracts do not load the Auth SDK into the panel. Full web quality725+3skip/67script and ratchet139 unchanged PASS; typecheck/lint/graphs PASS. Clean build and after-browser checks remain pending. This continues point6 but all four mandatory entrypoints remain above800lines; no native/SQL/device/release change.

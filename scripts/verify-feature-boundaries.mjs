@@ -13,6 +13,7 @@ export const featureOwners = {
     'hooks/use-arena-season-context.ts', 'hooks/use-arena-day-export.ts',
     'hooks/use-profile-metrics.ts', 'hooks/use-web-tracker-display.ts', 'hooks/use-web-tracker-setup.ts',
     'hooks/use-profile-catalog.ts', 'hooks/use-profile-metadata-enrichment.ts',
+    'hooks/use-profile-account-credentials.ts',
   ],
   native: [
     'expo/app/table/[id]/play.tsx', 'expo/app/table/[id]/index.tsx',
@@ -21,6 +22,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/profile/profile-account-panel.tsx',
     'components/arena/guest-directory.tsx',
     'components/arena/arena-data-status.tsx',
     'components/arena/arena-history-pagination.tsx',

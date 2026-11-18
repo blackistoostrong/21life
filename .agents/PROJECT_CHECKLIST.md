@@ -2,6 +2,15 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Account prebuild18-11: webquality725+3skip/67script e ratchet139 PASS, typecheck/lint/grafo PASS. Tre corpi comandi AST invariati; before2/2 reale con writeAuth/profile intercettate, zero credenziali modificate. Pannello206righe/0state/0effect, hook115/7/1, profilo3000/51/8; lifetimehook invariata. Fare cleanbuildwebDev9.3.0 dopo lettura gate, browseraccount+catalogolifecycle+archivio+slotArchidekt; nessun ritocco grafico/dispositivo/merge/deploy. Rischi globalAuth reauth/lifecycle ancora aperti in tranche successiva.
+
+
+- [ ] Account estratto meccanico: profilo3270→3000righe,58→51state e9→8effect; hook115righe/7state/1effect, pannello206/0/0. Hook invocato incondizionatamente mantiene lifetime precedente anche quando la route mostra AppLoader; slotArchidekt conserva UI/comandi parent. ASTcorpi saveNickname/changePassword/togglePanel identici a HEAD, policyalias punta alla stessa isStrongPassword. Typecheck/lint/grafo PASS. Fare quality/build/browserDOPO, poi fix credenziali distinto: reauth attuale usa clientAuth globale e non ha lease/doppioinvio; evitare risposte tardive e mutazioni sessione fuori contesto.
+
+
+- [ ] Account profilo11b18-11: caratterizzazionePRIMA desktop/mobile2/2 su47deccc2 PASS per nickname errore/successo/trim e passworddebole/mismatch/reauthfallita, bozze mantenute e zeroPUTAuth; cleanupDev PASS. Estrarre7stati/2comandi in hook chiamato incondizionatamente dalla pagina (stessa lifetime), pannello presentazionale con slotArchidekt e controller tipizzato. Directory profili persiste nickname; AuthSDK solo nel hookowner. Validatoreimportato dalla funzione canonica già usata dal wrapperUI. Nessuna nuovafeature; lifecycle credenziali successivo distinto.
+
+
 - [x] Lifecycle profilo47deccc2 CHIUSO tranche: qualityweb725+3skip/67script, ratchet139 PASS senza soglie ridotte; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile12/12 PASS:3ROSSI→VERDI (retryloader, CMCabort, idlecleanup),2mount/unmount per caso, zeroPATCHtardivi, catalogo251/error/retry, CMCupdateunico, metriche complete, archivio/ripristino+Axe; cleanupDev PASS. Catalogo64righe/1state/1layout, enrichment225/1/2layout, profilo3270/58/9effect. Nessun native/schema/dispositivo/merge/deploy. Restano contesti account/admin completi, profili/credenziali/import/editor e resto punto6/piano.
 
 

@@ -114,6 +114,7 @@ try {
       'tests/e2e/live-game-wizard.spec.ts',
       'tests/e2e/deck-ranking-filter.spec.ts',
       'tests/e2e/analytics-v2.spec.ts',
+        'tests/e2e/profile-account.spec.ts',
       'tests/e2e/history-v2.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
