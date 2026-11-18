@@ -2,6 +2,10 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Account meccanicoacca60ab CHIUSO: qualityweb725+3skip/67script, ratchet139 PASS; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile16/16 DOPO PASS: nuovi contratti nickname/password (prima2/2), catalogo251/retry, lifecycleCMC/idle2mount, metriche, archivio/ripristino+Axe e slotArchidekt conlogin/notificationpanel; cleanupDev PASS. Credenziali/nickname scritture intercettate, zeroPUTAuth reale. Pagina3000righe/51state/8effect, hook115/7/1, pannello206/0/0;3corpi comandi invariati. Nessun native/DB/dispositivo/merge/deploy. Continuare lifecycle credenziali/profili/import, punto6 ancora aperto.
+- [ ] Auth follow-up verificato18-11 READONLY: SDK installato espone UserAttributes.current_password; doc ufficiale password-security richiede configurazione per verificarlo. Dev Auth supabase/gotrue:v2.189.0 e GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD NON IMPOSTATO (nessuna env/config cambiata, solo whitelist immagine/flag letta via SSH sul Compose supabase-dev). NON rimuovere la verifica corrente contando sul solo parametro: potrebbe essere ignorato. Reauth globale signInWithPassword salva sessione/notificaSIGNED_IN; eliminare side-effect tardivi e doppioinvio con soluzione compatibile, mantenendo controllo password attuale. Nessuna modifica configAuth globale/prod o passaggiOTP/email non richiesti. ChangelogSupabase letto18-11: CLIv3/Flutterbreaking non pertinenti alloSDKpinned; fonti aggiornate e codiceSDK letti.
+
+
 - [ ] Account prebuild18-11: webquality725+3skip/67script e ratchet139 PASS, typecheck/lint/grafo PASS. Tre corpi comandi AST invariati; before2/2 reale con writeAuth/profile intercettate, zero credenziali modificate. Pannello206righe/0state/0effect, hook115/7/1, profilo3000/51/8; lifetimehook invariata. Fare cleanbuildwebDev9.3.0 dopo lettura gate, browseraccount+catalogolifecycle+archivio+slotArchidekt; nessun ritocco grafico/dispositivo/merge/deploy. Rischi globalAuth reauth/lifecycle ancora aperti in tranche successiva.
 
 
