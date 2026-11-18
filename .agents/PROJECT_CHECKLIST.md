@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Directory meccanicab3135cfe CHIUSA: qualityweb738+3skip/67script e ratchet140 PASS; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile22/22 DOPO PASS, inclusi targetadmin/errore/draft/retry/trim, account/password/sessione, catalogo251/CMCidle, Archidekt e archive+Axe; cleanupDev PASS. Profilo2902/48state/8effect, directory66/3/0 e presentazione60/0/0. Nessun DB/native/dispositivo/merge/deploy; lifecycle directory e resto punto6 ancora aperti. Warning Next/httpxy11close persistente, non soppresso.
+
 - [ ] Directory prebuild18-11: estrazione meccanica verificata AST; profilo2902/48state/8effect, controller66/3/0 e pannello60/0/0. Qualityweb738+3skip/67script e ratchet140 PASS, soglie precedenti invariate. Gate merge/prebuild letti: nessun nuovo commit origin/Dev mancante, nessun merge tentato; solo cleanbuild locale Dev9.3.0, advisory finale ancora aperta. BrowserDOPO richiesto, poi lifecycle separato.
 
 - [ ] Directory11b18-11: prima desktop/mobile2/2 suadb11c35 PASS pertargetadminUI/errore/bozzaconservata/retry/trim/successo e profiloown invariato; ruoloUI e writeintercettati, nessungrant/update reale, cleanupDevPASS. Estrarre3stati, load/saveNickname e pannelloAdmin in controller/presentazione tipizzati; invariata query/RLS/markup, correzioni lease/account/abort successive. Passwordcheckpointec782b35 remoto pulito prima di iniziare questa tranche.

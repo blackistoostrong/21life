@@ -265,3 +265,5 @@ The tracked live Auth QA script was rerun on the same commit: actual disposable 
 | Nickname presentation |60|0|0|
 
 Before characterization passed desktop/mobile2/2 onadb11c35: correct target, failed save preserving draft, successful retry/trim, own profile unchanged. Admin role is mocked only in UI and profile writes intercepted; no actual permission grant or nickname mutation. Dev disposable fixture cleanup verified. Post-extraction quality/build/browser checks remain pending; all four mandatory entrypoints still exceed the800-line target.
+
+Directoryb3135cfe verified: web quality738+3skip/67script, ratchet140 unchanged; clean56route build/3.19MiB budget; browserdesktop/mobile22/22 with fixture cleanup PASS. Admin nickname targeting/error/retry joins all previous profile/catalog/metadata/password/Archidekt/archive checks. No permission grant, real profile write, schema/native/device/deployment changes. Lifecycle follow-up remains open; existing Next/httpxy11close warning remains visible.
