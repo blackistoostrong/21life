@@ -140,6 +140,7 @@ export function ProfileAccountPanel({ user, currentProfile, adminMode, controls,
                       </label>
                       <Input
                         id="currentPassword"
+                        disabled={savingPassword}
                         name="currentPassword"
                         type="password"
                         value={currentPassword}
@@ -156,6 +157,7 @@ export function ProfileAccountPanel({ user, currentProfile, adminMode, controls,
                       </label>
                       <Input
                         id="newPassword"
+                        disabled={savingPassword}
                         name="newPassword"
                         type="password"
                         value={newPassword}
@@ -173,6 +175,7 @@ export function ProfileAccountPanel({ user, currentProfile, adminMode, controls,
                       </label>
                       <Input
                         id="confirmNewPassword"
+                        disabled={savingPassword}
                         name="confirmNewPassword"
                         type="password"
                         value={confirmNewPassword}

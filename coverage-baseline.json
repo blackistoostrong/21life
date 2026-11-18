@@ -832,5 +832,11 @@
     "branches": 95,
     "functions": 95,
     "statements": 95
+  },
+  "lib/profile-password.ts": {
+    "lines": 96.15,
+    "branches": 90.9,
+    "functions": 87.5,
+    "statements": 94.91
   }
 }
