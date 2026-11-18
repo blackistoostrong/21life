@@ -2,6 +2,9 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Catalogo/enrichment327424f9 CHIUSO meccanico: qualityweb721+3skip/67script, ratchet139 PASS; build56route/budget3.18/18MiB PASS. BrowserDOPO8/8 desktop/mobile:251mazzi+tailfailure/retry, CMClookup/PATCH unico, stats/draw e archivio/ripristino+Axe; cleanupDev PASS. Prima4/4, corpi2job AST identici, profilo3480→3274/63→58state; nuovi owner49/165righe. Nessun native/dispositivo/schema/merge/deploy. Proseguire fix lifecycle: request/job dopo navigazione/pausa, key account/admin e stato retry; non dichiarare punto6 completo.
+
+
 - [ ] Profilo prebuild18-11: qualityweb721+3skip/67script PASS, ratchet139 invariato; typecheck/lint/grafo PASS, jobbodyAST identici e caratterizzazionePRIMA4/4. Documentoarchitettura/mappa aggiornati, profilo3480→3274righe/63→58state. Leggere gate merge/prebuild: zero merge tentati/unmerged, solo cleanbuildDev9.3.0 locale; advisory precedente resta aperta, nessuna distribuzione. Poi browserDOPO e fix lifecycle distinto.
 
 

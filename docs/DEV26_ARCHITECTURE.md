@@ -196,3 +196,5 @@ Before characterization on application1e6839a0 passed desktop/mobile4/4:251decks
 | Metadata enrichment controller |165|1|2|
 
 AST artifact: `artifacts/dev26/architecture-profile-catalog.json`. Other targets remain table3801,web game1193,native game2227nonempty lines; all four still exceed800. No completion claim for point6. Web quality721+3skip/67script, ratchet139 unchanged; typecheck/lint/runtime boundaries PASS. Clean build and after-browser characterization remain pending at this checkpoint. Native source/behavior unchanged in this web-only extraction.
+
+Catalog/enrichment327424f9 verified: full web quality721+3skip/67script, ratchet139 PASS; clean56route build and3.18/18MiB budget PASS. After-browser desktop/mobile8/8 passed complete251deck traversal/tailfailure/retry, one CMClookup/PATCH, profile complete metrics/draws and real archive/restore with Axe. Fixture cleanup verified. No native source/SQL/device/distribution changes; lifecycle behavior fixes are a separate next tranche.
