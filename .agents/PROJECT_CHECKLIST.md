@@ -2,6 +2,10 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Recapweb0ee34b64 CHIUSO18-11: qualityweb707+3skip/67script ed Expo511 PASS, ratchet138/130 invariati. Buildweb56route/exportAndroid+iOS PASS; budgetweb2.85/18 e Android9.32/12MiB PASS. Browserdesktop/mobile10/10 DOPO PASS: annulla conferma rivincita e ripristino/riselezione snapshot, flusso reale4giocatori/2client/recovery/idempotenza, fullscreen/observer e goldenwizard. Esattamente2match e cleanupDev PASS. WebLiveGame1192righe/33state, nuovoWebCompletedGame107/1state; nessun SDK/journal nel pannello. Punto6,08 e resto piano ancora aperti; continuare dai ticket esistenti. Nessun dispositivo/merge/deploy.
+
+- [x] Analisi librerie richiestaPM18-11: verificati manifest/lock/code e fonti primarie; ScryfallAPI e ZustandExpo già presenti, TanStackQuery entrambi. MTGAPI deprecata fino01-03-2027; reactjs-mtg-card peerReact16; rilevato throttle native90ms che non garantisce<10req/s e chiamate Scryfall sparse. Report docs/MTG_LIBRARIES_REVIEW_2026-11-18.md: priorità consolidamentoScryfall, provaRechartsweb e importTXT; bulkcatalogo condizionale. Nessuna dipendenza installata né ampliamento automatico dei ticket obbligatori.
+
 - [ ] Recapweb prebuild18-11: qualityweb707+3skip/67script e Expo511 PASS, ratchet138/130 invariati; controlli import/presentazione PASS dopo restrizione del builder al dominio puro. Contratto browser prima2/2 su sourceapp752667a1 con conferma/annulla/riselezione e snapshot ripristinato PASS. Commit meccanico pronto; nuovo build/export e browser dopo richiesti.
 
 - [ ] Recapweb18-11: estrazione WebCompletedGame107righe/1state, parent1270→1192/34→33state. Conferma e snapshot ordinato slot nel pannello; comandi creazione/journal/navigation restano sessioncontroller. Guard rileva facadeIO indiretta nel builderrecap: import pure ristretto senza deroghe. Baseline752667a1 critical2/2 e contratto annulla/riselezione2/2 PASS; aspettativa test step4 dopo reload corretta (UIresta step1 come prima), zero cambio semantico. Typecheck/lint/grafo PASS; quality/build/export/browser del nuovo candidato da eseguire. Non chiude08 né punto6.
