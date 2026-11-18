@@ -13,7 +13,7 @@ export const featureOwners = {
     'hooks/use-arena-season-context.ts', 'hooks/use-arena-day-export.ts',
     'hooks/use-profile-metrics.ts', 'hooks/use-web-tracker-display.ts', 'hooks/use-web-tracker-setup.ts',
     'hooks/use-profile-catalog.ts', 'hooks/use-profile-metadata-enrichment.ts',
-    'hooks/use-profile-commander-editor.ts', 'hooks/use-profile-command-scope.ts', 'hooks/use-profile-archidekt-import.ts', 'hooks/use-profile-url-import.ts', 'hooks/use-profile-commander-arts.ts',
+    'hooks/use-profile-archidekt-settings.ts', 'hooks/use-profile-commander-editor.ts', 'hooks/use-profile-command-scope.ts', 'hooks/use-profile-archidekt-import.ts', 'hooks/use-profile-url-import.ts', 'hooks/use-profile-commander-arts.ts',
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
@@ -23,7 +23,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
-    'components/profile/profile-account-panel.tsx', 'components/profile/profile-nickname-directory.tsx',
+    'components/profile/profile-archidekt-settings-panel.tsx', 'components/profile/profile-account-panel.tsx', 'components/profile/profile-nickname-directory.tsx',
     'components/arena/guest-directory.tsx',
     'components/arena/arena-data-status.tsx',
     'components/arena/arena-history-pagination.tsx',

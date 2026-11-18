@@ -75,7 +75,9 @@ import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
-import { ProfileAccountPanel, PROFILE_ACCOUNT_INPUT_CLASS as accountPanelInputClass } from '@/components/profile/profile-account-panel';
+import { ProfileAccountPanel } from '@/components/profile/profile-account-panel';
+import { useProfileArchidektSettings } from '@/hooks/use-profile-archidekt-settings';
+import { ProfileArchidektSettingsPanel } from '@/components/profile/profile-archidekt-settings-panel';
 import { useProfileCommanderEditor } from '@/hooks/use-profile-commander-editor';
 import { useProfileCommanderArts } from '@/hooks/use-profile-commander-arts';
 import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import';
@@ -146,6 +148,7 @@ export default function ProfilePage() {
   const [addMode, setAddMode] = useState<AddDeckMode>('choose');
   const directory = useProfileDirectory(user, adminMode, adminLoading);
   const { profiles, setProfiles, fetchProfiles, saveProfileDisplayName } = directory;
+  const currentProfile = user ? profiles.find((profile) => profile.id === user.id) || null : null;
   const [selectedTargetProfileId, setSelectedTargetProfileId] = useState<string>('');
   const [exportingAccount, setExportingAccount] = useState(false);
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
@@ -164,9 +167,7 @@ export default function ProfilePage() {
     clearArchidektPreview, resetArchidektImport,
   } = useProfileArchidektImport(user && !adminLoading ? user.id + ':' + adminMode : null,
     showAddModal && addMode === 'archidekt-user');
-  const [archidektSettingsUsername, setArchidektSettingsUsername] = useState('');
-  const [archidektAutoImport, setArchidektAutoImport] = useState(false);
-  const [savingArchidektSettings, setSavingArchidektSettings] = useState(false);
+  const archidektSettings = useProfileArchidektSettings(user, currentProfile, setProfiles, setArchidektUsername);
   const archidektAutoImportStartedRef = useRef(false);
   const [savingUserDecks, setSavingUserDecks] = useState(false);
   const [overwriteConfirm, setOverwriteConfirm] = useState<
@@ -204,7 +205,6 @@ export default function ProfilePage() {
   const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
   const [deckSort, setDeckSort] = useState<'recent' | 'winRate' | 'gamesPlayed' | 'damage' | 'eliminations' | 'fastest'>('recent');
   const [detailsDeck, setDetailsDeck] = useState<Deck | null>(null);
-  const currentProfile = user ? profiles.find((profile) => profile.id === user.id) || null : null;
   const targetProfiles = profiles.filter((profile) => !RESERVED_USERNAMES.has(profile.username.toLowerCase()));
   const manualPartnerMode = selectedCommander ? getManualPartnerMode(selectedCommander) : null;
   const manualPartnerCopy = manualPartnerMode ? getManualPartnerCopy(manualPartnerMode, t) : null;
@@ -319,14 +319,6 @@ export default function ProfilePage() {
     }
   }, [user, fetchDecks, fetchProfiles]);
 
-  useEffect(() => {
-    if (!currentProfile) return;
-    const savedArchidektUsername = currentProfile.archidekt_username || '';
-    setArchidektSettingsUsername(savedArchidektUsername);
-    setArchidektUsername(savedArchidektUsername);
-    setArchidektAutoImport(Boolean(currentProfile.archidekt_auto_import));
-  }, [currentProfile]);
-
   const getTargetProfileId = () => {
     if (!user) return null;
     return adminMode ? selectedTargetProfileId || null : user.id;
@@ -338,47 +330,6 @@ export default function ProfilePage() {
   };
 
   const account = useProfileAccountCredentials(user, currentProfile, saveProfileDisplayName);
-
-  const handleSaveArchidektSettings = async () => {
-    if (!user) return;
-    const username = archidektSettingsUsername.trim() || null;
-    if (archidektAutoImport && !username) {
-      toast({
-        title: t({ it: 'Username richiesto', en: 'Username required' }),
-        description: t({ it: 'Inserisci il tuo username Archidekt per abilitare il controllo automatico.', en: 'Enter your Archidekt username to enable automatic checks.' }),
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSavingArchidektSettings(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          archidekt_username: username,
-          archidekt_auto_import: archidektAutoImport,
-        })
-        .eq('id', user.id);
-      if (error) throw error;
-
-      setProfiles((current) => current.map((profile) => profile.id === user.id ? {
-        ...profile,
-        archidekt_username: username,
-        archidekt_auto_import: archidektAutoImport,
-      } : profile));
-      setArchidektUsername(username || '');
-      toast({ title: t({ it: 'Archidekt configurato', en: 'Archidekt configured' }) });
-    } catch (error) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile salvare le impostazioni Archidekt.', en: 'Unable to save Archidekt settings.' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingArchidektSettings(false);
-    }
-  };
 
   const exportAccountData = async () => {
     setExportingAccount(true);
@@ -1186,49 +1137,7 @@ export default function ProfilePage() {
         {metricsError ? <div role="alert" className="mb-4 rounded-xl border border-amber-400/30 p-4"><p>{t({ it: 'Statistiche non disponibili. Nessun dato parziale viene mostrato.', en: 'Statistics unavailable. Partial data is not displayed.' })}</p><Button onClick={refreshMetrics}>{t({ it: 'Riprova', en: 'Retry' })}</Button></div> : null}
         <MotionPanel>
           <ProfileAccountPanel user={user} currentProfile={currentProfile} adminMode={adminMode} controls={account}>
-              <div className="mt-6 overflow-hidden rounded-xl border border-emerald-400/30 bg-emerald-950/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Link2 className="h-4 w-4 text-emerald-300" />
-                    <h3 className="font-semibold text-emerald-50">{t({ it: 'Sincronizzazione Archidekt', en: 'Archidekt sync' })}</h3>
-                  </div>
-                  <p className="mb-3 text-sm text-emerald-200/70">
-                    {t({
-                      it: 'Collega il tuo profilo pubblico Archidekt. Se attivi il controllo automatico, i nuovi mazzi Commander pubblici vengono aggiunti in background senza modificare quelli esistenti.',
-                      en: 'Connect your public Archidekt profile. When automatic checks are enabled, new public Commander decks are added in the background without changing existing decks.',
-                    })}
-                  </p>
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-emerald-100/90">
-                      {t({ it: 'Il tuo username Archidekt', en: 'Your Archidekt username' })}
-                    </label>
-                    <Input
-                      value={archidektSettingsUsername}
-                      onChange={(event) => setArchidektSettingsUsername(event.target.value)}
-                      placeholder={t({ it: 'Username Archidekt', en: 'Archidekt username' })}
-                      className={accountPanelInputClass}
-                    />
-                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-emerald-400/15 bg-black/15 p-3 text-sm text-emerald-100/90">
-                      <input
-                        type="checkbox"
-                        checked={archidektAutoImport}
-                        onChange={(event) => setArchidektAutoImport(event.target.checked)}
-                        className="mt-0.5 h-4 w-4 accent-emerald-500"
-                      />
-                      <span>
-                        <span className="block font-medium">{t({ it: 'Importa automaticamente nuovi mazzi', en: 'Automatically import new decks' })}</span>
-                        <span className="block text-xs text-emerald-200/65">{t({ it: 'Controllo una volta per apertura profilo, con limite API.', en: 'Checked once per profile opening, with API rate limiting.' })}</span>
-                      </span>
-                    </label>
-                    <Button
-                      onClick={handleSaveArchidektSettings}
-                      disabled={savingArchidektSettings}
-                      className="bg-gradient-to-r from-emerald-600 to-teal-700 shadow-[0_8px_24px_rgba(124,58,237,0.28)] hover:from-emerald-500 hover:to-teal-600"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      {savingArchidektSettings ? t({ it: 'Salvataggio...', en: 'Saving...' }) : t({ it: 'Salva Archidekt', en: 'Save Archidekt' })}
-                    </Button>
-                  </div>
-                </div>
+              <ProfileArchidektSettingsPanel controls={archidektSettings} />
           </ProfileAccountPanel>
         </MotionPanel>
 
