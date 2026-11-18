@@ -149,8 +149,13 @@ try {
   try { redact(resolve('test-results')); } catch (error) { if (error.code !== 'ENOENT') exitCode = 1; }
   try { redact(resolve('artifacts/e2e/maestro')); } catch (error) { if (error.code !== 'ENOENT') exitCode = 1; }
   if (userIds.length) {
-    const { error: groupError } = await supabase.from('groups').delete().eq('id', groupId);
-    if (groupError) { console.error('Could not clean up disposable staging E2E group.'); exitCode = 1; cleanupVerified=false; }
+    const groupCleanup = await supabase.from('groups').delete().eq('id', groupId);
+    if (groupCleanup.error) {
+      console.error('Could not clean up disposable staging E2E group.', {
+        status: groupCleanup.status, code: groupCleanup.error.code || 'unknown',
+      });
+      exitCode = 1; cleanupVerified=false;
+    }
   }
   for (const userId of userIds) {
     const { error } = await supabase.auth.admin.deleteUser(userId);
