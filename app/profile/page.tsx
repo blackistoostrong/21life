@@ -10,7 +10,7 @@ import {
   manualDeckColorFields,
   uniqueCommanderOptions,
 } from '@/lib/profile-commander';
-import type { CommanderSearchResult, ImportedCommanderOption, CommanderArtOption } from '@/lib/profile-commander';
+import type { CommanderSearchResult, CommanderArtOption } from '@/lib/profile-commander';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
@@ -76,6 +76,7 @@ import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel, PROFILE_ACCOUNT_INPUT_CLASS as accountPanelInputClass } from '@/components/profile/profile-account-panel';
+import { useProfileCommanderEditor } from '@/hooks/use-profile-commander-editor';
 import { useProfileCommanderArts } from '@/hooks/use-profile-commander-arts';
 import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import';
 import { useProfileUrlImport } from '@/hooks/use-profile-url-import';
@@ -188,12 +189,11 @@ export default function ProfilePage() {
   const [savingDeck, setSavingDeck] = useState(false);
   const [refreshingDecks, setRefreshingDecks] = useState(false);
   const [refreshingDeckIds, setRefreshingDeckIds] = useState<string[]>([]);
-  const [editingArtDeck, setEditingArtDeck] = useState<Deck | null>(null);
-  const [deckCommanderOptions, setDeckCommanderOptions] = useState<ImportedCommanderOption[]>([]);
-  const [selectedDeckCommander, setSelectedDeckCommander] = useState<ImportedCommanderOption | null>(null);
-  const [deckArtOptions, setDeckArtOptions] = useState<CommanderArtOption[]>([]);
-  const [loadingDeckArtOptions, setLoadingDeckArtOptions] = useState(false);
-  const [savingDeckArt, setSavingDeckArt] = useState(false);
+  const {
+    editingArtDeck, setEditingArtDeck, deckCommanderOptions, setDeckCommanderOptions,
+    selectedDeckCommander, setSelectedDeckCommander, deckArtOptions, setDeckArtOptions,
+    loadingDeckArtOptions, savingDeckArt, loadDeckCommanderArts, openDeckArtEditor, saveDeckCommanderPresentation,
+  } = useProfileCommanderEditor(fetchCommanderArts, setDecks);
   const [linkingDeck, setLinkingDeck] = useState<Deck | null>(null);
   const [linkDeckUrl, setLinkDeckUrl] = useState('');
   const [savingDeckLink, setSavingDeckLink] = useState(false);
@@ -698,125 +698,6 @@ export default function ProfilePage() {
     setSelectedPartnerCommander(null);
     setManualCommanderArts([]);
     void loadManualCommanderArts(commander.name, commander.imageUrl);
-  };
-
-  const loadDeckCommanderArts = async (commanderName: string, fallbackImageUrl: string | null) => {
-    setDeckArtOptions([]);
-    setLoadingDeckArtOptions(true);
-    try {
-      const arts = await fetchCommanderArts(commanderName);
-      const currentArt = fallbackImageUrl
-        ? [{
-            id: 'current',
-            name: commanderName,
-            imageUrl: fallbackImageUrl,
-            setName: t({ it: 'Art corrente', en: 'Current art' }),
-            collectorNumber: '',
-            releasedAt: null,
-          }]
-        : [];
-      const uniqueArts = [...currentArt, ...arts].filter((art, index, allArts) =>
-        allArts.findIndex((candidate) => candidate.imageUrl === art.imageUrl) === index
-      );
-      setDeckArtOptions(uniqueArts);
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: error instanceof Error ? error.message : t({ it: 'Impossibile caricare le art', en: 'Failed to load arts' }),
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingDeckArtOptions(false);
-    }
-  };
-
-  const openDeckArtEditor = async (deck: Deck) => {
-    const currentCommander = { name: deck.commander, imageUrl: deck.commander_image };
-    setEditingArtDeck(deck);
-
-    let loadedOptions = [currentCommander];
-    const storedOptions = getCommanderOptions(deck);
-    if (storedOptions.length > 0) {
-      loadedOptions = uniqueCommanderOptions([currentCommander, ...storedOptions]);
-    } else if (isImportedDeckSource(deck.source_type) && deck.source_url) {
-      try {
-        const response = await authenticatedFetch('/api/deck-import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: deck.source_url }),
-        });
-
-        if (response.ok) {
-          const imported = await response.json() as ImportedDeckPreview;
-          const importedOptions = imported.commanderOptions || [];
-          if (importedOptions.length > 0) {
-            loadedOptions = uniqueCommanderOptions([currentCommander, ...importedOptions]);
-          }
-        }
-      } catch {
-        loadedOptions = [currentCommander];
-      }
-    }
-
-    const selectableOptions = filterSelectableCommanderOptions(loadedOptions);
-    const selectedCommander = resolveSelectedCommanderOption(
-      selectableOptions,
-      deck.commander,
-      deck.commander_image,
-    ) || currentCommander;
-
-    setDeckCommanderOptions(selectableOptions);
-    setSelectedDeckCommander(selectedCommander);
-    void loadDeckCommanderArts(selectedCommander.name, selectedCommander.imageUrl);
-  };
-
-  const saveDeckCommanderPresentation = async (commanderName: string, imageUrl: string | null) => {
-    if (!editingArtDeck) return;
-
-    setSavingDeckArt(true);
-    try {
-      const colorFields = mergeDeckColorFields(editingArtDeck, deckCommanderOptions);
-      const commanderCmc = await resolveDeckCommanderCmc(
-        { commander: commanderName, commander_options: colorFields.commander_options },
-        lookupCommanderCmcInBrowser,
-      );
-      const { error } = await supabase
-        .from('decks')
-        .update({
-          commander: commanderName,
-          commander_image: imageUrl,
-          commander_cmc: commanderCmc,
-          ...colorFields,
-        })
-        .eq('id', editingArtDeck.id);
-
-      if (error) throw error;
-
-      setDecks((currentDecks) => currentDecks.map((deck) =>
-        deck.id === editingArtDeck.id
-          ? {
-              ...deck,
-              commander: commanderName,
-              commander_image: imageUrl,
-              commander_cmc: commanderCmc,
-              ...colorFields,
-            }
-          : deck
-      ));
-      setEditingArtDeck(null);
-      setSelectedDeckCommander(null);
-      setDeckCommanderOptions([]);
-      setDeckArtOptions([]);
-      toast({ title: t({ it: 'Comandante aggiornato', en: 'Commander updated' }) });
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile salvare il comandante', en: 'Failed to save commander' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingDeckArt(false);
-    }
   };
 
   const closeOverwriteConfirm = (value: boolean | 'overwrite' | 'skip' | 'cancel') => {
