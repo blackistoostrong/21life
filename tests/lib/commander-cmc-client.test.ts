@@ -9,7 +9,7 @@ describe('browser commander CMC cache', () => {
 
   it('does not cache a temporary provider failure as a missing commander', async () => {
     vi.mocked(fetchScryfall).mockResolvedValueOnce(new Response('{}', { status: 503 }));
-    await expect(lookupCommanderCmcInBrowser('Temporary CMC failure')).rejects.toThrow('503');
+    await expect(lookupCommanderCmcInBrowser('Temporary CMC failure')).resolves.toBeNull();
     vi.mocked(fetchScryfall).mockResolvedValueOnce(new Response(JSON.stringify({ name: 'Temporary CMC failure', cmc: 4 })));
     await expect(lookupCommanderCmcInBrowser('Temporary CMC failure')).resolves.toBe(4);
     await expect(lookupCommanderCmcInBrowser('Temporary CMC failure')).resolves.toBe(4);

@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/cache', () => ({
-  unstable_cache: <T extends (...args: never[]) => unknown>(fn: T) => fn,
+  unstable_cache: <T extends (...args: never[]) => Promise<unknown>>(fn: T) => {
+    const fulfilled = new Map<string, unknown>();
+    return async (...args: Parameters<T>) => {
+      const key = JSON.stringify(args);
+      if (fulfilled.has(key)) return fulfilled.get(key);
+      const result = await fn(...args);
+      fulfilled.set(key, result);
+      return result;
+    };
+  },
 }));
 
 // Adapter mapping tests do not wait for provider pacing; the transport suite
@@ -134,5 +143,13 @@ describe('Scryfall server adapter', () => {
     await expect(fetchCommanderArtOptions('unique art test')).resolves.toEqual(first);
     expect(fetch).toHaveBeenCalledTimes(1);
     await expect(fetchCommanderArtOptions('x')).resolves.toEqual([]);
+  });
+
+  it('does not persist a provider failure as a missing commander', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 403));
+    await expect(fetchCommanderCard('Transient server fixture')).resolves.toBeNull();
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(card));
+    await expect(fetchCommanderCard('Transient server fixture')).resolves.toMatchObject({ id: card.id });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

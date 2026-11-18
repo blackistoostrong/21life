@@ -131,4 +131,21 @@ describe('shared Scryfall transport', () => {
     }
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it('identifies server/native requests and lets browsers supply User-Agent', async () => {
+    const observedHeaders: unknown[] = [];
+    const fetcher = vi.fn(async (_input: unknown, init?: { headers?: unknown }) => {
+      observedHeaders.push(init?.headers);
+      return json({});
+    });
+    const client = createScryfallTransport({ fetch: fetcher, intervalMs: 0 });
+    await client(url('server'));
+    expect(observedHeaders[0]).toMatchObject({ Accept: 'application/json',
+      'User-Agent': '21Life/9.3.0 (support@21life.win)' });
+    vi.stubGlobal('document', {});
+    try {
+      await client(url('browser'));
+      expect(observedHeaders[1]).toEqual({ Accept: 'application/json' });
+    } finally { vi.unstubAllGlobals(); }
+  });
 });

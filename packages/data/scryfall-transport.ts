@@ -44,8 +44,12 @@ export function createScryfallTransport(options: Options = {}) {
   async function request(url: string, signal: AbortSignal): Promise<Snapshot> {
     for (let attempt = 0; ; attempt += 1) {
       await permit(signal);
+      // Browsers supply their own User-Agent; setting it can be rejected or
+      // trigger a CORS preflight. Server/native requests identify the app.
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (typeof document === 'undefined') headers['User-Agent'] = '21Life/9.3.0 (support@21life.win)';
       const response = await (options.fetch ?? fetch)(url, {
-        headers: { Accept: 'application/json', 'User-Agent': '21Life/9.3.0 (support@21life.win)' },
+        headers,
         signal,
       });
       if (RETRYABLE.has(response.status)) {

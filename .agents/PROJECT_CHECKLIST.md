@@ -2,6 +2,12 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Librerie candidato finale task: qualityweb721+3skip/67script e Expo522+3skip PASS; ratchet139/131 invariati rispetto ai nuovi floor approvati. Header User-Agent lasciato al browser per evitare CORS, esplicito server/native. Mock Fetch reso compatibile con overload RN/DOM;20regressioni mirate e typecheck PASS dopo sola correzione firma test. Procedere nuovo build/export sul commit pulito, poi browser; advisory preesistenti restano gate finale rosso.
+
+
+- [ ] Librerie ultima revisione18-11: buildweb/exportAndroid+iOS c0f04abe PASS, budget3.18/18MiB (+0.33MiB dai2.85 precedenti) e9.32/12MiB. Prima di browser trovata/corretta cache server che persisteva errori come null30giorni (catch ora esterno, chiavev8); CMC browser conserva null HTTP senza cache, non blocca metadati facoltativi. Regressioni9/9/typecheckPASS. Nuovo quality/buildweb/browser necessari; exportnative resta valido, ultime correzioni solo web/server.
+
+
 - [ ] Librerie18-11 prebuild: quality web719+3skip/67script, native521+3skip PASS; ratchet139/131 PASS, nessuna soglia precedente ridotta. Trasporto e CMC testati, grafico lazy con esiti da conteggi e label accessibile. Build/export SOLOQA locale su commit pulito9.3.0, nessun merge/rilascio/deploy; audit ROSSO rimane gate finale, non aggirato. Prima build letti registro merge/checklist, zero unmerged; fix upstream/versioni preservati. Browser e budget ancora da verificare.
 
 - [ ] Librerie18-11 verifica: webquality719+3skip/67script PASS, ratchet139 (aggiunto solo floor trasporto; precedenti invariati). Expo floor scryfall-search calato per estrazione: aggiunti3test di cap/mapping/errori, coverage524/ratchet131 PASS; quality finale in corso. Audit dipendenze ROSSO5highweb/26highExpo su catene preesistenti, nessuna nuova advisory Recharts/react-is; picomatch ultima4.0.7 ancora vulnerabile, niente bypass. Chiudere prove build/browser locali e salvare SAL; security resta gate finale del piano.
