@@ -73,6 +73,8 @@ try {
   process.env.E2E_PASSWORD = password;
   process.env.E2E_GROUP_ID = groupId;
   process.env.E2E_USER_ID = userIds[0];
+  process.env.E2E_SECOND_USER_ID = userIds[1];
+  process.env.E2E_SECOND_EMAIL = `player-1-${email}`;
   process.env.E2E_LIVE_GAME_FLOW = '1';
   process.env.E2E_ANALYTICS_FLOW = '1';
   const sessionCookies = [];
@@ -120,6 +122,7 @@ try {
       'tests/e2e/profile-editor.spec.ts',
       'tests/e2e/profile-settings.spec.ts',
       'tests/e2e/profile-autosync.spec.ts',
+      'tests/e2e/profile-auth-lifecycle.spec.ts',
       'tests/e2e/history-v2.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
