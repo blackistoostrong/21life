@@ -1,87 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState, type SetStateAction } from 'react';
 import { useLanguage } from '@/components/language-provider';
 import { useToast } from '@/hooks/use-toast';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { getDefaultImportedCommanderOption, resolveImportedCommanderAfterArtsLoad } from '@/lib/deck-importers';
 import { normalizeImportedDeckPreview } from '@/lib/profile-commander';
+import { withRequestDeadline } from '@/packages/data/request-deadline';
+import { useProfileImportScope, type ProfileImportJob } from '@/hooks/use-profile-import-scope';
 import type { CommanderArtOption, ImportedCommanderOption } from '@/lib/profile-commander';
 import type { ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 
-/** Owns one existing URL preview, its input, commander selection and art state. */
-export function useProfileUrlImport(fetchCommanderArts: (name: string) => Promise<CommanderArtOption[]>) {
+type Scope = ReturnType<typeof useProfileImportScope>;
+type State = {
+  context: Scope['context']; url: string; previewEpoch: Scope['epoch'] | null;
+  preview: ImportedDeckPreview | null; selected: ImportedCommanderOption | null; arts: CommanderArtOption[];
+  importJob: ProfileImportJob | null; artsJob: ProfileImportJob | null;
+};
+const empty = (context: Scope['context']): State => ({ context, url: '', previewEpoch: null,
+  preview: null, selected: null, arts: [], importJob: null, artsJob: null });
+
+/** Read-only URL preview and artwork are isolated from persistence and other openings. */
+export function useProfileUrlImport(key: string | null, enabled: boolean,
+  fetchCommanderArts: (name: string, signal?: AbortSignal) => Promise<CommanderArtOption[]>) {
   const { copy: t } = useLanguage();
   const { toast } = useToast();
-  const [importDeckUrl, setImportDeckUrl] = useState('');
+  const { context, epoch, committed, cancel, begin } = useProfileImportScope(key, enabled);
+  const [state, setState] = useState<State>(() => empty(context));
+  const current = state.context === context ? state : empty(context);
+  const importingDeck = current.importJob?.epoch === epoch;
+  const visible = current.previewEpoch === epoch;
+  const update = useCallback((action: (previous: State) => State, job?: ProfileImportJob) => {
+    if (!committed() || (job && !job.active())) return;
+    setState(previous => !committed() || (job && !job.active()) ? previous
+      : action(previous.context === context ? previous : empty(context)));
+  }, [committed, context]);
 
-  const [importingDeck, setImportingDeck] = useState(false);
-
-  const [importedDeck, setImportedDeck] = useState<ImportedDeckPreview | null>(null);
-
-  const [selectedImportedCommander, setSelectedImportedCommander] = useState<ImportedCommanderOption | null>(null);
-
-  const [importedCommanderArts, setImportedCommanderArts] = useState<CommanderArtOption[]>([]);
-
-  const [loadingImportedCommanderArts, setLoadingImportedCommanderArts] = useState(false);
-
-  const handleUrlImport = async () => {
-    if (!importDeckUrl.trim()) return;
-
-    setImportingDeck(true);
-    try {
-      const response = await authenticatedFetch('/api/deck-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: importDeckUrl }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }));
-      }
-
-      const imported = await normalizeImportedDeckPreview(await response.json() as ImportedDeckPreview);
-      const defaultCommander = getDefaultImportedCommanderOption(imported);
-      setImportedDeck(imported);
-      setSelectedImportedCommander(defaultCommander);
-      void loadImportedCommanderArts(defaultCommander);
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: error instanceof Error ? error.message : t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }),
-        variant: 'destructive',
-      });
-    } finally {
-      setImportingDeck(false);
-    }
+  const resetUrlImport = () => { cancel(); update(() => empty(context)); };
+  const setImportDeckUrl = (action: SetStateAction<string>) => {
+    if (importingDeck) return;
+    update(previous => ({ ...previous, url: typeof action === 'function' ? action(previous.url) : action }));
   };
-
   const loadImportedCommanderArts = async (commander: ImportedCommanderOption) => {
-    setLoadingImportedCommanderArts(true);
+    const job = begin('arts', true);
+    if (!job) return;
+    update(previous => ({ ...previous, artsJob: job, selected: commander, arts: [] }), job);
     try {
-      const arts = await fetchCommanderArts(commander.name);
-      setImportedCommanderArts(arts);
-      setSelectedImportedCommander(resolveImportedCommanderAfterArtsLoad(commander, arts));
+      const arts = await withRequestDeadline({ abortSignal: signal => fetchCommanderArts(commander.name, signal) }, 15000, job.signal);
+      update(previous => ({ ...previous, arts, selected: resolveImportedCommanderAfterArtsLoad(commander, arts) }), job);
     } catch {
-      setImportedCommanderArts(commander.imageUrl ? [{
-        id: 'current',
-        name: commander.name,
-        imageUrl: commander.imageUrl,
-        setName: t({ it: 'Art corrente', en: 'Current art' }),
-        collectorNumber: '',
-        releasedAt: null,
-      }] : []);
-      setSelectedImportedCommander(commander);
+      update(previous => ({ ...previous, selected: commander, arts: commander.imageUrl ? [{
+        id: 'current', name: commander.name, imageUrl: commander.imageUrl,
+        setName: t({ it: 'Art corrente', en: 'Current art' }), collectorNumber: '', releasedAt: null,
+      }] : [] }), job);
     } finally {
-      setLoadingImportedCommanderArts(false);
+      update(previous => ({ ...previous, artsJob: null }), job);
+      job.finish();
     }
   };
-
-  return {
-    importDeckUrl, setImportDeckUrl, importingDeck, importedDeck, setImportedDeck,
-    selectedImportedCommander, setSelectedImportedCommander,
-    importedCommanderArts, setImportedCommanderArts, loadingImportedCommanderArts, setLoadingImportedCommanderArts,
-    handleUrlImport, loadImportedCommanderArts,
+  const handleUrlImport = async () => {
+    if (!current.url.trim()) return;
+    const job = begin('import');
+    if (!job) return;
+    cancel('arts');
+    update(previous => ({ ...previous, importJob: job, artsJob: null }), job);
+    try {
+      const imported = await withRequestDeadline({ abortSignal: async signal => {
+        const response = await authenticatedFetch('/api/deck-import', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: current.url }), signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }));
+        return normalizeImportedDeckPreview(data as ImportedDeckPreview, signal);
+      } }, 15000, job.signal);
+      if (!job.active()) return;
+      const selected = getDefaultImportedCommanderOption(imported);
+      update(previous => ({ ...previous, preview: imported, previewEpoch: job.epoch, selected }), job);
+      void loadImportedCommanderArts(selected);
+    } catch (error) {
+      if (job.active()) toast({ title: t({ it: 'Errore', en: 'Error' }),
+        description: error instanceof Error ? error.message : t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }),
+        variant: 'destructive' });
+    } finally {
+      update(previous => ({ ...previous, importJob: null }), job);
+      job.finish();
+    }
   };
+  const selectImportedCommander = (commander: ImportedCommanderOption) => { void loadImportedCommanderArts(commander); };
+  const selectImportedArt = (art: CommanderArtOption) => {
+    update(previous => ({ ...previous, selected: previous.selected ? { ...previous.selected, imageUrl: art.imageUrl } : null }));
+  };
+  return { importDeckUrl: current.url, setImportDeckUrl, importingDeck,
+    importedDeck: visible ? current.preview : null, selectedImportedCommander: visible ? current.selected : null,
+    importedCommanderArts: visible ? current.arts : [], loadingImportedCommanderArts: current.artsJob?.epoch === epoch,
+    handleUrlImport, resetUrlImport, selectImportedCommander, selectImportedArt };
 }

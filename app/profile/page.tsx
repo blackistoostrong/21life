@@ -151,16 +151,18 @@ export default function ProfilePage() {
     useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
       user && !adminLoading ? user.id + ':' + adminMode : null);
   const {
-    importDeckUrl, setImportDeckUrl, importingDeck, importedDeck, setImportedDeck,
-    selectedImportedCommander, setSelectedImportedCommander,
-    importedCommanderArts, setImportedCommanderArts, loadingImportedCommanderArts, setLoadingImportedCommanderArts,
-    handleUrlImport, loadImportedCommanderArts,
-  } = useProfileUrlImport(fetchCommanderArts);
+    importDeckUrl, setImportDeckUrl, importingDeck, importedDeck, selectedImportedCommander,
+    importedCommanderArts, loadingImportedCommanderArts,
+    handleUrlImport, resetUrlImport, selectImportedCommander, selectImportedArt,
+  } = useProfileUrlImport(user && !adminLoading ? user.id + ':' + adminMode : null,
+    showAddModal && addMode === 'import-url', fetchCommanderArts);
   const {
     archidektUsername, setArchidektUsername, importingUserDecks,
-    importedUserDecks, setImportedUserDecks, selectedUserDeckCommanders, setSelectedUserDeckCommanders,
+    importedUserDecks, selectedUserDeckCommanders, setSelectedUserDeckCommanders,
     selectedUserDeckUrls, setSelectedUserDeckUrls, handleArchidektUserImport,
-  } = useProfileArchidektImport();
+    clearArchidektPreview, resetArchidektImport,
+  } = useProfileArchidektImport(user && !adminLoading ? user.id + ':' + adminMode : null,
+    showAddModal && addMode === 'archidekt-user');
   const [archidektSettingsUsername, setArchidektSettingsUsername] = useState('');
   const [archidektAutoImport, setArchidektAutoImport] = useState(false);
   const [savingArchidektSettings, setSavingArchidektSettings] = useState(false);
@@ -1159,15 +1161,8 @@ export default function ProfilePage() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setAddMode('choose');
-    setImportDeckUrl('');
-    setImportedDeck(null);
-    setSelectedImportedCommander(null);
-    setImportedCommanderArts([]);
-    setLoadingImportedCommanderArts(false);
-    setArchidektUsername(currentProfile?.archidekt_username || '');
-    setImportedUserDecks([]);
-    setSelectedUserDeckCommanders({});
-    setSelectedUserDeckUrls([]);
+    resetUrlImport();
+    resetArchidektImport(currentProfile?.archidekt_username || '');
     setSearchQuery('');
     setSearchResults([]);
     setSelectedCommander(null);
@@ -1783,6 +1778,7 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <Input
                     value={archidektUsername}
+                    disabled={importingUserDecks}
                     onChange={(e) => setArchidektUsername(e.target.value)}
                     placeholder={t({ it: 'Username Archidekt', en: 'Archidekt username' })}
                     className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
@@ -1945,11 +1941,7 @@ export default function ProfilePage() {
                     <Button
                       variant="outline"
                       className="flex-1 border-border text-foreground"
-                      onClick={() => {
-                      setImportedUserDecks([]);
-                      setSelectedUserDeckCommanders({});
-                      setSelectedUserDeckUrls([]);
-                    }}
+                      onClick={clearArchidektPreview}
                   >
                       {t({ it: 'Indietro', en: 'Back' })}
                     </Button>
@@ -1968,6 +1960,7 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <Input
                     value={importDeckUrl}
+                    disabled={importingDeck}
                     onChange={(e) => setImportDeckUrl(e.target.value)}
                     placeholder="https://archidekt.com/decks/123456 o https://www.moxfield.com/decks/..."
                     className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
@@ -2047,10 +2040,7 @@ export default function ProfilePage() {
                             <button
                               key={commander.name}
                               type="button"
-                              onClick={() => {
-                                setSelectedImportedCommander(commander);
-                                void loadImportedCommanderArts(commander);
-                              }}
+                              onClick={() => selectImportedCommander(commander)}
                               className={`flex items-center gap-3 rounded-lg border p-2 text-left transition-colors ${
                                 selected
                                   ? 'border-emerald-500 bg-emerald-500/10'
@@ -2072,18 +2062,14 @@ export default function ProfilePage() {
                   {selectedImportedCommander && renderCommanderArtPicker(
                     importedCommanderArts,
                     selectedImportedCommander.imageUrl,
-                    (art) => setSelectedImportedCommander((current) => current ? { ...current, imageUrl: art.imageUrl } : current),
+                    selectImportedArt,
                     loadingImportedCommanderArts
                   )}
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
                       className="flex-1 border-border text-foreground"
-                      onClick={() => {
-                        setImportedDeck(null);
-                        setSelectedImportedCommander(null);
-                        setImportDeckUrl('');
-                      }}
+                      onClick={resetUrlImport}
                     >
                       {t({ it: 'Annulla', en: 'Cancel' })}
                     </Button>

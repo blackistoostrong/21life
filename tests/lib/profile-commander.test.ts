@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const io = vi.hoisted(() => ({ scryfall: vi.fn(), authenticated: vi.fn(), delay: vi.fn() }));
 vi.mock('@/packages/data/scryfall-transport', () => ({ fetchScryfall: io.scryfall }));
 vi.mock('@/lib/authenticated-fetch', () => ({ authenticatedFetch: io.authenticated }));
-vi.mock('@/lib/async-utils', () => ({ delay: io.delay }));
+vi.mock('@/lib/async-utils', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/async-utils')>(), delay: io.delay,
+}));
 const load = () => import('@/lib/profile-commander');
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 const card = (name = 'Fixture Commander') => ({ id: name, name, color_identity: ['U'],
@@ -69,21 +71,23 @@ describe('profile public commander metadata adapter', () => {
     expect(queries[2]).toContain('!"Named Partner"');
   });
 
-  it('coalesces art requests, chooses the matching DFC face and retains printing metadata', async () => {
-    let release!: (value: Response) => void;
-    io.scryfall.mockReturnValue(new Promise<Response>(resolve => { release = resolve; }));
+  it('delegates HTTP coalescing to transport and maps each caller response independently', async () => {
+    let release!: (value: unknown) => void;
+    const payload = new Promise<unknown>(resolve => { release = resolve; });
+    // The shared transport returns a fresh Response to every subscriber.
+    io.scryfall.mockImplementation(() => payload.then(data => response(data)));
     const api = await load();
     const first = api.fetchScryfallArtOptionsFromBrowser('Back Face');
     const second = api.fetchScryfallArtOptionsFromBrowser('back face');
-    expect(io.scryfall).toHaveBeenCalledTimes(1);
-    release(response({ data: [{ id: 'dfc', name: 'Front Face // Back Face', set_name: 'Fixture Set',
+    expect(io.scryfall).toHaveBeenCalledTimes(2);
+    release({ data: [{ id: 'dfc', name: 'Front Face // Back Face', set_name: 'Fixture Set',
       collector_number: '7', released_at: '2026-01-01', image_uris: { art_crop: 'front.jpg' },
-      card_faces: [{ name: 'Back Face', image_uris: { normal: 'back.jpg' } }] }, { id: 'missing', name: 'No art' }] }));
+      card_faces: [{ name: 'Back Face', image_uris: { normal: 'back.jpg' } }] }, { id: 'missing', name: 'No art' }] });
     const result = await first;
-    expect(await second).toBe(result);
+    expect(await second).toEqual(result);
     expect(result).toEqual([{ id: 'dfc', name: 'Front Face // Back Face', imageUrl: 'back.jpg',
       setName: 'Fixture Set', collectorNumber: '7', releasedAt: '2026-01-01' }]);
-    expect(await api.fetchScryfallArtOptionsFromBrowser('Back Face')).toBe(result);
+    expect(await api.fetchScryfallArtOptionsFromBrowser('Back Face')).toEqual(result);
   });
 
   it('loads only unexpired art entries from the existing browser storage key', async () => {
@@ -156,4 +160,86 @@ describe('profile public commander metadata adapter', () => {
     expect(api.uniqueCommanderOptions([{ name: 'Same', imageUrl: 'first.jpg' }, { name: 'same', imageUrl: null }]))
       .toEqual([{ name: 'Same', imageUrl: 'first.jpg' }]);
   });
+
+  it('forwards art cancellation and rejects an aborted cache hit', async () => {
+    io.scryfall.mockResolvedValue(response({ data: [card()] }));
+    const api = await load();
+    const controller = new AbortController();
+    await api.fetchScryfallArtOptionsFromBrowser('Fixture', controller.signal);
+    expect(io.scryfall.mock.calls[0][1]).toBe(controller.signal);
+    controller.abort();
+    await expect(api.fetchScryfallArtOptionsFromBrowser('Fixture', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates cancellation into missing-image repair without trying fuzzy fallback', async () => {
+    io.scryfall.mockImplementation((_url, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    const api = await load();
+    const controller = new AbortController();
+    const task = api.normalizeImportedDeckPreview(preview(), controller.signal);
+    expect(io.scryfall.mock.calls[0][1]).toBe(controller.signal);
+    controller.abort();
+    await expect(task).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds public preview repair to three concurrent requests and preserves catalog order', async () => {
+    let active = 0; let peak = 0;
+    const releases: Array<() => void> = [];
+    io.scryfall.mockImplementation(async (url: string) => {
+      active += 1; peak = Math.max(peak, active);
+      await new Promise<void>(resolve => releases.push(resolve));
+      active -= 1;
+      return response(card(new URL(url).searchParams.get('exact')!));
+    });
+    const decks = Array.from({ length: 8 }, (_, i) => ({ ...preview(), commander: 'Commander ' + i,
+      sourceUrl: `https://archidekt.com/decks/${i + 1}` }));
+    const task = (await load()).normalizeImportedDeckPreviews(decks);
+    for (const expected of [3, 6, 8]) {
+      await vi.waitFor(() => expect(io.scryfall).toHaveBeenCalledTimes(expected));
+      releases.splice(0).forEach(release => release());
+    }
+    const result = await task;
+    expect(peak).toBe(3);
+    expect(result.map(deck => deck.sourceUrl)).toEqual(decks.map(deck => deck.sourceUrl));
+    expect(result.every(deck => deck.commanderImageUrl)).toBe(true);
+  });
+
+  it('stops queued preview repairs when the importing context is cancelled', async () => {
+    io.scryfall.mockImplementation((_url, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    const controller = new AbortController();
+    const api = await load();
+    const task = api.normalizeImportedDeckPreviews(Array.from({ length: 8 }, (_, i) => ({
+      ...preview(), commander: 'Commander ' + i,
+    })), controller.signal);
+    await vi.waitFor(() => expect(io.scryfall).toHaveBeenCalledTimes(3));
+    controller.abort();
+    await expect(task).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall).toHaveBeenCalledTimes(3);
+    await expect(api.normalizeImportedDeckPreview({ ...preview(), commanderImageUrl: 'ready.jpg' }, controller.signal))
+      .rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+
+  it('repairs distinct partner images under the caller signal without mutating source options', async () => {
+    io.scryfall.mockImplementation(async (url: string) => response(card(new URL(url).searchParams.get('exact')!)));
+    const signal = new AbortController().signal;
+    const original = { ...preview(), commander: 'Primary // Partner', commanderOptions: [
+      { name: 'Primary', imageUrl: 'shared.jpg', colorIdentity: ['U'] },
+      { name: 'Partner', imageUrl: 'shared.jpg', colorIdentity: ['R'] },
+    ] };
+    const result = await (await load()).normalizeImportedDeckPreview(original, signal);
+    expect(result.commanderOptions?.map(option => option.imageUrl)).toEqual([
+      'https://cards.scryfall.io/Primary.jpg', 'https://cards.scryfall.io/Partner.jpg',
+    ]);
+    expect(result.commanderImageUrl).toBe('https://cards.scryfall.io/Primary.jpg');
+    expect(original.commanderOptions.every(option => option.imageUrl === 'shared.jpg')).toBe(true);
+    expect(io.scryfall).toHaveBeenCalledTimes(2);
+    expect(io.scryfall.mock.calls.every(([, forwarded]) => forwarded === signal)).toBe(true);
+  });
+
 });

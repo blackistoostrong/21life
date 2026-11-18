@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { buildDeckColorFields, normalizeDeckColorIdentity } from '@/lib/deck-metadata';
 import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
 import { getDefaultImportedCommanderOption, repairImportedCommanderOptions, resolveImportedDeckCommanderImage } from '@/lib/deck-importers';
-import { delay } from '@/lib/async-utils';
+import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import type { CommanderPartnerMode } from '@/lib/scryfall';
 import type { ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 
@@ -81,7 +81,6 @@ const commanderSearchCache = new Map<string, CommanderSearchResult[]>();
 const COMMANDER_ART_CACHE_MS = 30 * 24 * 60 * 60 * 1_000;
 const COMMANDER_ART_STORAGE_KEY = 'phyrexian-arena:commander-art-options:v7';
 const commanderArtCache = new Map<string, { expiresAt: number; options: CommanderArtOption[] }>();
-const commanderArtInflight = new Map<string, Promise<CommanderArtOption[]>>();
 let commanderArtCacheHydrated = false;
 
 function hydrateCommanderArtCache() {
@@ -117,24 +116,25 @@ function rememberCommanderArts(key: string, options: CommanderArtOption[]) {
   }
 }
 
-async function lookupCommanderImageFromBrowser(name: string): Promise<string | null> {
-  const match = await lookupCommanderFromBrowser(name);
+async function lookupCommanderImageFromBrowser(name: string, signal?: AbortSignal): Promise<string | null> {
+  const match = await lookupCommanderFromBrowser(name, signal);
   return match?.imageUrl?.trim() || null;
 }
 
-export async function normalizeImportedDeckPreview(deck: ImportedDeckPreview): Promise<ImportedDeckPreview> {
+export async function normalizeImportedDeckPreview(deck: ImportedDeckPreview, signal?: AbortSignal): Promise<ImportedDeckPreview> {
+  signal?.throwIfAborted();
   const options = deck.commanderOptions || [];
   let repairedOptions = options;
 
   if (options.length > 1) {
-    repairedOptions = await repairImportedCommanderOptions(options, lookupCommanderImageFromBrowser);
+    repairedOptions = await repairImportedCommanderOptions(options, name => lookupCommanderImageFromBrowser(name, signal));
   } else if (options.length === 1 && !options[0]?.imageUrl?.trim()) {
-    const imageUrl = await lookupCommanderImageFromBrowser(options[0].name);
+    const imageUrl = await lookupCommanderImageFromBrowser(options[0].name, signal);
     if (imageUrl) {
       repairedOptions = [{ ...options[0], imageUrl }];
     }
   } else if (options.length === 0 && !deck.commanderImageUrl?.trim()) {
-    const imageUrl = await lookupCommanderImageFromBrowser(deck.commander);
+    const imageUrl = await lookupCommanderImageFromBrowser(deck.commander, signal);
     if (imageUrl) {
       return {
         ...deck,
@@ -159,6 +159,11 @@ export async function normalizeImportedDeckPreview(deck: ImportedDeckPreview): P
     commanderOptions: repairedOptions,
     commanderImageUrl: defaultCommander.imageUrl || deck.commanderImageUrl,
   };
+}
+
+/** Bounded image repair keeps large public catalogs out of the transport queue. */
+export function normalizeImportedDeckPreviews(decks: ImportedDeckPreview[], signal?: AbortSignal) {
+  return runTasksWithConcurrency(decks, 3, deck => normalizeImportedDeckPreview(deck, signal));
 }
 
 export async function resolveImportedDeckCommanderImageForSave(
@@ -336,7 +341,8 @@ export async function fetchCommanderSearchResults(
   return results;
 }
 
-export async function fetchScryfallArtOptionsFromBrowser(commanderName: string) {
+export async function fetchScryfallArtOptionsFromBrowser(commanderName: string, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const queryText = sanitizeScryfallQuery(commanderName);
   if (queryText.length < 2) return [];
   hydrateCommanderArtCache();
@@ -344,44 +350,33 @@ export async function fetchScryfallArtOptionsFromBrowser(commanderName: string) 
   const cached = commanderArtCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.options;
 
-  const inflight = commanderArtInflight.get(cacheKey);
-  if (inflight) return inflight;
+  const response = await fetchScryfall(
+    `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`!"${queryText}"`)}&unique=art&order=released`,
+    signal
+  );
 
-  const request = (async () => {
-    const response = await fetchScryfall(
-      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`!"${queryText}"`)}&unique=art&order=released`
-    );
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error('Scryfall art search failed');
 
-    if (response.status === 404) return [];
-    if (!response.ok) throw new Error('Scryfall art search failed');
+  const data = await response.json() as ScryfallBrowserSearchResponse;
+  const options = (data.data || [])
+    .map((card) => {
+      const imageUrl = extractBrowserScryfallImage(card, queryText);
+      if (!imageUrl) return null;
 
-    const data = await response.json() as ScryfallBrowserSearchResponse;
-    const options = (data.data || [])
-      .map((card) => {
-        const imageUrl = extractBrowserScryfallImage(card, queryText);
-        if (!imageUrl) return null;
+      return {
+        id: card.id,
+        name: card.name,
+        imageUrl,
+        setName: card.set_name || '',
+        collectorNumber: card.collector_number || '',
+        releasedAt: card.released_at || null,
+      };
+    })
+    .filter((option): option is CommanderArtOption => Boolean(option));
 
-        return {
-          id: card.id,
-          name: card.name,
-          imageUrl,
-          setName: card.set_name || '',
-          collectorNumber: card.collector_number || '',
-          releasedAt: card.released_at || null,
-        };
-      })
-      .filter((option): option is CommanderArtOption => Boolean(option));
-
-    rememberCommanderArts(cacheKey, options);
-    return options;
-  })();
-
-  commanderArtInflight.set(cacheKey, request);
-  try {
-    return await request;
-  } finally {
-    commanderArtInflight.delete(cacheKey);
-  }
+  rememberCommanderArts(cacheKey, options);
+  return options;
 }
 
 export function manualDeckColorFields(commander: CommanderSearchResult, partnerCommander?: CommanderSearchResult | null) {

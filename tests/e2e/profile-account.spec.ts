@@ -1,32 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { openPasswordFixture } from './profile-fixture';
 import { fixtureLogin } from './fixture-login';
 import { profileCatalogFixture } from '../fixtures/profile-catalog';
-
-async function openPasswordFixture(page: Page) {
-  const userId = process.env.E2E_USER_ID!;
-  let authorization = '';
-  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2', route => {
-    authorization = route.request().headers().authorization || '';
-    return route.fulfill({ status: 200, json: { schemaVersion: 2, scope: 'personal', userId,
-      revision: 'f'.repeat(32), total: 0, next: null, decks: [] } });
-  });
-  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2', route => {
-    const report = profileCatalogFixture(); report.userId = userId; report.total = 0; report.decks = [];
-    return route.fulfill({ status: 200, json: report });
-  });
-  await page.route('**/rest/v1/profiles?*', route => {
-    if (route.request().method() === 'PATCH') return route.fulfill({ status: 403 });
-    if (!new URL(route.request().url()).searchParams.get('select')?.includes('archidekt_last_sync_at')) return route.continue();
-    return route.fulfill({ status: 200, json: [{ id: userId, username: 'account_fixture', display_name: null,
-      archidekt_username: null, archidekt_auto_import: false, archidekt_last_sync_at: null }] });
-  });
-  await fixtureLogin(page);
-  await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
-  const card = page.locator('[data-web-card]').filter({ has: page.getByRole('button', { name: 'Nickname', exact: true }) });
-  await expect(card.getByRole('heading', { name: 'account_fixture', exact: true })).toBeVisible();
-  await card.getByRole('button', { name: 'Password', exact: true }).click();
-  return { card, authorization: () => authorization };
-}
 
 test('profile account preserves failed nickname/password drafts and validates before changing credentials', async ({ page }) => {
   test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
@@ -395,82 +370,3 @@ for (const action of ['clear', 'close', 'leave'] as const) {
     } finally { releases.forEach(release => release()); }
   });
 }
-
-test('profile URL import preserves a failed draft and retries to a preview without saving a deck', async ({ page }) => {
-  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
-  const url = 'https://archidekt.com/decks/123456';
-  const image = 'https://cards.scryfall.io/art_crop/import-preview.jpg';
-  let attempts = 0; let writes = 0;
-  await page.route('**/api/deck-import', route => {
-    expect(route.request().postDataJSON()).toEqual({ url });
-    attempts += 1;
-    return attempts === 1 ? route.fulfill({ status: 503, json: { error: 'Synthetic import unavailable' } })
-      : route.fulfill({ status: 200, json: { name: 'Imported fixture', commander: 'Imported commander',
-        commanderImageUrl: image, commanderOptions: [{ name: 'Imported commander', imageUrl: image, colorIdentity: ['U'] }],
-        colorIdentity: ['U'], bracket: '3', sourceUrl: url, sourceType: 'archidekt' } });
-  });
-  await page.route('https://api.scryfall.com/cards/search?*', route => route.fulfill({ status: 200, json: { data: [] } }));
-  await page.route('**/api/scryfall-card-arts?*', route => route.fulfill({ status: 200, json: { data: [] } }));
-  await page.route('**/api/edhrec-*', route => route.fulfill({ status: 404, json: {} }));
-  await page.route('https://cards.scryfall.io/**', route => route.fulfill({ status: 200,
-    contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' }));
-  await page.route('**/rest/v1/decks?*', route => {
-    if (route.request().method() !== 'POST' && route.request().method() !== 'PATCH') return route.continue();
-    writes += 1; return route.fulfill({ status: 403 });
-  });
-  await openPasswordFixture(page);
-  await page.getByRole('button', { name: 'Add Deck', exact: true }).click();
-  await page.getByRole('button', { name: /^Import from URL/ }).click();
-  const input = page.getByPlaceholder('https://archidekt.com/decks/123456 o https://www.moxfield.com/decks/...', { exact: true });
-  await input.fill(url);
-  await page.getByRole('button', { name: 'Import Deck', exact: true }).click();
-  await expect(page.getByText('Synthetic import unavailable', { exact: true })).toBeVisible();
-  await expect(input).toHaveValue(url);
-  await expect(page.getByRole('button', { name: 'Import Deck', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Import Deck', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Imported fixture', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save Deck', exact: true })).toBeEnabled();
-  expect(attempts).toBe(2); expect(writes).toBe(0);
-});
-
-test('profile Archidekt import preserves failed username and selects only usable previews', async ({ page }) => {
-  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
-  let attempts = 0; let writes = 0;
-  const image = 'https://cards.scryfall.io/art_crop/bulk-preview.jpg';
-  await page.route('**/api/archidekt-user-decks', route => {
-    expect(route.request().postDataJSON()).toEqual({ username: 'public_fixture' });
-    attempts += 1;
-    return attempts === 1 ? route.fulfill({ status: 503, json: { error: 'Synthetic public catalog failure' } })
-      : route.fulfill({ status: 200, json: { decks: [
-        { name: 'Public preview fixture', commander: 'Public commander', commanderImageUrl: image,
-          commanderOptions: [{ name: 'Public commander', imageUrl: image, colorIdentity: ['U'] }],
-          colorIdentity: ['U'], bracket: '3', sourceUrl: 'https://archidekt.com/decks/123456', sourceType: 'archidekt' },
-        { name: 'Unusable preview', sourceUrl: '', sourceType: 'archidekt' },
-      ] } });
-  });
-  await page.route('https://cards.scryfall.io/**', route => route.fulfill({ status: 200,
-    contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' }));
-  await page.route('**/rest/v1/decks?*', route => {
-    if (route.request().method() !== 'POST' && route.request().method() !== 'PATCH') return route.continue();
-    writes += 1; return route.fulfill({ status: 403 });
-  });
-  await openPasswordFixture(page);
-  await page.getByRole('button', { name: 'Add Deck', exact: true }).click();
-  await page.getByRole('button', { name: /^Import by Archidekt username/ }).click();
-  const input = page.getByRole('dialog').getByPlaceholder('Archidekt username', { exact: true });
-  await input.fill('public_fixture');
-  await page.getByRole('button', { name: 'Load Decks', exact: true }).click();
-  await expect(page.getByText('Synthetic public catalog failure', { exact: true })).toBeVisible();
-  await expect(input).toHaveValue('public_fixture');
-  await page.getByRole('button', { name: 'Load Decks', exact: true }).click();
-  await expect(page.getByText('Public preview fixture', { exact: true })).toBeVisible();
-  await expect(page.getByText('Unusable preview', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('1/1 deck selected', { exact: true })).toBeVisible();
-  const save = page.getByRole('button', { name: 'Save Decks', exact: true });
-  await expect(save).toBeEnabled();
-  await page.getByRole('dialog').getByRole('button', { name: 'None', exact: true }).click();
-  await expect(save).toBeDisabled();
-  await page.getByRole('dialog').getByRole('button', { name: 'All', exact: true }).click();
-  await expect(save).toBeEnabled();
-  expect(attempts).toBe(2); expect(writes).toBe(0);
-});

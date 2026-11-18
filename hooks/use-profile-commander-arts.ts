@@ -9,15 +9,17 @@ import type { CommanderArtOption } from '@/lib/profile-commander';
 /** Shared browser-first art lookup; feature callers own selection and request lifetime. */
 export function useProfileCommanderArts() {
   const { copy: t } = useLanguage();
-  return useCallback(async (commanderName: string) => {
+  return useCallback(async (commanderName: string, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
     try {
-      const arts = await fetchScryfallArtOptionsFromBrowser(commanderName);
+      const arts = await fetchScryfallArtOptionsFromBrowser(commanderName, signal);
       if (arts.length > 0) return arts;
-    } catch {
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
       // Fall back to the server route below.
     }
 
-    const response = await authenticatedFetch(`/api/scryfall-card-arts?name=${encodeURIComponent(commanderName)}`);
+    const response = await authenticatedFetch(`/api/scryfall-card-arts?name=${encodeURIComponent(commanderName)}`, { signal });
     if (!response.ok) throw new Error(t({ it: 'Ricerca art non riuscita', en: 'Art search failed' }));
 
     const data = await response.json();
