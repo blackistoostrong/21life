@@ -2,6 +2,9 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Lifecycle profilo47deccc2 CHIUSO tranche: qualityweb725+3skip/67script, ratchet139 PASS senza soglie ridotte; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile12/12 PASS:3ROSSI→VERDI (retryloader, CMCabort, idlecleanup),2mount/unmount per caso, zeroPATCHtardivi, catalogo251/error/retry, CMCupdateunico, metriche complete, archivio/ripristino+Axe; cleanupDev PASS. Catalogo64righe/1state/1layout, enrichment225/1/2layout, profilo3270/58/9effect. Nessun native/schema/dispositivo/merge/deploy. Restano contesti account/admin completi, profili/credenziali/import/editor e resto punto6/piano.
+
+
 - [ ] Lifecycle profilo prebuild18-11: qualityweb725+3skip/67script PASS, ratchet139 invariato, nuovo cleanup SSR testato senza ridurre floor100funzioni idle-work. Typecheck/lint/confini PASS; profilo3270/58state/9effect, catalogo64/1state/1layout, enrichment225/1state/2layout. Tre ROSSI su327424f9 registrati e cleanupPASS; browserverdi ripetono mount/unmount2volte. Buildweb localeDev pulito dopo lettura gate, nessun native/DB/dispositivo/merge/deploy; securityadvisory ancora gate finale aperto.
 
 
