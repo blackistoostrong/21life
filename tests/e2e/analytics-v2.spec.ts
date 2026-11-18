@@ -72,7 +72,9 @@ test('profile v2 reports backend errors and retries with neutral draws',async({p
   await expect(card.getByText('50%',{exact:true})).toBeVisible();
   await expect(page.getByRole('alert').filter({hasText:'Statistics unavailable.'})).toHaveCount(0);
   expect(legacy).toEqual([]);
-  await page.getByRole('button',{name:'Details',exact:true}).click();
+  await page.locator('[data-web-card]').filter({has:page.getByRole('heading',{
+    name:'DEV26 profile metric fixture',exact:true,
+  })}).getByRole('button',{name:'Details',exact:true}).click();
   const chart=page.getByRole('img',{name:'Wins 1, draws 1, losses 1. Win rate 50%.',exact:true});
   await expect(chart).toBeVisible();
   await expect(chart.locator('.recharts-pie-sector')).toHaveCount(3);

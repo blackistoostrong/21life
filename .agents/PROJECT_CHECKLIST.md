@@ -2,6 +2,10 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Librerie1–2 CHIUSE18-11: app1e6839a0, qualityweb721+3skip/67script, Expo522+3skip e supplemento con payloadSQL525/525 PASS; ratchet139/131 PASS. Buildweb56route ed exportAndroid/iOS stessoSHA PASS, budget3.18/18 e9.32/12MiB. Browserdesktop/mobile12/12 PASS: grafico reale e conteggi/colori/label, wizardgolden, recovery4giocatori/2client, fullscreen;2match esatti e cleanupDev PASS. Screenshot grafico ispezionati. Primo test ambiguo fra2Details corretto al solo deckfixture, nessun cambioUI. Audit dipendenze resta ROSSO5highweb/26highExpo preesistenti;37nuovi nodi senza advisory nel report, nessun bypass. Nessun merge/deploy/dispositivo.
+- [ ] PM18-11: NON investire ulteriormente sul grafico, ritocchi UI alla fine. SAL librerie consegnato; continuare punto6, prossimo confine catalogo/caricamento profilo e lifecycle account/admin. Recharts rimane renderer provvisorio; niente nuove feature/decklist. Resto piano originale ancora aperto.
+
+
 - [ ] Librerie candidato finale task: qualityweb721+3skip/67script e Expo522+3skip PASS; ratchet139/131 invariati rispetto ai nuovi floor approvati. Header User-Agent lasciato al browser per evitare CORS, esplicito server/native. Mock Fetch reso compatibile con overload RN/DOM;20regressioni mirate e typecheck PASS dopo sola correzione firma test. Procedere nuovo build/export sul commit pulito, poi browser; advisory preesistenti restano gate finale rosso.
 
 
@@ -12,7 +16,7 @@
 
 - [ ] Librerie18-11 verifica: webquality719+3skip/67script PASS, ratchet139 (aggiunto solo floor trasporto; precedenti invariati). Expo floor scryfall-search calato per estrazione: aggiunti3test di cap/mapping/errori, coverage524/ratchet131 PASS; quality finale in corso. Audit dipendenze ROSSO5highweb/26highExpo su catene preesistenti, nessuna nuova advisory Recharts/react-is; picomatch ultima4.0.7 ancora vulnerabile, niente bypass. Chiudere prove build/browser locali e salvare SAL; security resta gate finale del piano.
 
-- [ ] PM18-11 librerie1–2: unificare Scryfall JSON web/server/Expo con throttling conservativo, deadline, retry/Retry-After, dedup e cache limitata, cancellazione indipendente e regressioni; Recharts solo web per grafici esistenti, nessuna nuova feature. Importazione testuale ESCLUSA dal PM. Altre dipendenze solo se sostituiscono manutenzione reale; poi riprendere ticket del piano. Solo Dev, nessun dispositivo/merge/deploy.
+- [x] PM18-11 librerie1–2: unificare Scryfall JSON web/server/Expo con throttling conservativo, deadline, retry/Retry-After, dedup e cache limitata, cancellazione indipendente e regressioni; Recharts solo web per grafici esistenti, nessuna nuova feature. Importazione testuale ESCLUSA dal PM. Altre dipendenze solo se sostituiscono manutenzione reale; poi riprendere ticket del piano. Solo Dev, nessun dispositivo/merge/deploy.
 
 - [x] Recapweb0ee34b64 CHIUSO18-11: qualityweb707+3skip/67script ed Expo511 PASS, ratchet138/130 invariati. Buildweb56route/exportAndroid+iOS PASS; budgetweb2.85/18 e Android9.32/12MiB PASS. Browserdesktop/mobile10/10 DOPO PASS: annulla conferma rivincita e ripristino/riselezione snapshot, flusso reale4giocatori/2client/recovery/idempotenza, fullscreen/observer e goldenwizard. Esattamente2match e cleanupDev PASS. WebLiveGame1192righe/33state, nuovoWebCompletedGame107/1state; nessun SDK/journal nel pannello. Punto6,08 e resto piano ancora aperti; continuare dai ticket esistenti. Nessun dispositivo/merge/deploy.
 
