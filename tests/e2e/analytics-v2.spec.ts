@@ -97,10 +97,13 @@ test('profile catalog requires every page and retries without exposing a partial
     is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null,
   }));
   let allowTail=false;
+  let tailPending=false;
+  let releaseTail:()=>void=()=>{};
   const requests:Array<{p_after:string|null;p_revision:string|null}>=[];
-  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>{
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',async route=>{
     const body=route.request().postDataJSON();requests.push(body);
     if(body.p_after&&!allowTail)return route.fulfill({status:503,json:{message:'Synthetic tail unavailable'}});
+    if(body.p_after){tailPending=true;await new Promise<void>(resolve=>{releaseTail=resolve;});}
     return route.fulfill({status:200,json:{schemaVersion:2,scope:'personal',userId,revision,total:decks.length,
       decks:body.p_after?decks.slice(250):decks.slice(0,250),next:body.p_after?null:decks[249].id,
     }});
@@ -118,11 +121,94 @@ test('profile catalog requires every page and retries without exposing a partial
   expect(requests[1]).toMatchObject({p_after:decks[249].id,p_revision:revision});
   allowTail=true;
   await error.getByRole('button',{name:'Retry',exact:true}).click();
+  try {
+    await expect.poll(()=>tailPending).toBe(true);
+    await expect(page.getByText('Loading profile...',{exact:true})).toBeVisible();
+  } finally {releaseTail();}
   await expect(error).toHaveCount(0);
   await page.getByPlaceholder('Search by name or commander...').fill('Catalog fixture 251');
   await expect(page.getByRole('heading',{name:'Catalog fixture 251',exact:true})).toBeVisible();
   expect(requests.at(-2)).toMatchObject({p_after:null,p_revision:null});
   expect(requests.at(-1)).toMatchObject({p_after:decks[249].id,p_revision:revision});
+});
+
+test('profile metadata cancels owned CMC on navigation before any late write',async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  const userId=process.env.E2E_USER_ID!;
+  const deckId='00000000-0000-4000-8000-000000000001';
+  let pending=0;let cancelled=0;let writes=0;
+  const releases=new Set<()=>void>();
+  page.on('requestfailed',request=>{if(request.url().includes('/api/scryfall-commander-cmc'))cancelled+=1;});
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>route.fulfill({status:200,json:{
+    schemaVersion:2,scope:'personal',userId,revision:'d'.repeat(32),total:1,next:null,
+    decks:[{id:deckId,user_id:userId,group_id:null,name:'Cancel metadata fixture',commander:'Catalog commander',
+      commander_image:null,commander_cmc:null,commander_options:[],color_identity:['U'],bracket:'3',
+      source_type:'manual',source_url:null,is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null}],
+  }}));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+    const report=profileCatalogFixture();report.userId=userId;report.decks[0].deck_id=deckId;
+    return route.fulfill({status:200,json:report});
+  });
+  await page.route('**/api/scryfall-commander-cmc',async route=>{
+    pending+=1;
+    await new Promise<void>(resolve=>releases.add(resolve));
+    try {await route.fulfill({status:200,json:{cmcs:{'Catalog commander':4}}});}
+    catch(error){if(cancelled===0)throw error;}
+  });
+  await page.route('**/rest/v1/decks?*',route=>{
+    if(route.request().method()!=='PATCH')return route.continue();
+    writes+=1;return route.fulfill({status:204});
+  });
+  try {
+    await fixtureLogin(page);
+    for(let round=1;round<=2;round+=1){
+      await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+      await expect.poll(()=>pending).toBe(round);
+      await page.getByRole('button',{name:'Back to home',exact:true}).click();
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect.poll(()=>cancelled).toBe(round);
+      expect(writes).toBe(0);
+    }
+  } finally {releases.forEach(release=>release());}
+});
+
+test('profile metadata releases queued idle work on navigation',async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  await page.addInitScript(()=>{
+    const probe=window as typeof window&{__dev26MetadataIdle?:number};
+    probe.__dev26MetadataIdle=0;
+    const pending=new Set<number>();let serial=900_000;
+    const request=window.requestIdleCallback.bind(window),cancel=window.cancelIdleCallback.bind(window);
+    window.requestIdleCallback=(callback,options)=>{
+      if(options?.timeout!==6000)return request(callback,options);
+      const id=++serial;pending.add(id);probe.__dev26MetadataIdle=pending.size;return id;
+    };
+    window.cancelIdleCallback=id=>{
+      if(pending.delete(id))probe.__dev26MetadataIdle=pending.size;
+      else cancel(id);
+    };
+  });
+  const userId=process.env.E2E_USER_ID!;
+  const deckId='00000000-0000-4000-8000-000000000001';
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>route.fulfill({status:200,json:{
+    schemaVersion:2,scope:'personal',userId,revision:'e'.repeat(32),total:1,next:null,
+    decks:[{id:deckId,user_id:userId,group_id:null,name:'Queued metadata fixture',commander:'Catalog commander',
+      commander_image:null,commander_cmc:null,commander_options:[],color_identity:['U'],bracket:'3',
+      source_type:'manual',source_url:null,is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null}],
+  }}));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+    const report=profileCatalogFixture();report.userId=userId;report.decks[0].deck_id=deckId;
+    return route.fulfill({status:200,json:report});
+  });
+  const pending=()=>page.evaluate(()=>(window as typeof window&{__dev26MetadataIdle?:number}).__dev26MetadataIdle??0);
+  await fixtureLogin(page);
+  for(let round=0;round<2;round+=1){
+    await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+    await expect.poll(pending).toBe(1);
+    await page.getByRole('button',{name:'Back to home',exact:true}).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect.poll(pending).toBe(0);
+  }
 });
 
 test('profile catalog enriches missing commander CMC once without replacing the collection',async({page})=>{

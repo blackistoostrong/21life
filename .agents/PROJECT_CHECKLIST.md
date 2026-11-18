@@ -2,6 +2,12 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Lifecycle profilo prebuild18-11: qualityweb725+3skip/67script PASS, ratchet139 invariato, nuovo cleanup SSR testato senza ridurre floor100funzioni idle-work. Typecheck/lint/confini PASS; profilo3270/58state/9effect, catalogo64/1state/1layout, enrichment225/1state/2layout. Tre ROSSI su327424f9 registrati e cleanupPASS; browserverdi ripetono mount/unmount2volte. Buildweb localeDev pulito dopo lettura gate, nessun native/DB/dispositivo/merge/deploy; securityadvisory ancora gate finale aperto.
+
+
+- [ ] Profilo lifecycle fix in verifica18-11: ROSSI reali su327424f9 per retry senza loading, CMC non abortito dopoBack e idle6000ms ancora in coda; tre runner separati, cleanupDev PASS. Catalogo ora keyed per lease account/admin, setter/caricamenti vecchi non possono aggiornare un contesto nuovo; retry iniziale/error mostra loader, refresh con catalogo completo conserva UI. Enrichment possiede idle+job, cancella su unmount/pausa/cambio contesto/refresh catalogo, propaga abort fino a resolver/HTTP/SDK e controlla prima/dopo scritture; deadline15s comprende bodyAPI. delay e runWhenIdle ora offrono cleanup testato, niente nuovi pacchetti. Typecheck/lint/grafo e9unit PASS; quality/build/verde reali ancora necessari. Rimangono prove account/admin e altri controller del punto6; scrittura già accettata dal server non è rollbackabile tramite abort.
+
+
 - [x] Catalogo/enrichment327424f9 CHIUSO meccanico: qualityweb721+3skip/67script, ratchet139 PASS; build56route/budget3.18/18MiB PASS. BrowserDOPO8/8 desktop/mobile:251mazzi+tailfailure/retry, CMClookup/PATCH unico, stats/draw e archivio/ripristino+Axe; cleanupDev PASS. Prima4/4, corpi2job AST identici, profilo3480→3274/63→58state; nuovi owner49/165righe. Nessun native/dispositivo/schema/merge/deploy. Proseguire fix lifecycle: request/job dopo navigazione/pausa, key account/admin e stato retry; non dichiarare punto6 completo.
 
 

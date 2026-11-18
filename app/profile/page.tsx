@@ -64,7 +64,6 @@ import { DeckExternalLinkChip } from '@/components/deck/deck-external-link-chip'
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
-import { runWhenIdle } from '@/lib/idle-work';
 import { useProfileCatalog } from '@/hooks/use-profile-catalog';
 import type { ProfileDeck as Deck, ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
@@ -310,7 +309,8 @@ async function lookupCommanderFromBrowser(name: string, signal?: AbortSignal): P
 
 async function resolveCommanderColorOptions(
   commander: string,
-  existingOptions: ImportedCommanderOption[] = []
+  existingOptions: ImportedCommanderOption[] = [],
+  signal?: AbortSignal
 ): Promise<ImportedCommanderOption[]> {
   const commanderNames = expandDeckCommanderNames(commander);
   const resolved: ImportedCommanderOption[] = [];
@@ -322,14 +322,14 @@ async function resolveCommanderColorOptions(
       continue;
     }
 
-    const match = await lookupCommanderFromBrowser(name);
+    const match = await lookupCommanderFromBrowser(name, signal);
     resolved.push(match ? {
       name: match.name,
       imageUrl: existing?.imageUrl ?? match.imageUrl,
       colorIdentity: normalizeDeckColorIdentity(match.colorIdentity),
     } : (existing || { name, imageUrl: null, colorIdentity: [] }));
 
-    await delay(SCRYFALL_REQUEST_GAP_MS);
+    await delay(SCRYFALL_REQUEST_GAP_MS, signal);
   }
 
   return uniqueCommanderOptions(resolved.filter((option) => option.name));
@@ -545,8 +545,9 @@ export default function ProfilePage() {
   const [savingProfileDisplayNameIds, setSavingProfileDisplayNameIds] = useState<string[]>([]);
   const commanderSearchAbortRef = useRef<AbortController | null>(null);
   const partnerSearchAbortRef = useRef<AbortController | null>(null);
-  const { syncMissingDeckMetadata, syncMissingCommanderCmc, commanderCmcSyncInProgress } =
-    useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions);
+  const { scheduleEnrichment, commanderCmcSyncInProgress } =
+    useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
+      user && !adminLoading ? user.id + ':' + adminMode : null);
 
   // URL import state (Archidekt + Moxfield)
   const [importDeckUrl, setImportDeckUrl] = useState('');
@@ -627,13 +628,8 @@ export default function ProfilePage() {
   const fetchDecks = useCallback(async () => {
     const loaded = await loadCatalog();
     if (!loaded) return;
-    runWhenIdle(() => {
-      if (loaded.signal.aborted) return;
-      void syncMissingDeckMetadata(loaded.decks).finally(() => {
-        void syncMissingCommanderCmc();
-      });
-    }, { timeoutMs: 6000 });
-  }, [loadCatalog, syncMissingCommanderCmc, syncMissingDeckMetadata]);
+    scheduleEnrichment(loaded.decks, loaded.signal);
+  }, [loadCatalog, scheduleEnrichment]);
 
   const visibleDecks = useMemo(() => {
     const activeDecks = decks.filter((deck) => !deck.is_archived);
