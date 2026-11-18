@@ -60,6 +60,18 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   await page.evaluate(() => localStorage.setItem('live-onboarding-v1', 'done'));
   await page.getByTestId('live-start').click();
   await expect(page.getByTestId('live-end')).toBeVisible({ timeout: 20_000 });
+  // Sync feedback belongs in the central toolbar, outside the players' cards.
+  const syncIndicator = page.getByTestId('live-center-toolbar').getByTestId('live-sync-indicator');
+  await expect(syncIndicator).toBeVisible();
+  const toolbarBox = await page.getByTestId('live-center-toolbar').boundingBox();
+  const syncBox = await syncIndicator.boundingBox();
+  expect(toolbarBox).not.toBeNull();
+  expect(syncBox).not.toBeNull();
+  expect(syncBox!.x).toBeGreaterThanOrEqual(toolbarBox!.x);
+  expect(syncBox!.y).toBeGreaterThanOrEqual(toolbarBox!.y);
+  expect(syncBox!.x + syncBox!.width).toBeLessThanOrEqual(toolbarBox!.x + toolbarBox!.width);
+  expect(syncBox!.y + syncBox!.height).toBeLessThanOrEqual(toolbarBox!.y + toolbarBox!.height);
+  await test.info().attach('live-central-sync', { body: await page.screenshot(), contentType: 'image/png' });
   const arenaA11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(arenaA11y.violations.filter((entry) => ['serious', 'critical'].includes(entry.impact ?? ''))).toEqual([]);
   const journal = () => page.evaluate(({ groupId, userId }) => {

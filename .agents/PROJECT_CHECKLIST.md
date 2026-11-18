@@ -2,6 +2,11 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Central sync prebuild18-11: indicatore nello slot orologio della barra centrale web/native, icona10px, stati distinti, retry/nome accessibile/autohide preservati; test geometria reale desktop/mobile nel flusso wizard. Quality web763+3skip/71script/142floor e native525/131floor PASS, typecheck entrambi PASS; nessuna soglia abbassata. Runner async4test PASS; nuova QA lunga richiesta per cleanup status0 dei precedenti run. Gate merge/prebuild riletti, cleanbuild locale Dev9.3.0 + Android/iOS export richiesti; nessun dispositivo/merge/deploy. Settings lifecycle e piano ancora aperti.
+
+- [ ] PM18-11 microfix: indicatoreSynced nelbloccodurata della barra centrale, simbolopiccolo, niente overlaycard; applicareweb+native mantenendostati/retry/accessibilità eautohide. QAdevice restaallafine.
+- [ ] Settings66cd7fc0:60/60browserPASS ma cleanupsecondolungrun fallisceprimaDELETE status0/codeunknown(nessuna rispostaHTTP). VerificaREADONLYesatta fixture3f5b96a6-1d2e-4d87-912a-adcd47bd4cfd conferma0gruppi/membri/match/profili/decks/Auth, reportsettings-cleanup-verification.json; nessuna mutazionerecupero. PatterncompatibileconpoolHTTPinattivodurante spawnSync lungo, causalitàdettaglio nonprovata. RunnerPlaywright ora awaitspawn asincrono(eventlooplibero), preservaexiterror ecleanupgate;4testdi exitcode/responsiveness/spawnerror, poi nuovaQA lunga richiesta. Settingsmeccanico ancora nonchiuso finchérunner+cleanupverdi; fixdraft/prefill dopo microUI.
+
 - [ ] Settings prebuild18-11: qualityweb763+3skip/67script/ratchet142 PASS; save+prefill AST identici, baseline2/2 PASS, typecheck/confiniPASS. Profilo2172/22state/4effect, owner64/3/1 Panel57/0/0; warningprefill trasferito enonaggirato. Gate merge/prebuild riletti/invariati, cleanbuildDev9.3.0 poi browser60; nessunDB/native/dispositivo/merge/deploy, piano/securitygate aperti.
 
 - [ ] Archidektsettings meccanico18-11: baseline2/2 desktop/mobile su67ac PASS perauto-empty/errorebozza-check/retry/ownID/trim/prefill ebackgroundreadvuota, writeintercettate/cleanupDev PASS. Estratti5statement(3state,1effect,1save) eJSXpannello invariati; profilo2172/22state/4effect, owner64/3/1 ePanel57/0/0; typecheck/grafoPASS, quality in verifica. Warningforeignpreviewsetter e lifetime volutamente da correggere successivamente, autosyncancora nelroute.

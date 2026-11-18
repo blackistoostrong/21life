@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CircleDot, Loader2, WifiOff } from 'lucide-react';
+import { AlertTriangle, CircleDot, Clock3, CloudUpload, Loader2, WifiOff } from 'lucide-react';
 import { useLanguage } from '@/components/language-provider';
 import { getLiveGameSyncCopy, getLiveGameSyncIndicator, type LiveGameSyncState } from '@/lib/live-game-sync-presentation';
 
@@ -31,13 +31,15 @@ export function WebSyncBadge({ state, pendingOperations, errorDetail, onRetry }:
     const timer = window.setTimeout(() => setAnnouncedState(state),1500);
     return () => window.clearTimeout(timer);
   },[state]);
-  return <>
+  const fullLabel = label + (pendingOperations > 0 ? ` · ${pendingOperations}` : '');
+  return <span className="relative block h-4 w-4 shrink-0">
     <span role="status" aria-live="polite" className="sr-only">{getLiveGameSyncCopy(announcedState,language).label}</span>
-    {visible ? <button type="button" onClick={onRetry}
-      className={`absolute right-2 top-[calc(env(safe-area-inset-top)+.5rem)] z-40 flex items-center gap-1.5 rounded-full border bg-black/75 px-2.5 py-1 text-[10px] font-bold backdrop-blur ${indicator === 'error' ? 'border-rose-400/50 text-rose-200' : indicator === 'offline' ? 'border-amber-400/40 text-amber-200' : 'border-emerald-400/30 text-emerald-200'}`}
-      title={hint || errorDetail || undefined}>
-      {indicator === 'syncing' ? <Loader2 className="h-3 w-3 animate-spin" /> : indicator === 'offline' ? <WifiOff className="h-3 w-3" /> : <CircleDot className="h-3 w-3" />}
-      {label}{pendingOperations > 0 ? ` · ${pendingOperations}` : ''}
-    </button> : null}
-  </>;
+    {visible ? <button type="button" onClick={onRetry} data-testid="live-sync-indicator"
+      aria-label={fullLabel}
+      className={`absolute -inset-2 grid place-items-center rounded-full focus-visible:outline-none focus-visible:ring-1 ${indicator === 'error' ? 'text-rose-200' : indicator === 'offline' || indicator === 'pending' ? 'text-amber-200' : 'text-emerald-200'}`}
+      title={hint || errorDetail || fullLabel}>
+      {indicator === 'syncing' ? <Loader2 aria-hidden="true" className="h-2.5 w-2.5 animate-spin" /> : indicator === 'offline' ? <WifiOff aria-hidden="true" className="h-2.5 w-2.5" /> : indicator === 'error' ? <AlertTriangle aria-hidden="true" className="h-2.5 w-2.5" /> : indicator === 'pending' ? <CloudUpload aria-hidden="true" className="h-2.5 w-2.5" /> : <CircleDot aria-hidden="true" className="h-2.5 w-2.5" />}
+      {pendingOperations > 0 ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 rounded bg-zinc-900 px-0.5 text-[7px] leading-none">{pendingOperations > 9 ? '9+' : pendingOperations}</span> : null}
+    </button> : <Clock3 className="h-4 w-4" />}
+  </span>;
 }
