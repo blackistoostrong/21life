@@ -166,8 +166,9 @@ export default function ProfilePage() {
     selectedUserDeckUrls, setSelectedUserDeckUrls, handleArchidektUserImport,
     clearArchidektPreview, resetArchidektImport,
   } = useProfileArchidektImport(user && !adminLoading ? user.id + ':' + adminMode : null,
-    showAddModal && addMode === 'archidekt-user');
-  const archidektSettings = useProfileArchidektSettings(user, currentProfile, setProfiles, setArchidektUsername);
+    showAddModal && addMode === 'archidekt-user', currentProfile?.archidekt_username || '');
+  const archidektSettings = useProfileArchidektSettings(user && !adminLoading ? user.id + ':' + adminMode : null,
+    user?.id ?? null, currentProfile, setProfiles);
   const archidektAutoImportStartedRef = useRef(false);
   const [savingUserDecks, setSavingUserDecks] = useState(false);
   const [overwriteConfirm, setOverwriteConfirm] = useState<
@@ -995,7 +996,7 @@ export default function ProfilePage() {
     setShowAddModal(false);
     setAddMode('choose');
     resetUrlImport();
-    resetArchidektImport(currentProfile?.archidekt_username || '');
+    resetArchidektImport();
     setSearchQuery('');
     setSearchResults([]);
     setSelectedCommander(null);

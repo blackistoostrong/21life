@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type SetStateAction } from 'react';
+import { useCallback, useEffect, useState, type SetStateAction } from 'react';
 import { useLanguage } from '@/components/language-provider';
 import { useToast } from '@/hooks/use-toast';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
@@ -13,16 +13,16 @@ import type { ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/ty
 
 type Scope = ReturnType<typeof useProfileCommandScope>;
 type Selections = Record<string, ImportedCommanderOption>;
-type State = { context: Scope['context']; username: string; previewEpoch: Scope['epoch'] | null;
+type State = { context: Scope['context']; username: string; sourceUsername: string; previewEpoch: Scope['epoch'] | null;
   decks: ImportedDeckPreview[]; selected: Selections; urls: string[]; job: ProfileCommandJob | null };
 const EMPTY_DECKS: ImportedDeckPreview[] = [];
 const EMPTY_SELECTIONS: Selections = {};
 const EMPTY_URLS: string[] = [];
-const empty = (context: Scope['context']): State => ({ context, username: '', previewEpoch: null,
+const empty = (context: Scope['context']): State => ({ context, username: '', sourceUsername: '', previewEpoch: null,
   decks: EMPTY_DECKS, selected: EMPTY_SELECTIONS, urls: EMPTY_URLS, job: null });
 
 /** The complete public catalog preview is scoped separately from its later persistence. */
-export function useProfileArchidektImport(key: string | null, enabled: boolean) {
+export function useProfileArchidektImport(key: string | null, enabled: boolean, defaultUsername = '') {
   const { copy: t } = useLanguage();
   const { toast } = useToast();
   const { context, epoch, committed, cancel, begin } = useProfileCommandScope(key, enabled);
@@ -35,6 +35,12 @@ export function useProfileArchidektImport(key: string | null, enabled: boolean) 
     setState(previous => !committed() || (job && !job.active()) ? previous
       : action(previous.context === context ? previous : empty(context)));
   }, [committed, context]);
+  useEffect(() => {
+    update(previous => previous.sourceUsername === defaultUsername ? previous : { ...previous,
+      sourceUsername: defaultUsername,
+      username: !enabled || (!previous.job && previous.username === previous.sourceUsername)
+        ? defaultUsername : previous.username });
+  }, [defaultUsername, enabled, update]);
   const setArchidektUsername = (action: SetStateAction<string>) => {
     if (importingUserDecks) return;
     update(previous => ({ ...previous, username: typeof action === 'function' ? action(previous.username) : action }));
@@ -50,8 +56,8 @@ export function useProfileArchidektImport(key: string | null, enabled: boolean) 
     update(previous => ({ ...previous, decks: EMPTY_DECKS, selected: EMPTY_SELECTIONS,
       urls: EMPTY_URLS, job: null, previewEpoch: epoch }));
   };
-  const resetArchidektImport = (username = '') => {
-    cancel(); update(() => ({ ...empty(context), username }));
+  const resetArchidektImport = () => {
+    cancel(); update(previous => ({ ...empty(context), username: previous.sourceUsername, sourceUsername: previous.sourceUsername }));
   };
   const handleArchidektUserImport = async () => {
     if (!current.username.trim()) return;

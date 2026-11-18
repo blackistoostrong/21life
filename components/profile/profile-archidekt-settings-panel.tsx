@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { Link2, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { PROFILE_ACCOUNT_INPUT_CLASS as accountPanelInputClass } from '@/compone
 import type { ProfileArchidektSettingsControls } from '@/hooks/use-profile-archidekt-settings';
 
 export function ProfileArchidektSettingsPanel({ controls }: { controls: ProfileArchidektSettingsControls }) {
+  const usernameId = useId();
   const { copy: t } = useLanguage();
   const { archidektSettingsUsername, setArchidektSettingsUsername, archidektAutoImport,
     setArchidektAutoImport, savingArchidektSettings, handleSaveArchidektSettings } = controls;
@@ -24,10 +26,12 @@ export function ProfileArchidektSettingsPanel({ controls }: { controls: ProfileA
                     })}
                   </p>
                   <div className="space-y-3">
-                    <label className="block text-sm font-medium text-emerald-100/90">
+                    <label htmlFor={usernameId} className="block text-sm font-medium text-emerald-100/90">
                       {t({ it: 'Il tuo username Archidekt', en: 'Your Archidekt username' })}
                     </label>
                     <Input
+                      id={usernameId}
+                      disabled={savingArchidektSettings}
                       value={archidektSettingsUsername}
                       onChange={(event) => setArchidektSettingsUsername(event.target.value)}
                       placeholder={t({ it: 'Username Archidekt', en: 'Archidekt username' })}
@@ -36,6 +40,7 @@ export function ProfileArchidektSettingsPanel({ controls }: { controls: ProfileA
                     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-emerald-400/15 bg-black/15 p-3 text-sm text-emerald-100/90">
                       <input
                         type="checkbox"
+                        disabled={savingArchidektSettings}
                         checked={archidektAutoImport}
                         onChange={(event) => setArchidektAutoImport(event.target.checked)}
                         className="mt-0.5 h-4 w-4 accent-emerald-500"
