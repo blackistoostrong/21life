@@ -119,6 +119,7 @@ try {
       'tests/e2e/profile-import.spec.ts',
       'tests/e2e/profile-editor.spec.ts',
       'tests/e2e/profile-settings.spec.ts',
+      'tests/e2e/profile-autosync.spec.ts',
       'tests/e2e/history-v2.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',

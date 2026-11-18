@@ -76,6 +76,7 @@ import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel } from '@/components/profile/profile-account-panel';
+import { useProfileArchidektAutosync } from '@/hooks/use-profile-archidekt-autosync';
 import { useProfileArchidektSettings } from '@/hooks/use-profile-archidekt-settings';
 import { ProfileArchidektSettingsPanel } from '@/components/profile/profile-archidekt-settings-panel';
 import { useProfileCommanderEditor } from '@/hooks/use-profile-commander-editor';
@@ -169,7 +170,6 @@ export default function ProfilePage() {
     showAddModal && addMode === 'archidekt-user', currentProfile?.archidekt_username || '');
   const archidektSettings = useProfileArchidektSettings(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, setProfiles);
-  const archidektAutoImportStartedRef = useRef(false);
   const [savingUserDecks, setSavingUserDecks] = useState(false);
   const [overwriteConfirm, setOverwriteConfirm] = useState<
     | { kind: 'single' }
@@ -861,67 +861,7 @@ export default function ProfilePage() {
     }
   };
 
-  const autoImportArchidektDecks = useCallback(async (username: string) => {
-    if (!user) return;
-    try {
-      const response = await authenticatedFetch('/api/archidekt-user-decks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      if (!response.ok) return;
-
-      const payload = await response.json() as { decks?: ImportedDeckPreview[] };
-      const candidates = (payload.decks || []).filter((deck) =>
-        deck.sourceType === 'archidekt'
-        && deck.sourceUrl
-        && !deck.warning
-        && !deck.error
-        && Boolean(deck.commander?.trim()),
-      );
-      const rows = [];
-      for (const rawDeck of candidates) {
-        const deck = await normalizeImportedDeckPreview(rawDeck);
-        const commander = getDefaultImportedCommanderOption(deck);
-        const colorFields = deckDataToColorFields({
-          commanderOptions: deck.commanderOptions || [],
-          colorIdentity: deck.colorIdentity || [],
-        });
-        const commanderCmc = await resolveDeckCommanderCmc(
-          { commander: commander.name, commander_options: colorFields.commander_options },
-          lookupCommanderCmcInBrowser,
-        );
-        const commanderImage = await resolveImportedDeckCommanderImageForSave(commander, deck);
-        rows.push({
-          user_id: user.id,
-          group_id: null,
-          name: deck.name,
-          commander: commander.name,
-          commander_image: commanderImage,
-          source_url: deck.sourceUrl,
-          source_type: 'archidekt',
-          bracket: deck.bracket,
-          commander_cmc: commanderCmc,
-          ...colorFields,
-        });
-        await delay(SCRYFALL_REQUEST_GAP_MS);
-      }
-      if (rows.length > 0) {
-        const { error } = await supabase.rpc('sync_archidekt_decks', { p_decks: rows });
-        if (error) throw error;
-        await fetchDecks();
-      }
-    } catch {
-      // Background sync must not interrupt profile use.
-    }
-  }, [fetchDecks, user]);
-
-  useEffect(() => {
-    const username = currentProfile?.archidekt_username?.trim();
-    if (!user || !currentProfile?.archidekt_auto_import || !username || archidektAutoImportStartedRef.current) return;
-    archidektAutoImportStartedRef.current = true;
-    void autoImportArchidektDecks(username);
-  }, [autoImportArchidektDecks, currentProfile?.archidekt_auto_import, currentProfile?.archidekt_username, user]);
+  useProfileArchidektAutosync(user, currentProfile, fetchDecks);
 
   const saveManualDeck = async () => {
     const targetProfileId = getTargetProfileId();
