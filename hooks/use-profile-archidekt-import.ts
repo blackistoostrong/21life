@@ -7,14 +7,14 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { buildArchidektBatchCommanderSelections } from '@/lib/deck-importers';
 import { normalizeImportedDeckPreviews } from '@/lib/profile-commander';
 import { withRequestDeadline } from '@/packages/data/request-deadline';
-import { useProfileImportScope, type ProfileImportJob } from '@/hooks/use-profile-import-scope';
+import { useProfileCommandScope, type ProfileCommandJob } from '@/hooks/use-profile-command-scope';
 import type { ImportedCommanderOption } from '@/lib/profile-commander';
 import type { ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 
-type Scope = ReturnType<typeof useProfileImportScope>;
+type Scope = ReturnType<typeof useProfileCommandScope>;
 type Selections = Record<string, ImportedCommanderOption>;
 type State = { context: Scope['context']; username: string; previewEpoch: Scope['epoch'] | null;
-  decks: ImportedDeckPreview[]; selected: Selections; urls: string[]; job: ProfileImportJob | null };
+  decks: ImportedDeckPreview[]; selected: Selections; urls: string[]; job: ProfileCommandJob | null };
 const EMPTY_DECKS: ImportedDeckPreview[] = [];
 const EMPTY_SELECTIONS: Selections = {};
 const EMPTY_URLS: string[] = [];
@@ -25,12 +25,12 @@ const empty = (context: Scope['context']): State => ({ context, username: '', pr
 export function useProfileArchidektImport(key: string | null, enabled: boolean) {
   const { copy: t } = useLanguage();
   const { toast } = useToast();
-  const { context, epoch, committed, cancel, begin } = useProfileImportScope(key, enabled);
+  const { context, epoch, committed, cancel, begin } = useProfileCommandScope(key, enabled);
   const [state, setState] = useState<State>(() => empty(context));
   const current = state.context === context ? state : empty(context);
   const visible = current.previewEpoch === epoch;
   const importingUserDecks = current.job?.epoch === epoch;
-  const update = useCallback((action: (previous: State) => State, job?: ProfileImportJob) => {
+  const update = useCallback((action: (previous: State) => State, job?: ProfileCommandJob) => {
     if (!committed() || (job && !job.active())) return;
     setState(previous => !committed() || (job && !job.active()) ? previous
       : action(previous.context === context ? previous : empty(context)));

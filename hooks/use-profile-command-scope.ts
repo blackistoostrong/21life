@@ -4,18 +4,18 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 
 type Context = { readonly key: string | null };
 type Epoch = { readonly context: Context; readonly enabled: boolean };
-type JobName = 'import' | 'arts';
+type JobName = 'import' | 'arts' | 'save';
 type Entry = { controller: AbortController; pending: boolean };
 type Owner = { epoch: Epoch; jobs: Map<JobName, Entry> };
-export type ProfileImportJob = {
+export type ProfileCommandJob = {
   readonly epoch: Epoch;
   readonly signal: AbortSignal;
   active: () => boolean;
   finish: () => void;
 };
 
-/** Private import jobs belong to one committed account/role and modal phase. */
-export function useProfileImportScope(key: string | null, enabled: boolean) {
+/** Private profile commands belong to one committed account/role and modal phase. */
+export function useProfileCommandScope(key: string | null, enabled: boolean) {
   const context = useMemo<Context>(() => ({ key }), [key]);
   const epoch = useMemo<Epoch>(() => ({ context, enabled }), [context, enabled]);
   const ownerRef = useRef<Owner | null>(null);
@@ -41,7 +41,7 @@ export function useProfileImportScope(key: string | null, enabled: boolean) {
       owner.jobs.clear();
     }
   }, [epoch]);
-  const begin = useCallback((name: JobName, replace = false): ProfileImportJob | null => {
+  const begin = useCallback((name: JobName, replace = false): ProfileCommandJob | null => {
     const owner = ownerRef.current;
     if (!context.key || !epoch.enabled || owner?.epoch !== epoch) return null;
     const previous = owner.jobs.get(name);
@@ -58,5 +58,9 @@ export function useProfileImportScope(key: string | null, enabled: boolean) {
       finish: () => { if (owner.jobs.get(name) === entry) entry.pending = false; },
     };
   }, [context, epoch]);
-  return { context, epoch, committed, cancel, begin };
+  const pending = useCallback((name: JobName) => {
+    const owner = ownerRef.current;
+    return owner?.epoch === epoch && owner.jobs.get(name)?.pending === true;
+  }, [epoch]);
+  return { context, epoch, committed, cancel, begin, pending };
 }

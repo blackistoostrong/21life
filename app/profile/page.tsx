@@ -190,10 +190,11 @@ export default function ProfilePage() {
   const [refreshingDecks, setRefreshingDecks] = useState(false);
   const [refreshingDeckIds, setRefreshingDeckIds] = useState<string[]>([]);
   const {
-    editingArtDeck, setEditingArtDeck, deckCommanderOptions, setDeckCommanderOptions,
-    selectedDeckCommander, setSelectedDeckCommander, deckArtOptions, setDeckArtOptions,
-    loadingDeckArtOptions, savingDeckArt, loadDeckCommanderArts, openDeckArtEditor, saveDeckCommanderPresentation,
-  } = useProfileCommanderEditor(fetchCommanderArts, setDecks);
+    editingArtDeck, deckCommanderOptions, selectedDeckCommander, deckArtOptions,
+    loadingDeckArtOptions, savingDeckArt, openDeckArtEditor, selectDeckCommander,
+    saveDeckCommanderPresentation, closeCommanderEditor,
+  } = useProfileCommanderEditor(user && !adminLoading ? user.id + ':' + adminMode : null,
+    fetchCommanderArts, setDecks);
   const [linkingDeck, setLinkingDeck] = useState<Deck | null>(null);
   const [linkDeckUrl, setLinkDeckUrl] = useState('');
   const [savingDeckLink, setSavingDeckLink] = useState(false);
@@ -2220,10 +2221,8 @@ export default function ProfilePage() {
                           className={`flex min-w-0 items-center gap-3 rounded-lg border p-2 text-left transition-colors ${
                             selected ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-background/30 hover:border-emerald-500/50'
                           }`}
-                          onClick={() => {
-                            setSelectedDeckCommander(commander);
-                            void loadDeckCommanderArts(commander.name, commander.imageUrl);
-                          }}
+                          disabled={savingDeckArt}
+                          onClick={() => selectDeckCommander(commander)}
                         >
                           <DeckImage
                             src={commander.imageUrl}
@@ -2274,12 +2273,7 @@ export default function ProfilePage() {
                   type="button"
                   variant="outline"
                   className="border-border text-foreground"
-                  onClick={() => {
-                    setEditingArtDeck(null);
-                    setSelectedDeckCommander(null);
-                    setDeckCommanderOptions([]);
-                    setDeckArtOptions([]);
-                  }}
+                  onClick={closeCommanderEditor}
                   disabled={savingDeckArt}
                 >
                   {t({ it: 'Chiudi', en: 'Close' })}

@@ -844,5 +844,11 @@
     "branches": 72.72,
     "functions": 100,
     "statements": 86.31
+  },
+  "packages/domain/commander-presentation.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
   }
 }
