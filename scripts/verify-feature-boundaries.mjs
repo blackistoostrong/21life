@@ -12,6 +12,7 @@ export const featureOwners = {
     'hooks/use-arena-match-history.ts', 'hooks/use-arena-analytics.ts',
     'hooks/use-arena-season-context.ts', 'hooks/use-arena-day-export.ts',
     'hooks/use-profile-metrics.ts', 'hooks/use-web-tracker-display.ts', 'hooks/use-web-tracker-setup.ts',
+    'hooks/use-profile-catalog.ts', 'hooks/use-profile-metadata-enrichment.ts',
   ],
   native: [
     'expo/app/table/[id]/play.tsx', 'expo/app/table/[id]/index.tsx',

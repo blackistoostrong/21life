@@ -2,6 +2,15 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Profilo prebuild18-11: qualityweb721+3skip/67script PASS, ratchet139 invariato; typecheck/lint/grafo PASS, jobbodyAST identici e caratterizzazionePRIMA4/4. Documentoarchitettura/mappa aggiornati, profilo3480→3274righe/63→58state. Leggere gate merge/prebuild: zero merge tentati/unmerged, solo cleanbuildDev9.3.0 locale; advisory precedente resta aperta, nessuna distribuzione. Poi browserDOPO e fix lifecycle distinto.
+
+
+- [ ] Catalogo/enrichment11b meccanico: PRIMA4/4 desktop/mobile su1e6839a0 PASS (251mazzi/coda errore/retry e CMCmancante con unlookup/PATCH intercettato), cleanupDev PASS. useProfileCatalog49righe/4state/1effect e useProfileMetadataEnrichment165/1/2; profilo3274righe/58state/9effect,4target sempre sopra800. Corpi AST dei2job identici a HEAD salvo lineending; resolver pagina passato esplicitamente, nessuna sostituzione con helper simile ma diverso. Hook catalogo usa contratto typealias senza catena castunknown; niente nuove validazioni runtime nel commit meccanico. Typecheck/lint/grafo PASS; nuovo quality/build/browser dopo da chiudere. Lifetime/account/pause dei job e loading contesto ancora da correggere in tranche distinta.
+
+
+- [ ] Profilo catalogo11b18-11: caratterizzazione browser PRIMA2/2 desktop/mobile PASS su1e6839a0,251mazzi in2pagine, errore coda senza catalogo parziale e retry/revisione/cursore/tail251 PASS; cleanupDev verificato. Estrarre solo stato/caricamento/abort catalogo in useProfileCatalog e contratto ProfileDeck, enrichment resta nel chiamante. Separare successive correzioni lifecycle da commit meccanico; verificare soglie/grafo/build/browser DOPO. Nessun ritocco grafico.
+
+
 - [x] Librerie1–2 CHIUSE18-11: app1e6839a0, qualityweb721+3skip/67script, Expo522+3skip e supplemento con payloadSQL525/525 PASS; ratchet139/131 PASS. Buildweb56route ed exportAndroid/iOS stessoSHA PASS, budget3.18/18 e9.32/12MiB. Browserdesktop/mobile12/12 PASS: grafico reale e conteggi/colori/label, wizardgolden, recovery4giocatori/2client, fullscreen;2match esatti e cleanupDev PASS. Screenshot grafico ispezionati. Primo test ambiguo fra2Details corretto al solo deckfixture, nessun cambioUI. Audit dipendenze resta ROSSO5highweb/26highExpo preesistenti;37nuovi nodi senza advisory nel report, nessun bypass. Nessun merge/deploy/dispositivo.
 - [ ] PM18-11: NON investire ulteriormente sul grafico, ritocchi UI alla fine. SAL librerie consegnato; continuare punto6, prossimo confine catalogo/caricamento profilo e lifecycle account/admin. Recharts rimane renderer provvisorio; niente nuove feature/decklist. Resto piano originale ancora aperto.
 

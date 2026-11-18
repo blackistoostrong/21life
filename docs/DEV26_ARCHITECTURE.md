@@ -179,3 +179,20 @@ Intermediate WebLiveGame1270→1192nonempty lines and34→33state cells; panel10
 
 
 Completed-game candidate0ee34b64 verified18-11: full qualityweb707+3skip/67script and native511PASS, ratchets138/130 unchanged. Clean56route build, Android/iOS exports and budgets2.85/18MiB web,9.32/12MiB Android PASS. Browser desktop/mobile10/10PASS including rematch confirmation cancellation, restored setup/reselection, real4player/2client recovery/idempotency, display ownership and unchanged wizard goldens. Exactly2matches and fixture cleanup verified. The remaining original plan/point6 and actual rematch robustness08 remain open; no physical-device certification.
+
+## Profile catalog and enrichment ownership (2026-11-18)
+
+`useProfileCatalog` owns the complete personal/admin catalog traversal, state and request cancellation. It returns a scoped successful load result; the route only schedules enrichment against that result. `useProfileMetadataEnrichment` owns the color/bracket and CMC batch jobs, pause/inflight refs, collection mirror and CMC progress. The route provides its original color resolver explicitly: the similarly named library helper has different image fallbacks/delays and is not silently substituted. `lib/types/profile-deck` holds the existing deck/import-preview view contracts. SDK calls live in the two named containers, not presentation. Both owners join the runtime graph gate.
+
+This commit is mechanical: both enrichment callback bodies match the previous page AST text after line-ending normalization; request routes, batch limits, delay values, write order and updates remain unchanged. Catalog assertion is one compatible typed boundary, with no added runtime validation or unknown-cast chain. Adding stable setter/resolver hook dependencies changes no execution identity. Existing lifecycle defects (background work after navigation/context changes, pause races and loading state across scopes) are follow-up behavior changes, not certified fixed by this extraction.
+
+Before characterization on application1e6839a0 passed desktop/mobile4/4:251decks across250+1pages, failed final page hides the partial collection, retry resets cursor/revision and finds deck251; missing CMC causes one intercepted lookup/PATCH without dropping the collection. Backend Auth is real and disposable; catalog/metadata/write boundaries are mocked, no synthetic deck write reaches Dev. Fixture cleanup verified.
+
+| Target/owner | Nonempty lines | useState | useEffect |
+|---|---:|---:|---:|
+| Profile before (be401b64) |3480|63|11|
+| Profile after extraction |3274|58|9|
+| Catalog controller |49|4|1|
+| Metadata enrichment controller |165|1|2|
+
+AST artifact: `artifacts/dev26/architecture-profile-catalog.json`. Other targets remain table3801,web game1193,native game2227nonempty lines; all four still exceed800. No completion claim for point6. Web quality721+3skip/67script, ratchet139 unchanged; typecheck/lint/runtime boundaries PASS. Clean build and after-browser characterization remain pending at this checkpoint. Native source/behavior unchanged in this web-only extraction.

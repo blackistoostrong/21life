@@ -58,17 +58,16 @@ import {
   resolveImportedDeckCommanderImage,
 } from '@/lib/deck-importers';
 import {
-  buildDeckCommanderCmcFromCmcs,
-  deckNeedsCommanderCmc,
   resolveDeckCommanderCmc,
 } from '@/lib/deck-commander-cmc';
-import { collectUniqueCommanderNames } from '@/lib/deck-collection-analytics';
 import { DeckExternalLinkChip } from '@/components/deck/deck-external-link-chip';
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { runWhenIdle } from '@/lib/idle-work';
-import { fetchCompleteProfileCatalog,fetchProfileCatalogPage,parseProfileCatalogPage } from '@/lib/profile-catalog-pages';
+import { useProfileCatalog } from '@/hooks/use-profile-catalog';
+import type { ProfileDeck as Deck, ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
+import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
 import { useProfileMetrics } from '@/hooks/use-profile-metrics';
 import { MANA_COLOR_LABELS, MANA_COLOR_ORDER } from '@/lib/mana-colors';
 import { getProfileDisplayName } from '@/lib/profile-display';
@@ -112,30 +111,6 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import { buildMatchRecord, formatMatchRecord } from '@/lib/win-rate';
 
-interface Deck {
-  id: string;
-  user_id: string;
-  group_id: string | null;
-  name: string;
-  commander: string;
-  commander_image: string | null;
-  source_url: string | null;
-  source_type: string | null;
-  bracket: string | null;
-  color_identity: string[] | null;
-  commander_options: ImportedCommanderOption[] | null;
-  commander_cmc: number | null;
-  is_favorite: boolean;
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string | null;
-  profiles?: {
-    username: string;
-    display_name: string | null;
-  } | null;
-}
-
-
 interface Profile {
   id: string;
   username: string;
@@ -159,20 +134,6 @@ interface ImportedCommanderOption {
   name: string;
   imageUrl: string | null;
   colorIdentity?: string[];
-}
-
-interface ImportedDeckPreview {
-  id?: string;
-  name: string;
-  commander: string;
-  commanderImageUrl: string | null;
-  commanderOptions?: ImportedCommanderOption[];
-  colorIdentity?: string[];
-  bracket: string | null;
-  sourceUrl: string;
-  sourceType: string;
-  error?: string;
-  warning?: string;
 }
 
 interface CommanderArtOption {
@@ -561,21 +522,13 @@ function uniqueCommanderOptions(options: ImportedCommanderOption[]) {
   );
 }
 
-const EMPTY_PROFILE_DECKS:Deck[]=[];
-
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { copy: t } = useLanguage();
   const { adminMode, loading:adminLoading } = usePlatformAdmin();
-  const [catalogDecks,setDecks]=useState<Deck[]>([]);
-  const catalogKey=user ? user.id+':'+adminMode : null;
-  const [loadedCatalogKey,setLoadedCatalogKey]=useState<string|null>(null);
-  const [catalogError,setCatalogError]=useState(false);
-  const catalogRequestRef=useRef<AbortController|null>(null);
-  const decks=loadedCatalogKey===catalogKey ? catalogDecks : EMPTY_PROFILE_DECKS;
-  const [loading, setLoading] = useState(true);
+  const { decks, setDecks, loading, catalogError, loadCatalog } = useProfileCatalog(user, adminMode, adminLoading);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<AddDeckMode>('choose');
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -592,11 +545,8 @@ export default function ProfilePage() {
   const [savingProfileDisplayNameIds, setSavingProfileDisplayNameIds] = useState<string[]>([]);
   const commanderSearchAbortRef = useRef<AbortController | null>(null);
   const partnerSearchAbortRef = useRef<AbortController | null>(null);
-  const deckMetadataSyncAbortRef = useRef(false);
-  const deckMetadataSyncInFlightRef = useRef(false);
-  const commanderCmcSyncInFlightRef = useRef(false);
-  const decksRef = useRef<Deck[]>([]);
-  const [commanderCmcSyncInProgress, setCommanderCmcSyncInProgress] = useState(false);
+  const { syncMissingDeckMetadata, syncMissingCommanderCmc, commanderCmcSyncInProgress } =
+    useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions);
 
   // URL import state (Archidekt + Moxfield)
   const [importDeckUrl, setImportDeckUrl] = useState('');
@@ -674,209 +624,16 @@ export default function ProfilePage() {
     setDisplayNameDraft(currentProfile.display_name || '');
   }, [currentProfile]);
 
-  useEffect(() => {
-    decksRef.current = decks;
-  }, [decks]);
-
-  const syncMissingDeckMetadata = useCallback(async (loadedDecks: Deck[]) => {
-    if (deckMetadataSyncInFlightRef.current) return;
-
-    const MAX_AUTO_SYNC_DECKS = 3;
-    const decksToSync = loadedDecks.filter((deck) => {
-      const needsColors = !deckHasColorIdentity(deck);
-      const needsBracket = isImportedDeckSource(deck.source_type) && !!deck.source_url && !deck.bracket;
-      return needsColors || needsBracket;
-    }).slice(0, MAX_AUTO_SYNC_DECKS);
-
-    if (decksToSync.length === 0) return;
-
-    deckMetadataSyncInFlightRef.current = true;
-    deckMetadataSyncAbortRef.current = false;
-
-    try {
-      await delay(4000);
-      if (deckMetadataSyncAbortRef.current) return;
-
-      const successfulUpdates: Array<Partial<Deck> & { id: string }> = [];
-
-      for (const deck of decksToSync) {
-        if (deckMetadataSyncAbortRef.current) break;
-
-        try {
-          const updatePayload: Partial<Deck> = {};
-          const needsColors = !deckHasColorIdentity(deck);
-          const needsBracket = isImportedDeckSource(deck.source_type) && !!deck.source_url && !deck.bracket;
-
-          if (needsColors || needsBracket) {
-            if (isImportedDeckSource(deck.source_type) && deck.source_url) {
-              const response = await authenticatedFetch('/api/deck-import', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: deck.source_url }),
-              });
-
-              if (response.ok) {
-                const imported = await response.json() as ImportedDeckPreview & { colorIdentity?: string[] };
-                const bracket = typeof imported.bracket === 'string' ? imported.bracket : null;
-                const colorFields = deckDataToColorFields({
-                  commanderOptions: imported.commanderOptions || [],
-                  colorIdentity: imported.colorIdentity || [],
-                });
-
-                if (!deck.bracket && bracket) updatePayload.bracket = bracket;
-                if (needsColors && deckHasColorIdentity(colorFields)) {
-                  updatePayload.color_identity = colorFields.color_identity ?? null;
-                  updatePayload.commander_options = colorFields.commander_options ?? null;
-                }
-              }
-            } else if (needsColors && deck.commander.trim()) {
-              const commanderOptions = await resolveCommanderColorOptions(
-                deck.commander,
-                getCommanderOptions(deck)
-              );
-              const colorFields = buildDeckColorFields(commanderOptions);
-              if (deckHasColorIdentity(colorFields)) {
-                updatePayload.color_identity = colorFields.color_identity ?? null;
-                updatePayload.commander_options = colorFields.commander_options ?? null;
-              }
-            }
-          }
-
-          if (Object.keys(updatePayload).length === 0) continue;
-
-          const { error } = await supabase
-            .from('decks')
-            .update(updatePayload)
-            .eq('id', deck.id);
-
-          if (!error) {
-            successfulUpdates.push({ id: deck.id, ...updatePayload });
-          }
-        } catch {
-          // Keep syncing the remaining decks.
-        }
-
-        await delay(SCRYFALL_REQUEST_GAP_MS);
-      }
-
-      if (!deckMetadataSyncAbortRef.current && successfulUpdates.length > 0) {
-        setDecks((currentDecks) => currentDecks.map((deck) => {
-          const update = successfulUpdates.find((item) => item.id === deck.id);
-          return update ? { ...deck, ...update } : deck;
-        }));
-      }
-    } finally {
-      deckMetadataSyncInFlightRef.current = false;
-    }
-  }, []);
-
-  const syncMissingCommanderCmc = useCallback(async () => {
-    if (commanderCmcSyncInFlightRef.current || deckMetadataSyncAbortRef.current) return;
-
-    const MAX_BATCH_DECKS = 6;
-    const MAX_ROUNDS = 24;
-
-    commanderCmcSyncInFlightRef.current = true;
-    setCommanderCmcSyncInProgress(true);
-
-    try {
-      let stalledRounds = 0;
-
-      for (let round = 0; round < MAX_ROUNDS; round += 1) {
-        if (deckMetadataSyncAbortRef.current) break;
-
-        const decksNeedingCmc = decksRef.current.filter((deck) => deckNeedsCommanderCmc(deck));
-        if (decksNeedingCmc.length === 0) break;
-
-        const batch = decksNeedingCmc.slice(0, MAX_BATCH_DECKS);
-        const commanderNames = collectUniqueCommanderNames(batch);
-        if (commanderNames.length === 0) break;
-
-        const response = await authenticatedFetch('/api/scryfall-commander-cmc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ names: commanderNames }),
-        });
-
-        if (!response.ok) {
-          stalledRounds += 1;
-          if (stalledRounds >= 2) break;
-          await delay(600);
-          continue;
-        }
-
-        const payload = await response.json() as { cmcs?: Record<string, number | null> };
-        const commanderCmcs = payload.cmcs || {};
-        const successfulUpdates: Array<{ id: string; commander_cmc: number }> = [];
-
-        for (const deck of batch) {
-          const commanderCmc = buildDeckCommanderCmcFromCmcs(deck, commanderCmcs);
-          if (commanderCmc == null) continue;
-
-          const { error } = await supabase
-            .from('decks')
-            .update({ commander_cmc: commanderCmc })
-            .eq('id', deck.id);
-
-          if (!error) {
-            successfulUpdates.push({ id: deck.id, commander_cmc: commanderCmc });
-          } else {
-            console.error('Failed to persist commander_cmc for deck', deck.id, error);
-          }
-        }
-
-        if (successfulUpdates.length === 0) {
-          stalledRounds += 1;
-          if (stalledRounds >= 2) break;
-          await delay(600);
-          continue;
-        }
-
-        stalledRounds = 0;
-        setDecks((currentDecks) => currentDecks.map((deck) => {
-          const update = successfulUpdates.find((item) => item.id === deck.id);
-          return update ? { ...deck, commander_cmc: update.commander_cmc } : deck;
-        }));
-
-        await delay(SCRYFALL_REQUEST_GAP_MS);
-      }
-    } finally {
-      commanderCmcSyncInFlightRef.current = false;
-      setCommanderCmcSyncInProgress(false);
-    }
-  }, []);
-
-  useEffect(()=>()=>catalogRequestRef.current?.abort(),[catalogKey]);
-
   const fetchDecks = useCallback(async () => {
-    if (!user || adminLoading) return;
-    catalogRequestRef.current?.abort();
-    const controller=new AbortController();catalogRequestRef.current=controller;
-    setCatalogError(false);
-    try {
-      const data=await fetchCompleteProfileCatalog(async(after,revision,signal)=>{
-        if(!adminMode) return fetchProfileCatalogPage(supabase,user.id,after,revision,signal);
-        const params=new URLSearchParams();if(after)params.set('after',after);if(revision)params.set('revision',revision);
-        const response=await fetch('/api/admin/profile-catalog?'+params,{cache:'no-store',signal});
-        if(!response.ok) throw new Error('PROFILE_CATALOG_UNAVAILABLE');
-        return parseProfileCatalogPage(await response.json(),null,after,revision);
-      },controller.signal);
-      if(controller.signal.aborted) return;
-      const loadedDecks=data as unknown as Deck[];
-      setLoadedCatalogKey(catalogKey);
-      setDecks(loadedDecks);
-      runWhenIdle(() => {
-        if(controller.signal.aborted) return;
-        void syncMissingDeckMetadata(loadedDecks).finally(() => {
-          void syncMissingCommanderCmc();
-        });
-      }, { timeoutMs: 6000 });
-    } catch (error) {
-      if(!controller.signal.aborted) {setCatalogError(true);setLoadedCatalogKey(catalogKey);setDecks([]);}
-    } finally {
-      if(!controller.signal.aborted) setLoading(false);
-    }
-  }, [adminMode, adminLoading, catalogKey, syncMissingCommanderCmc, syncMissingDeckMetadata, user]);
+    const loaded = await loadCatalog();
+    if (!loaded) return;
+    runWhenIdle(() => {
+      if (loaded.signal.aborted) return;
+      void syncMissingDeckMetadata(loaded.decks).finally(() => {
+        void syncMissingCommanderCmc();
+      });
+    }, { timeoutMs: 6000 });
+  }, [loadCatalog, syncMissingCommanderCmc, syncMissingDeckMetadata]);
 
   const visibleDecks = useMemo(() => {
     const activeDecks = decks.filter((deck) => !deck.is_archived);
@@ -896,7 +653,7 @@ export default function ProfilePage() {
     if (error) throw error;
     setDecks((current) => current.map((entry) => entry.id === deck.id ? { ...entry, is_archived: archived } : entry));
     toast({ title: t(archived ? { it: 'Mazzo archiviato', en: 'Deck archived' } : { it: 'Mazzo ripristinato', en: 'Deck restored' }) });
-  }, [t, toast, user]);
+  }, [setDecks, t, toast, user]);
 
   const filteredDecks = useMemo(() => {
     const normalizedQuery = deckSearchQuery.trim().toLowerCase();
@@ -960,7 +717,7 @@ export default function ProfilePage() {
         variant: 'destructive',
       });
     }
-  }, [t, toast, user]);
+  }, [setDecks, t, toast, user]);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -1650,7 +1407,6 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    deckMetadataSyncAbortRef.current = showAddModal;
     if (showAddModal) {
       commanderSearchAbortRef.current?.abort();
       partnerSearchAbortRef.current?.abort();

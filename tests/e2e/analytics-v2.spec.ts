@@ -85,3 +85,76 @@ test('profile v2 reports backend errors and retries with neutral draws',async({p
   expect(sectors.every(sector=>sector.path&&!/NaN|Infinity/.test(sector.path))).toBe(true);
   await chart.screenshot({path:`artifacts/dev26/recharts-profile-${test.info().project.name}.png`});
 });
+
+test('profile catalog requires every page and retries without exposing a partial collection',async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  const userId=process.env.E2E_USER_ID!;
+  const revision='b'.repeat(32);
+  const decks=Array.from({length:251},(_,index)=>({
+    id:`00000000-0000-4000-8000-${String(index+1).padStart(12,'0')}`,user_id:userId,group_id:null,
+    name:`Catalog fixture ${index+1}`,commander:'Catalog commander',commander_image:null,commander_cmc:4,
+    commander_options:[],color_identity:['U'],bracket:'3',source_type:'manual',source_url:null,
+    is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null,
+  }));
+  let allowTail=false;
+  const requests:Array<{p_after:string|null;p_revision:string|null}>=[];
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>{
+    const body=route.request().postDataJSON();requests.push(body);
+    if(body.p_after&&!allowTail)return route.fulfill({status:503,json:{message:'Synthetic tail unavailable'}});
+    return route.fulfill({status:200,json:{schemaVersion:2,scope:'personal',userId,revision,total:decks.length,
+      decks:body.p_after?decks.slice(250):decks.slice(0,250),next:body.p_after?null:decks[249].id,
+    }});
+  });
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+    const report=profileCatalogFixture();report.userId=userId;report.total=decks.length;
+    report.decks=decks.map(deck=>({...report.decks[0],deck_id:deck.id}));
+    return route.fulfill({status:200,json:report});
+  });
+  await fixtureLogin(page);
+  await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+  const error=page.getByRole('alert').filter({hasText:'Catalog unavailable. Please retry.'});
+  await expect(error).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Catalog fixture 1',exact:true})).toHaveCount(0);
+  expect(requests[1]).toMatchObject({p_after:decks[249].id,p_revision:revision});
+  allowTail=true;
+  await error.getByRole('button',{name:'Retry',exact:true}).click();
+  await expect(error).toHaveCount(0);
+  await page.getByPlaceholder('Search by name or commander...').fill('Catalog fixture 251');
+  await expect(page.getByRole('heading',{name:'Catalog fixture 251',exact:true})).toBeVisible();
+  expect(requests.at(-2)).toMatchObject({p_after:null,p_revision:null});
+  expect(requests.at(-1)).toMatchObject({p_after:decks[249].id,p_revision:revision});
+});
+
+test('profile catalog enriches missing commander CMC once without replacing the collection',async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  const userId=process.env.E2E_USER_ID!;
+  const deckId='00000000-0000-4000-8000-000000000001';
+  const patches:unknown[]=[];const lookups:unknown[]=[];
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>route.fulfill({status:200,json:{
+    schemaVersion:2,scope:'personal',userId,revision:'c'.repeat(32),total:1,next:null,
+    decks:[{id:deckId,user_id:userId,group_id:null,name:'Enrichment fixture',commander:'Catalog commander',
+      commander_image:null,commander_cmc:null,commander_options:[],color_identity:['U'],bracket:'3',
+      source_type:'manual',source_url:null,is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null}],
+  }}));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+    const report=profileCatalogFixture();report.userId=userId;report.decks[0].deck_id=deckId;
+    return route.fulfill({status:200,json:report});
+  });
+  await page.route('**/api/scryfall-commander-cmc',route=>{
+    lookups.push(route.request().postDataJSON());
+    return route.fulfill({status:200,json:{cmcs:{'Catalog commander':4}}});
+  });
+  await page.route('**/rest/v1/decks?*',route=>{
+    if(route.request().method()!=='PATCH')return route.continue();
+    expect(new URL(route.request().url()).searchParams.get('id')).toBe(`eq.${deckId}`);
+    patches.push(route.request().postDataJSON());
+    return route.fulfill({status:204});
+  });
+  await fixtureLogin(page);
+  await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Enrichment fixture',exact:true})).toBeVisible();
+  await expect.poll(()=>patches).toEqual([{commander_cmc:4}]);
+  await page.getByPlaceholder('Search by name or commander...').fill('Enrichment fixture');
+  await expect(page.getByRole('heading',{name:'Enrichment fixture',exact:true})).toBeVisible();
+  expect(lookups).toEqual([{names:['Catalog commander']}]);
+});
