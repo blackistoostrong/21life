@@ -212,3 +212,93 @@ test('profile nickname directory keeps the target and draft through an error and
   expect(attempts).toBe(2);
   await expect(page.getByRole('heading', { name: 'account_fixture', exact: true })).toBeVisible();
 });
+
+test('profile nickname lifecycle cancels a pending save on navigation across two mounts', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  const releases = new Set<() => void>();
+  let pending = 0; let cancelled = 0;
+  page.on('requestfailed', request => {
+    if (request.method() === 'PATCH' && request.url().includes('/rest/v1/profiles?')) cancelled += 1;
+  });
+  const fixture = await openPasswordFixture(page);
+  await page.route('**/rest/v1/profiles?*', async route => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    expect(new URL(route.request().url()).searchParams.get('id')).toBe(`eq.${process.env.E2E_USER_ID}`);
+    pending += 1;
+    await new Promise<void>(resolve => releases.add(resolve));
+    await route.fulfill({ status: 204 }).catch(() => { /* Route may be closed during fixture teardown. */ });
+  });
+  try {
+    for (let round = 1; round <= 2; round += 1) {
+      if (round > 1) await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
+      await fixture.card.getByRole('button', { name: 'Nickname', exact: true }).click();
+      await fixture.card.getByRole('textbox').first().fill(`Pending nickname ${round}`);
+      await fixture.card.getByRole('button', { name: 'Save nickname', exact: true }).click();
+      await expect.poll(() => pending).toBe(round);
+      await page.getByRole('button', { name: 'Back to home', exact: true }).click();
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect.poll(() => cancelled).toBe(round);
+    }
+    await expect(page.getByText('Nickname updated', { exact: true })).toHaveCount(0);
+  } finally { releases.forEach(release => release()); }
+});
+
+test('profile nickname lifecycle cancels pending directory loads on navigation across two mounts', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  const releases = new Set<() => void>();
+  let pending = 0; let cancelled = 0;
+  page.on('requestfailed', request => {
+    if (request.method() === 'GET' && new URL(request.url()).searchParams.get('select')?.includes('archidekt_last_sync_at')) cancelled += 1;
+  });
+  await openPasswordFixture(page);
+  await page.getByRole('button', { name: 'Back to home', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.route('**/rest/v1/profiles?*', async route => {
+    if (!new URL(route.request().url()).searchParams.get('select')?.includes('archidekt_last_sync_at')) return route.fallback();
+    pending += 1;
+    await new Promise<void>(resolve => releases.add(resolve));
+    await route.fulfill({ status: 200, json: [] }).catch(() => { /* Route may be closed during fixture teardown. */ });
+  });
+  try {
+    for (let round = 1; round <= 2; round += 1) {
+      const before = pending;
+      await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
+      await expect.poll(() => pending > before).toBe(true);
+      await page.getByRole('button', { name: 'Back to home', exact: true }).click();
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect.poll(() => cancelled === pending).toBe(true);
+    }
+  } finally { releases.forEach(release => release()); }
+});
+
+test('profile nickname lifecycle cancels saving when switching to the password panel', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  let pending = 0; let cancelled = 0; let release!: () => void;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  page.on('requestfailed', request => {
+    if (request.method() === 'PATCH' && request.url().includes('/rest/v1/profiles?')) cancelled += 1;
+  });
+  const fixture = await openPasswordFixture(page);
+  await page.route('**/rest/v1/profiles?*', async route => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    pending += 1;
+    await wait;
+    await route.fulfill({ status: 204 }).catch(() => { /* Cancelled route may already be closed. */ });
+  });
+  try {
+    await fixture.card.getByRole('button', { name: 'Nickname', exact: true }).click();
+    const draft = fixture.card.getByRole('textbox').first();
+    await draft.fill('Pending panel nickname');
+    await fixture.card.getByRole('button', { name: 'Save nickname', exact: true }).click();
+    await expect.poll(() => pending).toBe(1);
+    await fixture.card.getByRole('button', { name: 'Password', exact: true }).click();
+    await expect(fixture.card.getByLabel('Current password', { exact: true })).toBeVisible();
+    await expect.poll(() => cancelled).toBe(1);
+    release();
+    await expect(page.getByText('Nickname updated', { exact: true })).toHaveCount(0);
+    await fixture.card.getByRole('button', { name: 'Nickname', exact: true }).click();
+    await expect(draft).toHaveValue('Pending panel nickname');
+    await expect(fixture.card.getByRole('button', { name: 'Save nickname', exact: true })).toBeEnabled();
+    expect(pending).toBe(1);
+  } finally { release(); }
+});

@@ -521,7 +521,7 @@ export default function ProfilePage() {
   const { decks, setDecks, loading, catalogError, loadCatalog } = useProfileCatalog(user, adminMode, adminLoading);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<AddDeckMode>('choose');
-  const directory = useProfileDirectory();
+  const directory = useProfileDirectory(user, adminMode, adminLoading);
   const { profiles, setProfiles, fetchProfiles, saveProfileDisplayName } = directory;
   const [selectedTargetProfileId, setSelectedTargetProfileId] = useState<string>('');
   const [exportingAccount, setExportingAccount] = useState(false);

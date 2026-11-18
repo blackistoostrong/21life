@@ -39,6 +39,7 @@ export function ProfileNicknameDirectory({ directory }: { directory: NicknameCon
                       </div>
                       <Input
                         value={draft}
+                        disabled={savingProfile}
                         onChange={(event) => setProfileDisplayNameDrafts((drafts) => ({ ...drafts, [profile.id]: event.target.value }))}
                         placeholder={profile.username}
                         className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"

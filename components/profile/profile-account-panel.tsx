@@ -109,6 +109,7 @@ export function ProfileAccountPanel({ user, currentProfile, adminMode, controls,
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                     <Input
                       value={displayNameDraft}
+                      disabled={savingDisplayName}
                       onChange={(event) => setDisplayNameDraft(event.target.value)}
                       placeholder={currentProfile?.username || t({ it: 'Nick visualizzato', en: 'Display nickname' })}
                       className={accountPanelInputClass}
