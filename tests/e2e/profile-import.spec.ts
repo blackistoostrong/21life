@@ -169,8 +169,10 @@ test('profile URL import cancels an older art selection without replacing the ne
     await page.getByRole('dialog').getByRole('button', { name: /Art partner/ }).click();
     await expect.poll(() => cancelled).toBe(1);
     await expect(page.getByText('Partner printing', { exact: true })).toBeVisible();
-    release();
     const preview = page.getByRole('heading', { name: 'Art preview fixture', exact: true }).locator('xpath=../..');
+    await expect(preview.getByRole('img', { name: 'Art partner', exact: true })).toHaveAttribute('src', '/favicon.ico?partner');
+    await page.getByRole('button', { name: /Partner printing/ }).click();
+    release();
     await expect(preview.getByText('Art partner', { exact: true })).toBeVisible();
     await expect(preview.getByRole('img', { name: 'Art partner', exact: true })).toHaveAttribute('src', /fresh-partner/);
     await expect(page.getByText('Old printing', { exact: true })).toHaveCount(0);
