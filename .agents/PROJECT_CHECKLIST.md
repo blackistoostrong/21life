@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Search ownera145f560 CHIUSO meccanico: qualityweb751+3skip/67script/ratchet141 PASS; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile30/30 DOPO PASS e cleanupDev PASS; ricerca/selezione/stampa, account/Auth/nickname/catalogo/metadati/Archidekt/archive invariati. Hook109/6state/3effect/2ref, profilo2484/42state/5effect. Proseguire senza pausa con cancellazioni su querycorta/close/unmount/account e timer; niente DB/native/dispositivo/merge/deploy, piano/punto6/advisory ancora aperti.
+
 - [ ] Search owner prebuild18-11: qualityweb751+3skip/67script/ratchet141 PASS. Ripristinato setterbusy partner usato dal reset, nessuna modifica comportamento. Due callback AST identiche e13statement spostati; profilo2484/42state/5effect, hook109/6state/3effect/2ref. Gate merge/prebuild riletti/invariati; cleanbuild locale candidatoDev9.3.0 e browser30 dopo; advisory resta gatefinale aperto, nessun merge/deploy/dispositivo.
 
 - [ ] Search controller18-11: ripresa senza nuova chat dal checkpoint3a37a583 pulito/pushed. Estrarre6state/2ref/2callback/3effect nel solo owner ricerca manuale/partner; comportamento invariato, incluse cancellazioni incomplete da correggere in commit distinto. Baseline browser30/30 su94b6f6d5 comprende ricerca/selezione/stampa. Nessun nuovo scope, sempre candidatoDev9.3.0.
