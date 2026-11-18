@@ -838,5 +838,11 @@
     "branches": 90.9,
     "functions": 87.5,
     "statements": 94.91
+  },
+  "lib/profile-commander.ts": {
+    "lines": 93.42,
+    "branches": 72.72,
+    "functions": 100,
+    "statements": 86.31
   }
 }

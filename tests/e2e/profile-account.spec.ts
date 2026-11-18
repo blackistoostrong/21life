@@ -302,3 +302,39 @@ test('profile nickname lifecycle cancels saving when switching to the password p
     expect(pending).toBe(1);
   } finally { release(); }
 });
+
+test('profile commander search preserves manual selection and printing preview', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  const searches: string[] = [];
+  let artRequests = 0; let writes = 0;
+  const name = 'Fixture Commander';
+  await page.route('https://api.scryfall.com/cards/search?*', route => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get('unique') === 'art') artRequests += 1;
+    else searches.push(params.get('q') || '');
+    return route.fulfill({ status: 200, json: { data: [{ id: 'commander-fixture', name,
+      type_line: 'Legendary Creature — Wizard', color_identity: ['U'], oracle_text: '', keywords: [],
+      image_uris: { art_crop: `https://cards.scryfall.io/art_crop/fixture-${params.get('unique') === 'art' ? 'printing' : 'commander'}.jpg` },
+      set_name: 'Fixture Set', collector_number: '7', released_at: '2026-01-01' }] } });
+  });
+  await page.route('https://cards.scryfall.io/**', route => route.fulfill({ status: 200,
+    contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="blue"/></svg>' }));
+  await page.route('**/rest/v1/decks?*', route => {
+    if (route.request().method() !== 'POST' && route.request().method() !== 'PATCH') return route.continue();
+    writes += 1; return route.fulfill({ status: 403 });
+  });
+  await openPasswordFixture(page);
+  await page.getByRole('button', { name: 'Add Deck', exact: true }).click();
+  await page.getByRole('button', { name: 'Add manually Search for a commander', exact: true }).click();
+  await page.getByPlaceholder('Search commander by name...', { exact: true }).fill('Fixture');
+  await page.getByRole('button', { name: /Fixture Commander.*Legendary Creature/ }).click();
+  await expect(page.getByText('Choose commander art', { exact: true })).toBeVisible();
+  await expect(page.getByText('Fixture Set', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Fixture Set/ }).click();
+  await expect(page.getByPlaceholder(name, { exact: true })).toHaveValue(name);
+  expect(searches).toHaveLength(1);
+  expect(searches[0]).toContain('is:commander');
+  expect(searches[0]).toContain('Fixture');
+  expect(artRequests).toBe(1);
+  expect(writes).toBe(0);
+});
