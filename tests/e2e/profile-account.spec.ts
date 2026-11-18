@@ -374,7 +374,11 @@ for (const action of ['clear', 'close', 'leave'] as const) {
         await query.fill(`Pending ${round}`);
         await expect.poll(() => pending).toBe(round);
         if (action === 'clear') await query.fill('');
-        else if (action === 'close') await page.keyboard.press('Escape');
+        else if (action === 'close') {
+          await page.getByRole('dialog').getByRole('button', { name: 'Back', exact: true }).click();
+          await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+        }
         else {
           await page.goBack();
           await expect(page).toHaveURL(/\/dashboard$/);
@@ -382,7 +386,11 @@ for (const action of ['clear', 'close', 'leave'] as const) {
         await expect.poll(() => cancelled).toBe(round);
         releases.forEach(release => release()); releases.clear();
         await expect(page.getByRole('button', { name: /Late commander/ })).toHaveCount(0);
-        if (action === 'clear') await page.keyboard.press('Escape');
+        if (action === 'clear') {
+          await page.getByRole('dialog').getByRole('button', { name: 'Back', exact: true }).click();
+          await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+        }
       }
     } finally { releases.forEach(release => release()); }
   });
