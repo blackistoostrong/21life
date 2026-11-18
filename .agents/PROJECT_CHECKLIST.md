@@ -2,6 +2,12 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Import owner prebuild18-11:4corpiAST invariati, pagina2388/31state/5effect; URL74/6state, bulk64/5state, art22/0. Qualityweb751+3skip/67script/ratchet141 PASS; baselineURL2/2+bulk2/2 PASS concleanup. origin/Dev aggiornato senza commitmancanti; gate merge/prebuild riletti/invariati. CleanbuildlocaleDev9.3.0 e browser40 attesi, advisoryfinale aperta; niente native/DB/dispositivo/merge/deploy. Poi fix lifecycle import/art.
+
+- [ ] Import owner18-11: seconda baselineArchidektusername2/2 desktop/mobile PASS su767f7a05: errore/usernameconservato/retry, solo preview con sourcevalida, None/All e SaveDecks enabled corretti, zero write e cleanupDev PASS. Estratti5state+callbackbulk separati dai6state/callbackURL e loaderart; totale11stati trasferiti in owner piccoli. Nessun salvataggio mazzi spostato, cancellazione/scoping da correggere dopo commitmeccanico.
+
+- [ ] URLimport owner18-11: PRIMA2/2 desktop/mobile su767f7a05 PASS, API503 conservaURL/abilitaRetry, secondo200 mostraanteprima/SaveDecksenzaPOST/PATCHmazzi; cleanupDev PASS. Estratti6state+2callback in use-profile-url-import e loaderart condiviso in use-profile-commander-arts; nove statement/corpi invariati, niente nuovefunzioni/importtestuale/decklist. Lifecycle abort/account/deadline in tranche successiva, poi editor/bulk.
+
 - [x] Search lifecycle767f7a05 CHIUSO: qualityweb751+3skip/67script/ratchet141 PASS; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile36/36 finale PASS,2ROSSI validi→VERDI (clear/back), chiusuraREALEBack→Cancel verificata, tutti3casi dueaperture e zeroresult tardivi; Partner selezione/esclusioneprimario/nomecomposito e tutti precedenti flussi verdi. CleanupDev PASS; fonteapp767, successivi cambi soltanto test/docs percorrezioneEscape noncollegato. Hook95righe,2canali ciascuno1state/1layout/1effect; profilo2484/42state/5effect. Proseguire URLimport+arts, poi editor/bulk. Cambiaccount reali, cachebounds, punto6/restopiano/advisory aperti. Nessun DB/native/dispositivo/merge/deploy.
 
 - [ ] Correzione provaSearch18-11: primo verde767f7a05 passa13precedenti e cancellazionequery al primo giro, poi timeout alla riapertura. Causa test: Escape NON chiude AddDeck (ModalOverlay senzaonClose), quindi primoROSSOclose non valido; soloqueryclear eback sonoROSSI provati. Test ora usaBack→Cancel eassert dialogassente, duegiri percaso; nessuna modificaUI per farpassaretest. CleanupDev PASS. Ripetere browser completo; baselinePartner2/2 valida. Build/quality app767 restano verdi, modifiche solo test/docs.

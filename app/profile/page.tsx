@@ -76,6 +76,9 @@ import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel, PROFILE_ACCOUNT_INPUT_CLASS as accountPanelInputClass } from '@/components/profile/profile-account-panel';
+import { useProfileCommanderArts } from '@/hooks/use-profile-commander-arts';
+import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import';
+import { useProfileUrlImport } from '@/hooks/use-profile-url-import';
 import { useProfileCommanderSearch } from '@/hooks/use-profile-commander-search';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
@@ -135,6 +138,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
   const { copy: t } = useLanguage();
+  const fetchCommanderArts = useProfileCommanderArts();
   const { adminMode, loading:adminLoading } = usePlatformAdmin();
   const { decks, setDecks, loading, catalogError, loadCatalog } = useProfileCatalog(user, adminMode, adminLoading);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -146,23 +150,21 @@ export default function ProfilePage() {
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
     useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
       user && !adminLoading ? user.id + ':' + adminMode : null);
-
-  // URL import state (Archidekt + Moxfield)
-  const [importDeckUrl, setImportDeckUrl] = useState('');
-  const [importingDeck, setImportingDeck] = useState(false);
-  const [importedDeck, setImportedDeck] = useState<ImportedDeckPreview | null>(null);
-  const [selectedImportedCommander, setSelectedImportedCommander] = useState<ImportedCommanderOption | null>(null);
-  const [importedCommanderArts, setImportedCommanderArts] = useState<CommanderArtOption[]>([]);
-  const [loadingImportedCommanderArts, setLoadingImportedCommanderArts] = useState(false);
-  const [archidektUsername, setArchidektUsername] = useState('');
+  const {
+    importDeckUrl, setImportDeckUrl, importingDeck, importedDeck, setImportedDeck,
+    selectedImportedCommander, setSelectedImportedCommander,
+    importedCommanderArts, setImportedCommanderArts, loadingImportedCommanderArts, setLoadingImportedCommanderArts,
+    handleUrlImport, loadImportedCommanderArts,
+  } = useProfileUrlImport(fetchCommanderArts);
+  const {
+    archidektUsername, setArchidektUsername, importingUserDecks,
+    importedUserDecks, setImportedUserDecks, selectedUserDeckCommanders, setSelectedUserDeckCommanders,
+    selectedUserDeckUrls, setSelectedUserDeckUrls, handleArchidektUserImport,
+  } = useProfileArchidektImport();
   const [archidektSettingsUsername, setArchidektSettingsUsername] = useState('');
   const [archidektAutoImport, setArchidektAutoImport] = useState(false);
   const [savingArchidektSettings, setSavingArchidektSettings] = useState(false);
   const archidektAutoImportStartedRef = useRef(false);
-  const [importingUserDecks, setImportingUserDecks] = useState(false);
-  const [importedUserDecks, setImportedUserDecks] = useState<ImportedDeckPreview[]>([]);
-  const [selectedUserDeckCommanders, setSelectedUserDeckCommanders] = useState<Record<string, ImportedCommanderOption>>({});
-  const [selectedUserDeckUrls, setSelectedUserDeckUrls] = useState<string[]>([]);
   const [savingUserDecks, setSavingUserDecks] = useState(false);
   const [overwriteConfirm, setOverwriteConfirm] = useState<
     | { kind: 'single' }
@@ -654,98 +656,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleUrlImport = async () => {
-    if (!importDeckUrl.trim()) return;
-
-    setImportingDeck(true);
-    try {
-      const response = await authenticatedFetch('/api/deck-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: importDeckUrl }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }));
-      }
-
-      const imported = await normalizeImportedDeckPreview(await response.json() as ImportedDeckPreview);
-      const defaultCommander = getDefaultImportedCommanderOption(imported);
-      setImportedDeck(imported);
-      setSelectedImportedCommander(defaultCommander);
-      void loadImportedCommanderArts(defaultCommander);
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: error instanceof Error ? error.message : t({ it: 'Importazione mazzo non riuscita', en: 'Failed to import deck' }),
-        variant: 'destructive',
-      });
-    } finally {
-      setImportingDeck(false);
-    }
-  };
-
-  const handleArchidektUserImport = async () => {
-    if (!archidektUsername.trim()) return;
-
-    setImportingUserDecks(true);
-    try {
-      const response = await authenticatedFetch('/api/archidekt-user-decks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: archidektUsername }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || t({ it: 'Importazione mazzi non riuscita', en: 'Failed to import decks' }));
-      }
-
-      const data = await response.json();
-      const validDecks = await Promise.all(
-        (Array.isArray(data.decks) ? data.decks : [])
-          .filter((deck: ImportedDeckPreview) => Boolean(deck.sourceUrl && deck.sourceType))
-          .map((deck: ImportedDeckPreview) => normalizeImportedDeckPreview(deck)),
-      );
-      const initialSelections = buildArchidektBatchCommanderSelections(validDecks);
-
-      setImportedUserDecks(validDecks);
-      setSelectedUserDeckCommanders(initialSelections);
-      setSelectedUserDeckUrls(validDecks.map((deck: ImportedDeckPreview) => deck.sourceUrl));
-
-      if (validDecks.length === 0) {
-        toast({
-          title: t({ it: 'Nessun mazzo pubblico trovato', en: 'No public decks found' }),
-          description: t({ it: 'Archidekt non ha restituito mazzi Commander pubblici per questo utente.', en: 'Archidekt did not return public Commander decks for this user.' }),
-        });
-      }
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: error instanceof Error ? error.message : t({ it: 'Importazione mazzi non riuscita', en: 'Failed to import decks' }),
-        variant: 'destructive',
-      });
-    } finally {
-      setImportingUserDecks(false);
-    }
-  };
-
-  const fetchCommanderArts = async (commanderName: string) => {
-    try {
-      const arts = await fetchScryfallArtOptionsFromBrowser(commanderName);
-      if (arts.length > 0) return arts;
-    } catch {
-      // Fall back to the server route below.
-    }
-
-    const response = await authenticatedFetch(`/api/scryfall-card-arts?name=${encodeURIComponent(commanderName)}`);
-    if (!response.ok) throw new Error(t({ it: 'Ricerca art non riuscita', en: 'Art search failed' }));
-
-    const data = await response.json();
-    return Array.isArray(data.data) ? data.data as CommanderArtOption[] : [];
-  };
-
   const loadManualCommanderArts = async (commanderName: string, fallbackImageUrl: string | null) => {
     setLoadingManualCommanderArts(true);
     try {
@@ -775,27 +685,6 @@ export default function ProfilePage() {
       }] : []);
     } finally {
       setLoadingManualCommanderArts(false);
-    }
-  };
-
-  const loadImportedCommanderArts = async (commander: ImportedCommanderOption) => {
-    setLoadingImportedCommanderArts(true);
-    try {
-      const arts = await fetchCommanderArts(commander.name);
-      setImportedCommanderArts(arts);
-      setSelectedImportedCommander(resolveImportedCommanderAfterArtsLoad(commander, arts));
-    } catch {
-      setImportedCommanderArts(commander.imageUrl ? [{
-        id: 'current',
-        name: commander.name,
-        imageUrl: commander.imageUrl,
-        setName: t({ it: 'Art corrente', en: 'Current art' }),
-        collectorNumber: '',
-        releasedAt: null,
-      }] : []);
-      setSelectedImportedCommander(commander);
-    } finally {
-      setLoadingImportedCommanderArts(false);
     }
   };
 
