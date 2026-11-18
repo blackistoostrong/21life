@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { runNodeCommand } from './qa-command.mjs';
 import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
@@ -105,7 +106,7 @@ try {
     }
   }
   for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks'])) {
-    const result = spawnSync(process.execPath, [
+    const status = await runNodeCommand([
       resolve('node_modules/@playwright/test/cli.js'), 'test',
       'tests/e2e/public-ui.spec.ts',
       'tests/e2e/responsive-layout.spec.ts',
@@ -122,7 +123,7 @@ try {
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
     ], { stdio: 'inherit' });
-    if ((result.status ?? 1) !== 0) exitCode = result.status ?? 1;
+    if (status !== 0) exitCode = status;
   }
   if (driver === 'playwright' && exitCode === 0 && (!process.env.E2E_GREP || process.env.E2E_GREP.includes('wizard → damage'))) {
     const { count, error } = await supabase.from('matches').select('id', { count: 'exact', head: true }).eq('group_id', groupId);
