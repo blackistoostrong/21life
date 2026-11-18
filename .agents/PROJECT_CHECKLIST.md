@@ -2,6 +2,11 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Directory prebuild18-11: estrazione meccanica verificata AST; profilo2902/48state/8effect, controller66/3/0 e pannello60/0/0. Qualityweb738+3skip/67script e ratchet140 PASS, soglie precedenti invariate. Gate merge/prebuild letti: nessun nuovo commit origin/Dev mancante, nessun merge tentato; solo cleanbuild locale Dev9.3.0, advisory finale ancora aperta. BrowserDOPO richiesto, poi lifecycle separato.
+
+- [ ] Directory11b18-11: prima desktop/mobile2/2 suadb11c35 PASS pertargetadminUI/errore/bozzaconservata/retry/trim/successo e profiloown invariato; ruoloUI e writeintercettati, nessungrant/update reale, cleanupDevPASS. Estrarre3stati, load/saveNickname e pannelloAdmin in controller/presentazione tipizzati; invariata query/RLS/markup, correzioni lease/account/abort successive. Passwordcheckpointec782b35 remoto pulito prima di iniziare questa tranche.
+
+
 - [x] Passwordadb11c35 CHIUSO: qualityweb738+3skip/67script PASS, ratchet140 PASS (139precedenti invariati + floor servizio). Cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile20/20 PASS:2ROSSI→VERDI (abortAuthPOST e sessioneoriginale), verifica reale passwordfixture con PUTintercettato, cookie fingerprint invariato, updateJWToriginale, logoutsoloJWTtemporaneo, reloadautenticato; tutti account/catalogo251/CMCidle/metriche/Archidekt/archive+Axe precedenti verdi. QAAuthDevREALE suSTESSOSHA PASS senza warning: passwordcambiata, oldreject/newaccept, mainJWT invariato/refresh valido, auth.sessions READONLY solo main, cleanupAuth/profilo PASS e manifestpendingfalse. MailernotifichePW/recentreauth/currentPW flags unset/defaultfalse suGoTruev2.189, niente mail o configurazione modificata. Nessun native/dispositivo/merge/deploy. Prossimo: directory profili/nickname ownership+cancel+callback, poi import/editor e altri target punto6; piano originale e advisory5highweb/26highExpo ancora aperti.
 
 

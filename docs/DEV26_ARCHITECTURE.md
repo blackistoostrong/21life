@@ -251,3 +251,17 @@ Live QA command: `E2E_ENV_ROOT=<primary-env-root> node scripts/run-dev26-passwor
 Passwordadb11c35 verified: full web quality738+3skip/67script; all139prior ratchets retained, new reviewed service floor brings140PASS. Clean56route build and3.19/18MiB budget PASS. Browserdesktop/mobile20/20PASS: both red regressions now green, pending verification aborts on leaving, successful verification keeps original-cookie fingerprint and uses the original JWT, only temporary JWT is logged out, authenticated reload succeeds; prior account/catalog/metadata/archive/Archidekt checks remain green. Fixture cleanup verified.
 
 The tracked live Auth QA script was rerun on the same commit: actual disposable password change, old credential rejected/new accepted, original client JWT unchanged and refresh valid, READONLY auth.sessions only original remaining; Auth/profile fixture cleanup and pendingfalse manifest verified. No warning: deployed Auth reports an already revoked session as AuthSessionMissingError400, handled by the SDK predicate and a regression. Notifications, require-current-password and recent-reauth are unset/defaultfalse on Dev v2.189; no mail/configuration/production changes. No native/device certification. Remaining profile directory/nickname/import/editor and other mandatory target owners are still open, as is release dependency security.
+
+
+## Profile nickname directory extraction (2026-11-18)
+
+`useProfileDirectory` owns directory loading, nickname drafts, busy IDs and display-name persistence; `ProfileNicknameDirectory` owns presentation through a narrowed typed contract. `ProfileDirectoryEntry` is the unchanged shared feature type. The route still triggers loading and supplies its own-profile save callback. Query columns/order, RLS, trimming, error/retry feedback and markup are preserved. Load and save function AST bodies match the previous route after newline normalization. This mechanical tranche does not yet fix late replies, account/role transitions or duplicate commands.
+
+| Owner | Nonempty lines | useState | useEffect |
+|---|---:|---:|---:|
+| Profile before |3000|51|8|
+| Profile after |2902|48|8|
+| Directory controller |66|3|0|
+| Nickname presentation |60|0|0|
+
+Before characterization passed desktop/mobile2/2 onadb11c35: correct target, failed save preserving draft, successful retry/trim, own profile unchanged. Admin role is mocked only in UI and profile writes intercepted; no actual permission grant or nickname mutation. Dev disposable fixture cleanup verified. Post-extraction quality/build/browser checks remain pending; all four mandatory entrypoints still exceed the800-line target.

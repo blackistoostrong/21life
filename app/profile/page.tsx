@@ -66,6 +66,9 @@ import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel, PROFILE_ACCOUNT_INPUT_CLASS as accountPanelInputClass } from '@/components/profile/profile-account-panel';
+import { useProfileDirectory } from '@/hooks/use-profile-directory';
+import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
+import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
 import { useProfileCatalog } from '@/hooks/use-profile-catalog';
 import type { ProfileDeck as Deck, ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
@@ -105,15 +108,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { buildMatchRecord, formatMatchRecord } from '@/lib/win-rate';
-
-interface Profile {
-  id: string;
-  username: string;
-  display_name: string | null;
-  archidekt_username: string | null;
-  archidekt_auto_import: boolean;
-  archidekt_last_sync_at: string | null;
-}
 
 interface CommanderSearchResult {
   id: string;
@@ -527,11 +521,10 @@ export default function ProfilePage() {
   const { decks, setDecks, loading, catalogError, loadCatalog } = useProfileCatalog(user, adminMode, adminLoading);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<AddDeckMode>('choose');
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const directory = useProfileDirectory();
+  const { profiles, setProfiles, fetchProfiles, saveProfileDisplayName } = directory;
   const [selectedTargetProfileId, setSelectedTargetProfileId] = useState<string>('');
   const [exportingAccount, setExportingAccount] = useState(false);
-  const [profileDisplayNameDrafts, setProfileDisplayNameDrafts] = useState<Record<string, string>>({});
-  const [savingProfileDisplayNameIds, setSavingProfileDisplayNameIds] = useState<string[]>([]);
   const commanderSearchAbortRef = useRef<AbortController | null>(null);
   const partnerSearchAbortRef = useRef<AbortController | null>(null);
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
@@ -700,30 +693,6 @@ export default function ProfilePage() {
     }
   }, [setDecks, t, toast, user]);
 
-  const fetchProfiles = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, display_name, archidekt_username, archidekt_auto_import, archidekt_last_sync_at')
-        .order('username', { ascending: true });
-
-      if (error) throw error;
-      const loadedProfiles = data || [];
-      setProfiles(loadedProfiles);
-      setProfileDisplayNameDrafts(loadedProfiles.reduce((drafts: Record<string, string>, profile) => {
-        drafts[profile.id] = profile.display_name || '';
-        return drafts;
-      }, {}));
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Impossibile caricare i giocatori', en: 'Failed to load players' }),
-        variant: 'destructive',
-      });
-    }
-  }, [t, toast]);
-
   useEffect(() => {
     if (user) {
       fetchDecks();
@@ -747,35 +716,6 @@ export default function ProfilePage() {
   const getTargetProfileName = () => {
     if (!adminMode) return null;
     return getProfileDisplayName(profiles.find((profile) => profile.id === selectedTargetProfileId));
-  };
-
-  const saveProfileDisplayName = async (profileId: string, nextDisplayName: string): Promise<boolean> => {
-    const displayName = nextDisplayName.trim() || null;
-    setSavingProfileDisplayNameIds((ids) => [...ids, profileId]);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ display_name: displayName })
-        .eq('id', profileId);
-
-      if (error) throw error;
-
-      setProfiles((currentProfiles) => currentProfiles.map((profile) =>
-        profile.id === profileId ? { ...profile, display_name: displayName } : profile
-      ));
-      setProfileDisplayNameDrafts((drafts) => ({ ...drafts, [profileId]: displayName || '' }));
-      toast({ title: t({ it: 'Nick aggiornato', en: 'Nickname updated' }) });
-      return true;
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile salvare il nick', en: 'Failed to save nickname' })),
-        variant: 'destructive',
-      });
-      return false;
-    } finally {
-      setSavingProfileDisplayNameIds((ids) => ids.filter((id) => id !== profileId));
-    }
   };
 
   const account = useProfileAccountCredentials(user, currentProfile, saveProfileDisplayName);
@@ -2007,51 +1947,7 @@ export default function ProfilePage() {
           </ProfileAccountPanel>
         </MotionPanel>
 
-        {adminMode && (
-          <Card className="phyrexian-panel mb-8">
-            <CardHeader>
-              <CardTitle className="text-foreground">{t({ it: 'Nick giocatori', en: 'Player nicknames' })}</CardTitle>
-              <CardDescription>
-                {t({
-                  it: 'L\'admin puo modificare il nome visualizzato di ogni account senza cambiare lo username.',
-                  en: 'Admins can edit each account display name without changing usernames.',
-                })}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {profiles.map((profile) => {
-                  const savingProfile = savingProfileDisplayNameIds.includes(profile.id);
-                  const draft = profileDisplayNameDrafts[profile.id] || '';
-                  return (
-                    <div key={profile.id} className="grid gap-2 rounded-lg border border-border/70 bg-background/30 p-3 md:grid-cols-[minmax(0,220px)_1fr_auto] md:items-center">
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">{getProfileDisplayName(profile)}</p>
-                        <p className="text-xs text-muted-foreground truncate">@{profile.username}</p>
-                      </div>
-                      <Input
-                        value={draft}
-                        onChange={(event) => setProfileDisplayNameDrafts((drafts) => ({ ...drafts, [profile.id]: event.target.value }))}
-                        placeholder={profile.username}
-                        className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="border-border text-foreground"
-                        onClick={() => saveProfileDisplayName(profile.id, draft)}
-                        disabled={savingProfile || draft.trim() === (profile.display_name || '')}
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        {savingProfile ? t({ it: 'Salvo...', en: 'Saving...' }) : t({ it: 'Salva', en: 'Save' })}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {adminMode && <ProfileNicknameDirectory directory={directory} />}
 
         {!adminMode && !catalogError && (
           <section className="web-player-card mb-8 overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-950/45 via-background to-violet-950/35 p-4 shadow-[0_16px_42px_rgba(6,182,212,0.08)] sm:p-5" aria-label={t({ it: 'La tua scheda giocatore', en: 'Your player card' })}>

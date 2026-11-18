@@ -170,3 +170,45 @@ test('profile password change keeps the active session and revokes only temporar
   await expect(page).toHaveURL(/\/profile$/);
   await expect(page.getByRole('heading', { name: 'account_fixture', exact: true })).toBeVisible();
 });
+
+test('profile nickname directory keeps the target and draft through an error and retry', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  const userId = process.env.E2E_USER_ID!;
+  const targetId = '00000000-0000-4000-8000-000000000002';
+  let attempts = 0;
+  await page.route('**/rest/v1/rpc/is_admin', route => route.fulfill({ status: 200, json: true }));
+  await page.route('**/api/admin/profile-catalog*', route => route.fulfill({ status: 200, json: {
+    schemaVersion: 2, scope: 'global', userId: null, revision: 'e'.repeat(32), total: 0, next: null, decks: [],
+  } }));
+  await page.route('**/api/admin/profile-analytics', route => route.fulfill({ status: 200,
+    json: { ...profileCatalogFixture(), scope: 'global', userId: null, total: 0, decks: [] } }));
+  await page.route('**/rest/v1/profiles?*', route => {
+    if (route.request().method() === 'PATCH') {
+      expect(new URL(route.request().url()).searchParams.get('id')).toBe(`eq.${targetId}`);
+      expect(route.request().postDataJSON()).toEqual({ display_name: 'Target new' });
+      attempts += 1;
+      return attempts === 1 ? route.fulfill({ status: 503, json: { message: 'Synthetic nickname failure' } })
+        : route.fulfill({ status: 204 });
+    }
+    if (!new URL(route.request().url()).searchParams.get('select')?.includes('archidekt_last_sync_at')) return route.continue();
+    const profile = (id: string, username: string, display_name: string | null) => ({ id, username, display_name,
+      archidekt_username: null, archidekt_auto_import: false, archidekt_last_sync_at: null });
+    return route.fulfill({ status: 200, json: [profile(userId, 'account_fixture', null), profile(targetId, 'target_fixture', 'Target old')] });
+  });
+  await fixtureLogin(page);
+  await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Player nicknames', exact: true })).toBeVisible();
+  const input = page.getByPlaceholder('target_fixture', { exact: true });
+  const row = input.locator('xpath=..');
+  await input.fill('  Target new  ');
+  await row.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => attempts).toBe(1);
+  await expect(row.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  await expect(input).toHaveValue('  Target new  ');
+  await row.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(row.getByText('Target new', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('Target new');
+  await expect(row.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  expect(attempts).toBe(2);
+  await expect(page.getByRole('heading', { name: 'account_fixture', exact: true })).toBeVisible();
+});
