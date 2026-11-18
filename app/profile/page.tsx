@@ -861,7 +861,8 @@ export default function ProfilePage() {
     }
   };
 
-  useProfileArchidektAutosync(user, currentProfile, fetchDecks);
+  useProfileArchidektAutosync(user && !adminLoading ? user.id + ':' + adminMode : null,
+    user?.id ?? null, currentProfile, fetchDecks);
 
   const saveManualDeck = async () => {
     const targetProfileId = getTargetProfileId();

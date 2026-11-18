@@ -170,13 +170,16 @@ export async function resolveImportedDeckCommanderImageForSave(
   selectedCommander: ImportedCommanderOption,
   deck: ImportedDeckPreview,
   preserveImage?: string | null,
+  signal?: AbortSignal,
 ): Promise<string | null> {
+  signal?.throwIfAborted();
   let imageUrl = resolveImportedDeckCommanderImage(selectedCommander, deck, { preserveImage });
   if (!imageUrl) {
-    imageUrl = await lookupCommanderImageFromBrowser(selectedCommander.name);
-    await delay(SCRYFALL_REQUEST_GAP_MS);
+    imageUrl = await lookupCommanderImageFromBrowser(selectedCommander.name, signal);
+    await delay(SCRYFALL_REQUEST_GAP_MS, signal);
   }
 
+  signal?.throwIfAborted();
   return imageUrl;
 }
 

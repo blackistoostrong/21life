@@ -149,7 +149,25 @@ describe('profile public commander metadata adapter', () => {
     expect(await api.resolveImportedDeckCommanderImageForSave({ name: 'Fixture Commander', imageUrl: 'selected.jpg' }, preview())).toBe('selected.jpg');
     expect(io.scryfall).not.toHaveBeenCalled();
     expect(await api.resolveImportedDeckCommanderImageForSave({ name: 'Fixture Commander', imageUrl: null }, preview())).toContain('Fixture Commander.jpg');
-    expect(io.delay).toHaveBeenCalledWith(120);
+    expect(io.delay).toHaveBeenCalledWith(120, undefined);
+  });
+
+  it('cancels save-image preparation before any lookup even when an image is already available', async () => {
+    const controller = new AbortController(); controller.abort();
+    const api = await load();
+    await expect(api.resolveImportedDeckCommanderImageForSave({ name: 'Fixture Commander', imageUrl: 'selected.jpg' },
+      preview(), undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall).not.toHaveBeenCalled();
+  });
+
+  it('does not publish a repaired save image when its caller is cancelled during lookup', async () => {
+    const controller = new AbortController();
+    io.scryfall.mockImplementation(async () => { controller.abort(); return response(card()); });
+    const api = await load();
+    await expect(api.resolveImportedDeckCommanderImageForSave({ name: 'Fixture Commander', imageUrl: null },
+      preview(), undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall.mock.calls[0][1]).toBe(controller.signal);
+    expect(io.delay).toHaveBeenCalledWith(120, controller.signal);
   });
 
   it('combines commander colors and deduplicates options without dropping first-choice images', async () => {

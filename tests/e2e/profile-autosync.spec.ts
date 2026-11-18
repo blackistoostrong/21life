@@ -61,3 +61,80 @@ for (const outcome of ['success', 'unavailable'] as const) {
     expect(reads).toBe(1);
   });
 }
+
+for (const boundary of ['public catalog', 'commander metadata'] as const) {
+  test(`profile Archidekt autosync cancels ${boundary} before a late private write across two openings`, async ({ page }) => {
+    test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+    for (let opening = 0; opening < 2; opening++) {
+      await openPasswordFixture(page);
+      let pending = 0; let cancelled = 0; let writes = 0; let release!: () => void;
+      const wait = new Promise<void>(resolve => { release = resolve; });
+      const name = `Autosync ${boundary} ${opening}`;
+      const image = 'https://cards.scryfall.io/art_crop/autosync-cancel.jpg';
+      const isBoundary = (url: string) => boundary === 'public catalog' ? url.includes('/api/archidekt-user-decks')
+        : url.startsWith('https://api.scryfall.com/cards/named?');
+      const failed = (request: import('@playwright/test').Request) => { if (isBoundary(request.url())) cancelled += 1; };
+      page.on('requestfailed', failed);
+      await page.route('https://api.scryfall.com/cards/named?*', async route => {
+        if (boundary === 'commander metadata') { pending += 1; await wait; }
+        await route.fulfill({ status: 200, json: { object: 'card', name, cmc: 4 } }).catch(() => {});
+      });
+      await page.route('**/api/archidekt-user-decks', async route => {
+        if (boundary === 'public catalog') { pending += 1; await wait; }
+        await route.fulfill({ status: 200, json: { decks: [{ name: 'Cancel auto fixture', commander: name,
+          commanderImageUrl: image, commanderOptions: [{ name, imageUrl: image, colorIdentity: ['U'] }],
+          colorIdentity: ['U'], sourceUrl: 'https://archidekt.com/decks/333333', sourceType: 'archidekt' }] } }).catch(() => {});
+      });
+      await page.route('**/rest/v1/rpc/sync_archidekt_decks', route => { writes += 1; return route.fulfill({ status: 200, json: [] }); });
+      await page.route('**/rest/v1/profiles?*', route => route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 204 }) : route.fallback());
+      try {
+        await page.getByPlaceholder('Archidekt username', { exact: true }).fill('auto_owner');
+        await page.getByRole('checkbox', { name: /Automatically import new decks/ }).check();
+        await page.getByRole('button', { name: 'Save Archidekt', exact: true }).click();
+        await expect.poll(() => pending).toBe(1);
+        await page.getByRole('button', { name: 'Back to home', exact: true }).click();
+        await expect(page).toHaveURL(/\/dashboard$/);
+        await expect.poll(() => cancelled).toBe(1);
+        release();
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        expect(writes).toBe(0);
+        await expect(page.getByText('Decks imported!', { exact: true })).toHaveCount(0);
+      } finally { release(); page.off('requestfailed', failed); }
+    }
+  });
+}
+
+test('profile Archidekt autosync cancels on opt-out and does not restart within the same opening', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  await openPasswordFixture(page);
+  let reads = 0; let cancelled = 0; let writes = 0; let settingsWrites = 0; let release!: () => void;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  page.on('requestfailed', request => { if (request.url().includes('/api/archidekt-user-decks')) cancelled += 1; });
+  await page.route('**/api/archidekt-user-decks', async route => {
+    reads += 1; await wait;
+    await route.fulfill({ status: 200, json: { decks: [] } }).catch(() => {});
+  });
+  await page.route('**/rest/v1/rpc/sync_archidekt_decks', route => { writes += 1; return route.fulfill({ status: 200, json: [] }); });
+  await page.route('**/rest/v1/profiles?*', route => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    settingsWrites += 1; return route.fulfill({ status: 204 });
+  });
+  try {
+    const automatic = page.getByRole('checkbox', { name: /Automatically import new decks/ });
+    await page.getByPlaceholder('Archidekt username', { exact: true }).fill('auto_owner');
+    await automatic.check();
+    await page.getByRole('button', { name: 'Save Archidekt', exact: true }).click();
+    await expect.poll(() => reads).toBe(1);
+    await automatic.uncheck();
+    await page.getByRole('button', { name: 'Save Archidekt', exact: true }).click();
+    await expect.poll(() => settingsWrites).toBe(2);
+    await expect.poll(() => cancelled).toBe(1);
+    release();
+    await automatic.check();
+    await page.getByRole('button', { name: 'Save Archidekt', exact: true }).click();
+    await expect.poll(() => settingsWrites).toBe(3);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(reads).toBe(1); expect(writes).toBe(0);
+  } finally { release(); }
+});
