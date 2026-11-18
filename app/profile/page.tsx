@@ -175,8 +175,9 @@ export default function ProfilePage() {
   const {
     searchQuery, setSearchQuery, searchResults, setSearchResults, searching,
     partnerSearchQuery, setPartnerSearchQuery, partnerSearchResults, setPartnerSearchResults,
-    searchingPartner, setSearchingPartner,
-  } = useProfileCommanderSearch(showAddModal, selectedCommander, selectedPartnerCommander);
+    searchingPartner,
+  } = useProfileCommanderSearch(user && !adminLoading ? user.id + ':' + adminMode : null,
+    showAddModal && addMode === 'manual', selectedCommander, selectedPartnerCommander);
   const [manualCommanderArts, setManualCommanderArts] = useState<CommanderArtOption[]>([]);
   const [loadingManualCommanderArts, setLoadingManualCommanderArts] = useState(false);
   const [customDeckName, setCustomDeckName] = useState('');
@@ -1284,7 +1285,6 @@ export default function ProfilePage() {
     setPartnerSearchQuery('');
     setPartnerSearchResults([]);
     setSelectedPartnerCommander(null);
-    setSearchingPartner(false);
     setManualCommanderArts([]);
     setLoadingManualCommanderArts(false);
     setCustomDeckName('');

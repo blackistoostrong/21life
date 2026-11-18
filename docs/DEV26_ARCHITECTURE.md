@@ -298,3 +298,12 @@ Commander94b6f6d5 verified: quality751+3skip/67script and ratchet141 PASS with a
 `useProfileCommanderSearch` owns six query/results/busy states, two request refs, two search callbacks and three effects previously owned by the route. The thirteen statements are copied unchanged; search timing400ms, partner filtering, query/result clearing and request behavior are preserved. Selection, art loading, imported previews and persistence remain outside this owner. The extracted hook intentionally preserves existing incomplete cancellation on closing, short queries and navigation, to fix in a distinct commit with reproduced browser regressions. The hook is109nonempty lines; profile2484/42states/5effects (previous2570/48/8). Before browser evidence on94b6f6d5:30/30 including manual search/printing, prior profile and cancellation regressions. Full quality/build/after browser pending.
 
 Search ownera145f560 verified: quality751+3skip/67script/ratchet141, clean56route build/3.19MiB budget, browserdesktop/mobile30/30 after extraction with verified fixture cleanup PASS. Existing behavior remains unchanged. Proceed to explicit scoped cancellation fixes rather than considering point6 complete.
+
+
+## Scoped commander search cancellation (2026-11-18)
+
+Three browser regressions were reproduced against a145f560: clearing the primary query, closing the modal and navigating back each left the public Scryfall request pending (expected one cancellation, observed zero). Disposable Dev fixture cleanup passed for each isolated run.
+
+The search owner now composes two independent channels. Each owns one state object, context lease, debounce timer and request controller. Context includes account/admin scope, manual-modal availability and partner constraints. A context change masks previous values immediately and layout cleanup aborts owned requests. Input edits abort immediately, including short/empty queries; effect cleanup cancels the400ms timer and request. The15s request deadline includes authenticated fallback/body parsing. Guarded results/busy updates and feedback cannot escape an old lease, including A→B→A. Primary/partner queries remain independent and primary-name exclusion is preserved. Parent reset no longer writes a channel's busy flag.
+
+This fixes search ownership only. Selected commanders, target account, art/import/editor drafts and real account/role transition certification remain open. Metadata outer cache behavior is unchanged. Quality751+3skip/67script/ratchet141 PASS; final build and green browser evidence pending.

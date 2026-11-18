@@ -2,6 +2,10 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [ ] Search lifecycle prebuild18-11: treROSSI reali su a145f560 (queryclear/close/back, richiesta noncancellata), cleanupDev PASS; baselinePartner primaria+secondaria+stampa/nomecomposito2/2 PASS. Qualityweb751+3skip/67script/ratchet141 PASS, hook95righe con2canali ciascuno1state/1layout/1effect, pagina2484/42state/5effect. Testpartner rafforzato: esclusioneprimario verificata dopoarrivorisultati. Gate merge/prebuild riletti/invariati; solo cleanbuildDev9.3.0 e browser36 attesi. Nessun DB/native/dispositivo/merge/deploy, securitygate e resto piano aperti.
+
+- [ ] Search lifecycle18-11: ROSSI su a145f560 perquerysvuotata eclosemodale: requestfailed0 invece1, cleanupDev PASS (profile-search-{clear,close}-red-e2e). Terza prova back in corso. Implementati2canali con owner account/admin/modale/partner, abort immediato su input, timer400ms posseduto e cancellato, deadline15s anchefallback, no callback/toast tardivo, campi mascherati su scope diverso. Rimosso resetbusy manuale: posseduto dai canali. Prima quality/build/browser verdi richiesti; non chiude editor/import o cambioaccount reale.
+
 - [x] Search ownera145f560 CHIUSO meccanico: qualityweb751+3skip/67script/ratchet141 PASS; cleanbuild56route/budget3.19/18MiB PASS. Browserdesktop/mobile30/30 DOPO PASS e cleanupDev PASS; ricerca/selezione/stampa, account/Auth/nickname/catalogo/metadati/Archidekt/archive invariati. Hook109/6state/3effect/2ref, profilo2484/42state/5effect. Proseguire senza pausa con cancellazioni su querycorta/close/unmount/account e timer; niente DB/native/dispositivo/merge/deploy, piano/punto6/advisory ancora aperti.
 
 - [ ] Search owner prebuild18-11: qualityweb751+3skip/67script/ratchet141 PASS. Ripristinato setterbusy partner usato dal reset, nessuna modifica comportamento. Due callback AST identiche e13statement spostati; profilo2484/42state/5effect, hook109/6state/3effect/2ref. Gate merge/prebuild riletti/invariati; cleanbuild locale candidatoDev9.3.0 e browser30 dopo; advisory resta gatefinale aperto, nessun merge/deploy/dispositivo.

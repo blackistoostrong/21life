@@ -312,10 +312,12 @@ test('profile commander search preserves manual selection and printing preview',
     const params = new URL(route.request().url()).searchParams;
     if (params.get('unique') === 'art') artRequests += 1;
     else searches.push(params.get('q') || '');
-    return route.fulfill({ status: 200, json: { data: [{ id: 'commander-fixture', name,
-      type_line: 'Legendary Creature — Wizard', color_identity: ['U'], oracle_text: '', keywords: [],
+    const card = (cardName: string) => ({ id: cardName, name: cardName,
+      type_line: 'Legendary Creature — Wizard', color_identity: ['U'], oracle_text: 'Partner', keywords: ['Partner'],
       image_uris: { art_crop: `https://cards.scryfall.io/art_crop/fixture-${params.get('unique') === 'art' ? 'printing' : 'commander'}.jpg` },
-      set_name: 'Fixture Set', collector_number: '7', released_at: '2026-01-01' }] } });
+      set_name: 'Fixture Set', collector_number: '7', released_at: '2026-01-01' });
+    const cards = params.get('q')?.includes('o:partner') ? [card(name), card('Fixture Partner')] : [card(name)];
+    return route.fulfill({ status: 200, json: { data: cards } });
   });
   await page.route('https://cards.scryfall.io/**', route => route.fulfill({ status: 200,
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="blue"/></svg>' }));
@@ -332,9 +334,56 @@ test('profile commander search preserves manual selection and printing preview',
   await expect(page.getByText('Fixture Set', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Fixture Set/ }).click();
   await expect(page.getByPlaceholder(name, { exact: true })).toHaveValue(name);
-  expect(searches).toHaveLength(1);
+  await page.getByPlaceholder('Search Partner...', { exact: true }).fill('Fixture');
+  const partnerResult = page.getByRole('button', { name: /Fixture Partner.*Legendary Creature/ });
+  await expect(partnerResult).toBeVisible();
+  await expect(page.getByRole('button', { name: /Fixture Commander.*Legendary Creature/ })).toHaveCount(0);
+  await partnerResult.click();
+  await expect(page.getByPlaceholder(name, { exact: true })).toHaveValue('Fixture Commander // Fixture Partner');
+  expect(searches).toHaveLength(2);
+  expect(searches[1]).toContain('o:partner');
   expect(searches[0]).toContain('is:commander');
   expect(searches[0]).toContain('Fixture');
   expect(artRequests).toBe(1);
   expect(writes).toBe(0);
 });
+
+for (const action of ['clear', 'close', 'leave'] as const) {
+  test(`profile commander lifecycle cancels pending search on ${action} across two openings`, async ({ page }) => {
+    test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+    let pending = 0; let cancelled = 0;
+    const releases = new Set<() => void>();
+    page.on('requestfailed', request => {
+      if (request.url().startsWith('https://api.scryfall.com/cards/search?')) cancelled += 1;
+    });
+    await page.route('https://api.scryfall.com/cards/search?*', async route => {
+      pending += 1;
+      await new Promise<void>(resolve => releases.add(resolve));
+      await route.fulfill({ status: 200, json: { data: [{ id: 'late', name: 'Late commander', color_identity: ['U'] }] } })
+        .catch(() => { /* Expected when a cancelled route has closed. */ });
+    });
+    await openPasswordFixture(page);
+    try {
+      for (let round = 1; round <= 2; round += 1) {
+        if (round > 1 && action === 'leave') {
+          await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
+        }
+        await page.getByRole('button', { name: 'Add Deck', exact: true }).click();
+        await page.getByRole('button', { name: 'Add manually Search for a commander', exact: true }).click();
+        const query = page.getByPlaceholder('Search commander by name...', { exact: true });
+        await query.fill(`Pending ${round}`);
+        await expect.poll(() => pending).toBe(round);
+        if (action === 'clear') await query.fill('');
+        else if (action === 'close') await page.keyboard.press('Escape');
+        else {
+          await page.goBack();
+          await expect(page).toHaveURL(/\/dashboard$/);
+        }
+        await expect.poll(() => cancelled).toBe(round);
+        releases.forEach(release => release()); releases.clear();
+        await expect(page.getByRole('button', { name: /Late commander/ })).toHaveCount(0);
+        if (action === 'clear') await page.keyboard.press('Escape');
+      }
+    } finally { releases.forEach(release => release()); }
+  });
+}
