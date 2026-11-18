@@ -26,6 +26,7 @@ export const featureOwners = {
     'components/live-game/web-sync-badge.tsx',
     'components/live-game/web-journal-warning.tsx',
     'components/live-game/web-tracker-wizard.tsx',
+    'components/live-game/web-completed-game.tsx',
     'expo/components/table/table-guests-section.tsx',
     'expo/components/table/arena-analytics-status.tsx',
   ],

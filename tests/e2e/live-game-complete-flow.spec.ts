@@ -186,6 +186,15 @@ test('wizard → damage → Last Standing → recap', async ({ page, browser }) 
   await expect(page.getByText(/Game saved|Partita salvata/).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('button', { name: /Share|Condividi/ })).toBeVisible();
   if (checkDisplay) await expect.poll(() => page.evaluate(() => window.trackerDisplayMonitor?.active)).toBe(0);
+  await page.getByRole('button', { name: /New game · same decks|Nuova partita · stessi mazzi/ }).click();
+  await expect(page.getByText('Use the same decks?', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByText('Use the same decks?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Game saved|Partita salvata/).first()).toBeVisible();
+  await page.getByRole('button', { name: /Reselect players and decks|Riseleziona giocatori e mazzi/ }).click();
+  await page.getByRole('button', { name: /Step 4|Passaggio 4/ }).click();
+  await expect(page.getByRole('button', { name: /^(Seat|Posto) 1/ })).toBeVisible();
+  await expect(page.getByTestId('live-start')).toBeEnabled();
 });
 
 for (const { outcome, resume } of [
