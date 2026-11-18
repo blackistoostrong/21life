@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Autosync e9634ae3 CHIUSO meccanico18-11:3ASTstatement identici, qualityweb763+3skip/71script/142floor PASS; cleanbuild56route/budget3.20/18MiB PASS, browserDOPO16/16 desktop/mobile PASS(4autosync+10settings+2publicUI, cleanupDevVERIFICATO). Profilo2115/22state/3effect, owner75/0state/1effect. BaselineautosyncPRIMA4/4PASS; nessun cambio semantico/SQL/native/dispositivo/merge/deploy. Continuare subito con RED reali publicread/CMCcancel suBack dueaperture e opt-out; scopeaccount/onecheckperapertura/deadline/abortprimaWRITE eackguardato, poi salvataggi/punto6/restopiano.
+
 - [ ] Autosync prebuild18-11: qualityweb763+3skip/71script/142floor PASS,3statementAST identici, baseline4/4PASS e typecheck iniziale corretto; profilo2115/22state/3effect eowner75/0state/1effect. Gate merge/prebuild riletti/invariati e origin/Dev aggiornato senza commitmancanti; cleanbuildDev9.3.0 poi14browserautosync/settings perconfrontomeccanico. Nessun SQL/native/dispositivo/merge/deploy; fixlifecycle separato e restopiano/securitygate aperti.
 
 - [ ] Autosync owner18-11: baseline4/4 desktop/mobile su4413af16 PASS: opt-in, filtro2candidati validi/5invalidi, payload/RPCunica ownID+CMC4+art/bracket, reloadcatalogo, erroreHTTPsilenzioso/onecheckperapertura, writeintercettate ecleanupDevPASS. Estratti ref/callback/effect con3ASTcorpi identici, hook75righe, profilo2115; typecheckha rilevato hookprima di fetchDecks, corretto riposizionandolo alposto delvecchioeffect. Nessun cambio comportamento nelcommitmeccanico; cancel/opt-out/lateRPC/accountscope da correggere dopo quality/build/browserDOPO. origin/Dev zero commitmancanti; nessun DB/native/dispositivo/merge/deploy.
