@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Editorcb5956dd CHIUSO meccanico: qualityweb756+3skip/67script/ratchet141 PASS; cleanbuild56route/budget3.20/18MiB PASS. Browserdesktop/mobile52/52 DOPO PASS, baselineeditor2/2 conPATCHintercettata pererrore/bozzaart/retry/idtarget/payloadCMCcolore/successo/cardimage; precedenti50verdi ecleanupDev PASS.3corpiAST invariati, hook140/6state/0effect, pagina2265/25state/5effect. Proseguire senza stop con artcancel suClose, abortCMC primaSDKwrite dopoBack, singleflight/snapshotaccount e CMCopzionale che non cancelli valore noto in art-only. Warningprefill giàesistente aperto; piano/punto6/securitygate aperti. Nessun DB/native/dispositivo/merge/deploy.
+
 - [ ] Editor prebuild18-11: qualityweb756+3skip/67script/ratchet141 PASS;3corpiAST identici, baselinebrowser2/2 PASS, tipoimportato nonusato rimosso e lintmirato0errori. Warningprefill setArchidektUsername giàpresente nel checkpointimport precedente, da risolvere nel relativo owner senza mescolarecommitmeccanico. Gate merge/prebuild riletti/invariati; cleanbuildlocaleDev9.3.0 poi browser52, nessun DB/native/dispositivo/merge/deploy. Profilo2265/25state/5effect, editor140/6/0.
 
 - [ ] Editor meccanico18-11: baseline2/2 desktop/mobile PASS su490daf83 perPATCHerrore/bozzapreservata/retry/idtarget/payloadCMCcolore/successocardimage, writeintercettate/cleanupDev PASS. FixtureCMCcorretta al vero endpointnamedScryfall browser, nonAPIbatch. Estratti9statement(6state+3callback), hook140/6state/0effect; pagina2265/25state/5effect. Typecheck/confiniPASS, quality in corso; corpiAST e build/browserDOPO richiesti, fixlifecycle distinto.
