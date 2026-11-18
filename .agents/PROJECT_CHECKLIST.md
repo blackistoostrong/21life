@@ -2,6 +2,8 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+- [x] Import owners7664b224 CHIUSI meccanici: qualityweb751+3skip/67script/ratchet141 PASS; cleanbuild56route/budget3.20/18MiB PASS. Browserdesktop/mobile40/40 DOPO PASS, baselineURL2/2+Archidekt2/2, retry/draft/anteprime/sourcevalide/NoneAll/zero write; precedenti account/Auth/search/catalogo/metadati/archive verdi, cleanupDev PASS. AST4corpi invariati, profilo2388/31state/5effect; URL74/6state, username64/5, arts22/0. Proseguire cancellazioni import/art e singleflight/context, propagare signal alla riparazioneimmagini e affidare dedup HTTP al transport condiviso, batchnormalizzazione max3 tramiteutility esistente. Poi editor/persistenza/bulk e resto piano. Nessun DB/native/dispositivo/merge/deploy, advisoryfinale aperta.
+
 - [ ] Import owner prebuild18-11:4corpiAST invariati, pagina2388/31state/5effect; URL74/6state, bulk64/5state, art22/0. Qualityweb751+3skip/67script/ratchet141 PASS; baselineURL2/2+bulk2/2 PASS concleanup. origin/Dev aggiornato senza commitmancanti; gate merge/prebuild riletti/invariati. CleanbuildlocaleDev9.3.0 e browser40 attesi, advisoryfinale aperta; niente native/DB/dispositivo/merge/deploy. Poi fix lifecycle import/art.
 
 - [ ] Import owner18-11: seconda baselineArchidektusername2/2 desktop/mobile PASS su767f7a05: errore/usernameconservato/retry, solo preview con sourcevalida, None/All e SaveDecks enabled corretti, zero write e cleanupDev PASS. Estratti5state+callbackbulk separati dai6state/callbackURL e loaderart; totale11stati trasferiti in owner piccoli. Nessun salvataggio mazzi spostato, cancellazione/scoping da correggere dopo commitmeccanico.
