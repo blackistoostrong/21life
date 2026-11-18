@@ -21,6 +21,80 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('profile public commander metadata adapter', () => {
+  it('retries the same search after an upstream outage instead of caching an empty failure', async () => {
+    io.scryfall.mockResolvedValueOnce(response({}, 503)).mockResolvedValueOnce(response({ data: [card()] }));
+    io.authenticated.mockResolvedValue(response({}, 503));
+    const api = await load();
+    expect(await api.fetchCommanderSearchResults('Retry')).toEqual([]);
+    expect(await api.fetchCommanderSearchResults('Retry')).toHaveLength(1);
+    expect(io.scryfall).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds normalized search entries and refreshes successful metadata after five minutes', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(1_000);
+    io.scryfall.mockImplementation(async () => response({ data: [card()] }));
+    const api = await load();
+    const first = await api.fetchCommanderSearchResults('First');
+    for (let index = 0; index < 200; index++) await api.fetchCommanderSearchResults(`Query ${index}`);
+    expect(await api.fetchCommanderSearchResults('First')).not.toBe(first);
+    const recent = await api.fetchCommanderSearchResults('Query 199');
+    expect(await api.fetchCommanderSearchResults('Query 199')).toBe(recent);
+    vi.setSystemTime(301_001);
+    expect(await api.fetchCommanderSearchResults('Query 199')).not.toBe(recent);
+  });
+
+  it('honors cancellation even when search metadata is cached', async () => {
+    io.scryfall.mockResolvedValue(response({ data: [card()] }));
+    const api = await load();
+    await api.fetchCommanderSearchResults('Cached');
+    const controller = new AbortController(); controller.abort();
+    await expect(api.fetchCommanderSearchResults('Cached', null, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.scryfall).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds hydrated art entries and discards expired or malformed storage entries', async () => {
+    const options = [{ id: 'stored', name: 'Stored', imageUrl: 'stored.jpg', setName: '', collectorNumber: '', releasedAt: null }];
+    const stored = Object.fromEntries(Array.from({ length: 105 }, (_, index) => [`artist ${index}`, { expiresAt: Date.now() + 60000, options }]));
+    const setItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { getItem: () => JSON.stringify({ ...stored, expired: { expiresAt: 0, options }, invalid: null }), setItem } });
+    io.scryfall.mockResolvedValue(response({ data: [card('Artist 0')] }));
+    const api = await load();
+    expect(await api.fetchScryfallArtOptionsFromBrowser('Artist 104')).toEqual(options);
+    await api.fetchScryfallArtOptionsFromBrowser('Artist 0');
+    expect(io.scryfall).toHaveBeenCalledTimes(1);
+    const persisted = JSON.parse(setItem.mock.calls.at(-1)![1]);
+    expect(Object.keys(persisted).length).toBeLessThanOrEqual(100);
+    expect(persisted.expired).toBeUndefined(); expect(persisted.invalid).toBeUndefined();
+  });
+
+  it('bounds art storage size without truncating the returned art or retaining an oversized memory entry', async () => {
+    const setItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { getItem: () => null, setItem } });
+    const image = 'x'.repeat(600000);
+    io.scryfall.mockImplementation(async () => response({ data: [{ ...card('Huge'), image_uris: { art_crop: image } }] }));
+    const api = await load();
+    expect((await api.fetchScryfallArtOptionsFromBrowser('Huge'))[0].imageUrl).toBe(image);
+    expect(setItem.mock.calls.at(-1)![1].length).toBeLessThanOrEqual(512000);
+    await api.fetchScryfallArtOptionsFromBrowser('Huge');
+    expect(io.scryfall).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores oversized storage before parsing and prunes expired memory art before persistence', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(1_000);
+    const oversized = ' '.repeat(512001);
+    const parse = vi.spyOn(JSON, 'parse'); const setItem = vi.fn();
+    vi.stubGlobal('window', { localStorage: { getItem: () => oversized, setItem } });
+    io.scryfall.mockImplementation(async () => response({ data: [card()] }));
+    try {
+      const api = await load();
+      await api.fetchScryfallArtOptionsFromBrowser('Earlier');
+      expect(parse.mock.calls.some(([value]) => value === oversized)).toBe(false);
+      vi.setSystemTime(31 * 24 * 60 * 60 * 1000);
+      await api.fetchScryfallArtOptionsFromBrowser('Later');
+      expect(Object.keys(JSON.parse(setItem.mock.calls.at(-1)![1]))).toEqual(['later']);
+    } finally { parse.mockRestore(); }
+  });
+
   it('maps public card fields, caps results and caches normalized searches separately by partner mode', async () => {
     io.scryfall.mockImplementation(async () => response({ data: Array.from({ length: 25 }, (_, i) => card('Card ' + i)) }));
     const api = await load();

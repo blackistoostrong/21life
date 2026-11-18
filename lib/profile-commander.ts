@@ -77,25 +77,36 @@ function expandDeckCommanderNames(commander: string) {
 }
 
 export const SCRYFALL_REQUEST_GAP_MS = 120;
-const commanderSearchCache = new Map<string, CommanderSearchResult[]>();
+const COMMANDER_SEARCH_CACHE_MS = 5 * 60 * 1_000;
+const COMMANDER_SEARCH_CACHE_LIMIT = 200;
+const commanderSearchCache = new Map<string, { expiresAt: number; results: CommanderSearchResult[] }>();
 const COMMANDER_ART_CACHE_MS = 30 * 24 * 60 * 60 * 1_000;
 const COMMANDER_ART_STORAGE_KEY = 'phyrexian-arena:commander-art-options:v7';
+const COMMANDER_ART_CACHE_LIMIT = 100;
+const COMMANDER_ART_STORAGE_CHARS = 512000;
 const commanderArtCache = new Map<string, { expiresAt: number; options: CommanderArtOption[] }>();
 let commanderArtCacheHydrated = false;
+
+function trimCommanderArtCache() {
+  const now = Date.now();
+  commanderArtCache.forEach((entry, key) => { if (entry.expiresAt <= now) commanderArtCache.delete(key); });
+  while (commanderArtCache.size > COMMANDER_ART_CACHE_LIMIT) commanderArtCache.delete(commanderArtCache.keys().next().value!);
+}
 
 function hydrateCommanderArtCache() {
   if (commanderArtCacheHydrated) return;
   commanderArtCacheHydrated = true;
   try {
     const raw = window.localStorage.getItem(COMMANDER_ART_STORAGE_KEY);
-    if (!raw) return;
+    if (!raw || raw.length > COMMANDER_ART_STORAGE_CHARS) return;
     const stored = JSON.parse(raw) as Record<string, { expiresAt: number; options: CommanderArtOption[] }>;
     const now = Date.now();
     Object.entries(stored).forEach(([key, entry]) => {
-      if (entry.expiresAt > now && Array.isArray(entry.options)) {
+      if (entry && Number.isFinite(entry.expiresAt) && entry.expiresAt > now && Array.isArray(entry.options)) {
         commanderArtCache.set(key, entry);
       }
     });
+    trimCommanderArtCache();
   } catch {
     // Storage may be unavailable; memory cache still works.
   }
@@ -106,10 +117,16 @@ function rememberCommanderArts(key: string, options: CommanderArtOption[]) {
     expiresAt: Date.now() + COMMANDER_ART_CACHE_MS,
     options,
   });
+  trimCommanderArtCache();
   try {
+    let serialized = JSON.stringify(Object.fromEntries(commanderArtCache));
+    while (serialized.length > COMMANDER_ART_STORAGE_CHARS && commanderArtCache.size) {
+      commanderArtCache.delete(commanderArtCache.keys().next().value!);
+      serialized = JSON.stringify(Object.fromEntries(commanderArtCache));
+    }
     window.localStorage.setItem(
       COMMANDER_ART_STORAGE_KEY,
-      JSON.stringify(Object.fromEntries(commanderArtCache)),
+      serialized,
     );
   } catch {
     // Storage quota/private mode: memory cache still works.
@@ -317,9 +334,11 @@ export async function fetchCommanderSearchResults(
   partnerMode: ManualPartnerMode | null = null,
   signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   const cacheKey = getCommanderSearchCacheKey(query, partnerMode);
   const cached = commanderSearchCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.results;
+  commanderSearchCache.delete(cacheKey);
 
   let results: CommanderSearchResult[] = [];
 
@@ -340,7 +359,12 @@ export async function fetchCommanderSearchResults(
     }
   }
 
-  commanderSearchCache.set(cacheKey, results);
+  signal?.throwIfAborted();
+  // Empty/failed fallback responses must remain retryable; only cache success.
+  if (results.length) {
+    if (commanderSearchCache.size >= COMMANDER_SEARCH_CACHE_LIMIT) commanderSearchCache.delete(commanderSearchCache.keys().next().value!);
+    commanderSearchCache.set(cacheKey, { expiresAt: Date.now() + COMMANDER_SEARCH_CACHE_MS, results });
+  }
   return results;
 }
 
