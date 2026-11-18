@@ -1,3 +1,4 @@
+import { fetchScryfall } from '@/packages/data/scryfall-transport';
 import { isScryfallError, resolveCommanderCmcFromCard } from '@/lib/commander-cmc';
 import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
 import { unstable_cache } from 'next/cache';
@@ -56,13 +57,6 @@ export interface CommanderArtOption {
   releasedAt: string | null;
 }
 
-const SCRYFALL_HEADERS = {
-  Accept: 'application/json',
-  'User-Agent': '21Life/9.0 (https://app.phyrexianarena.dpdns.org)',
-};
-
-const SCRYFALL_MAX_RETRIES = 2;
-const SCRYFALL_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const ART_OPTIONS_CACHE_MS = 365 * 24 * 60 * 60 * 1_000;
 const ART_OPTIONS_EMPTY_CACHE_MS = 60 * 60 * 1_000;
 const ART_OPTIONS_CACHE_LIMIT = 500;
@@ -116,23 +110,10 @@ function sanitizeCommanderQuery(query: string): string {
 }
 
 async function fetchScryfallJson<T>(url: string): Promise<T | null> {
-  for (let attempt = 0; attempt <= SCRYFALL_MAX_RETRIES; attempt += 1) {
-    const response = await fetch(url, { headers: SCRYFALL_HEADERS });
-    if (response.status === 404) return null;
-    if (response.ok) return response.json() as Promise<T>;
-
-    if (!SCRYFALL_RETRYABLE_STATUSES.has(response.status) || attempt === SCRYFALL_MAX_RETRIES) {
-      throw new Error(`Scryfall request failed (${response.status})`);
-    }
-
-    const retryAfterSeconds = Number(response.headers.get('retry-after'));
-    const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-      ? retryAfterSeconds * 1_000
-      : 250 * (2 ** attempt);
-    await new Promise((resolve) => setTimeout(resolve, retryDelay));
-  }
-
-  throw new Error('Scryfall request retry loop exhausted');
+  const response = await fetchScryfall(url);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Scryfall request failed (${response.status})`);
+  return response.json() as Promise<T>;
 }
 
 function isResolvedScryfallCard(card: ScryfallCard | null): card is ScryfallCard {

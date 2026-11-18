@@ -72,4 +72,14 @@ test('profile v2 reports backend errors and retries with neutral draws',async({p
   await expect(card.getByText('50%',{exact:true})).toBeVisible();
   await expect(page.getByRole('alert').filter({hasText:'Statistics unavailable.'})).toHaveCount(0);
   expect(legacy).toEqual([]);
+  await page.getByRole('button',{name:'Details',exact:true}).click();
+  const chart=page.getByRole('img',{name:'Wins 1, draws 1, losses 1. Win rate 50%.',exact:true});
+  await expect(chart).toBeVisible();
+  await expect(chart.locator('.recharts-pie-sector')).toHaveCount(3);
+  const sectors=await chart.locator('.recharts-sector').evaluateAll(elements=>elements.map(element=>({
+    fill:element.getAttribute('fill'),path:element.getAttribute('d'),
+  })));
+  expect(sectors.map(sector=>sector.fill)).toEqual(['#34d399','#22d3ee','#64748b']);
+  expect(sectors.every(sector=>sector.path&&!/NaN|Infinity/.test(sector.path))).toBe(true);
+  await chart.screenshot({path:`artifacts/dev26/recharts-profile-${test.info().project.name}.png`});
 });

@@ -1,5 +1,7 @@
 'use client';
 
+import { fetchScryfall } from '@/packages/data/scryfall-transport';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
@@ -330,10 +332,7 @@ async function lookupCommanderFromBrowser(name: string, signal?: AbortSignal): P
   const queryText = sanitizeScryfallQuery(name);
   if (!queryText) return null;
 
-  const request = (path: string) => fetch(`https://api.scryfall.com/cards/named?${path}=${encodeURIComponent(queryText)}`, {
-    headers: { Accept: 'application/json' },
-    signal,
-  });
+  const request = (path: string) => fetchScryfall(`https://api.scryfall.com/cards/named?${path}=${encodeURIComponent(queryText)}`, signal);
 
   const exactResponse = await request('exact');
   if (exactResponse.ok) {
@@ -447,9 +446,9 @@ async function fetchScryfallCommandersFromBrowser(
   if (queryText.length < 2) return [];
 
   const baseQuery = scryfallPartnerModeQuery(partnerMode);
-  const response = await fetch(
+  const response = await fetchScryfall(
     `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`${baseQuery} ${buildCommanderNameSearchClause(queryText)}`)}&order=edhrec&unique=cards`,
-    { headers: { Accept: 'application/json' }, signal }
+    signal
   );
 
   if (response.status === 404) return [];
@@ -473,7 +472,7 @@ async function fetchCommanderSearchResults(
   try {
     results = await fetchScryfallCommandersFromBrowser(query, partnerMode, signal);
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     results = [];
   }
 
@@ -503,9 +502,8 @@ async function fetchScryfallArtOptionsFromBrowser(commanderName: string) {
   if (inflight) return inflight;
 
   const request = (async () => {
-    const response = await fetch(
-      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`!"${queryText}"`)}&unique=art&order=released`,
-      { headers: { Accept: 'application/json' } }
+    const response = await fetchScryfall(
+      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`!"${queryText}"`)}&unique=art&order=released`
     );
 
     if (response.status === 404) return [];
@@ -1541,7 +1539,7 @@ export default function ProfilePage() {
       if (controller.signal.aborted) return;
       setSearchResults(results);
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
       toast({
         title: t({ it: 'Errore', en: 'Error' }),
         description: t({ it: 'Ricerca comandanti non riuscita', en: 'Failed to search commanders' }),
@@ -1570,7 +1568,7 @@ export default function ProfilePage() {
       if (controller.signal.aborted) return;
       setPartnerSearchResults(results.filter((result) => result.name.toLowerCase() !== primaryCommander.name.toLowerCase()));
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
       toast({
         title: t({ it: 'Errore', en: 'Error' }),
         description: t({ it: 'Ricerca secondo comandante non riuscita', en: 'Failed to search second commander' }),

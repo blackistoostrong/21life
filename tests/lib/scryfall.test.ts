@@ -4,6 +4,13 @@ vi.mock('next/cache', () => ({
   unstable_cache: <T extends (...args: never[]) => unknown>(fn: T) => fn,
 }));
 
+// Adapter mapping tests do not wait for provider pacing; the transport suite
+// verifies real queue/cache/retry behavior separately with a controlled clock.
+vi.mock('@/packages/data/scryfall-transport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/packages/data/scryfall-transport')>();
+  return { ...actual, fetchScryfall: actual.createScryfallTransport({ intervalMs: 0, cacheLimit: 0 }) };
+});
+
 import {
   extractScryfallImage,
   fetchCardByName,

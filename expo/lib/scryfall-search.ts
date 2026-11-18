@@ -1,3 +1,4 @@
+import { fetchScryfall } from '../../packages/data/scryfall-transport';
 import type { CommanderArtOption, CommanderPartnerMode, CommanderSearchResult } from '@/lib/commander-types';
 import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
 import { normalizeDeckColorIdentity } from '@/lib/deck-metadata';
@@ -30,91 +31,6 @@ export type ScryfallCard = {
 type ScryfallSearchResponse = {
   data?: ScryfallCard[];
 };
-
-const SCRYFALL_HEADERS = {
-  Accept: 'application/json',
-  'User-Agent': '21Life/9.3.0 (support@21life.win)',
-};
-
-const SCRYFALL_MIN_REQUEST_INTERVAL_MS = 90;
-const SCRYFALL_MAX_RETRIES = 2;
-const SCRYFALL_REQUEST_TIMEOUT_MS = 10_000;
-const SCRYFALL_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-
-let scryfallRequestQueue: Promise<void> = Promise.resolve();
-let lastScryfallRequestAt = 0;
-
-function abortError(): Error {
-  const error = new Error('Scryfall request aborted');
-  error.name = 'AbortError';
-  return error;
-}
-
-function wait(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.reject(abortError());
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', handleAbort);
-      resolve();
-    }, ms);
-    const handleAbort = () => {
-      clearTimeout(timer);
-      reject(abortError());
-    };
-    signal?.addEventListener('abort', handleAbort, { once: true });
-  });
-}
-
-async function enqueueScryfallRequest(url: string, signal?: AbortSignal): Promise<Response> {
-  const run = async () => {
-    const elapsed = Date.now() - lastScryfallRequestAt;
-    if (elapsed < SCRYFALL_MIN_REQUEST_INTERVAL_MS) {
-      await wait(SCRYFALL_MIN_REQUEST_INTERVAL_MS - elapsed, signal);
-    }
-    if (signal?.aborted) throw abortError();
-    lastScryfallRequestAt = Date.now();
-    const controller = new AbortController();
-    let timedOut = false;
-    const handleAbort = () => controller.abort();
-    signal?.addEventListener('abort', handleAbort, { once: true });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, SCRYFALL_REQUEST_TIMEOUT_MS);
-
-    try {
-      return await fetch(url, { headers: SCRYFALL_HEADERS, signal: controller.signal });
-    } catch (error) {
-      if (timedOut) throw new Error('Scryfall request timed out');
-      throw error;
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', handleAbort);
-    }
-  };
-
-  const response = scryfallRequestQueue.then(run, run);
-  scryfallRequestQueue = response.then(() => undefined, () => undefined);
-  return response;
-}
-
-async function fetchScryfall(url: string, signal?: AbortSignal): Promise<Response> {
-  for (let attempt = 0; attempt <= SCRYFALL_MAX_RETRIES; attempt += 1) {
-    const response = await enqueueScryfallRequest(url, signal);
-    if (!SCRYFALL_RETRYABLE_STATUSES.has(response.status) || attempt === SCRYFALL_MAX_RETRIES) {
-      return response;
-    }
-
-    const retryAfterSeconds = Number(response.headers.get('retry-after'));
-    const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-      ? retryAfterSeconds * 1_000
-      : 250 * (2 ** attempt);
-    await wait(retryDelay, signal);
-  }
-
-  throw new Error('Scryfall request retry loop exhausted');
-}
 
 function sanitizeCommanderQuery(query: string): string {
   return query.trim().replace(/"/g, '');

@@ -826,5 +826,11 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "packages/data/scryfall-transport.ts": {
+    "lines": 100,
+    "branches": 95,
+    "functions": 95,
+    "statements": 95
   }
 }

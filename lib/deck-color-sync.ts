@@ -1,3 +1,4 @@
+import { fetchScryfall } from '@/packages/data/scryfall-transport';
 import { expandDeckCommanderNames } from '@/packages/domain/commander-names';
 export { expandDeckCommanderNames } from '@/packages/domain/commander-names';
 import {
@@ -12,10 +13,8 @@ import {
   type DeckColorRecord,
 } from '@/lib/deck-metadata';
 import { deckDataToColorFields } from '@/lib/deck-importers';
-import { delay } from '@/lib/async-utils';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
-const SCRYFALL_REQUEST_GAP_MS = 120;
 
 export interface DeckColorSyncTarget extends DeckColorRecord {
   id: string;
@@ -37,9 +36,8 @@ async function lookupCommanderFromBrowser(name: string) {
   const queryText = name.trim().replace(/"/g, '');
   if (!queryText) return null;
 
-  const request = (path: 'exact' | 'fuzzy') => fetch(
-    `https://api.scryfall.com/cards/named?${path}=${encodeURIComponent(queryText)}`,
-    { headers: { Accept: 'application/json' } }
+  const request = (path: 'exact' | 'fuzzy') => fetchScryfall(
+    `https://api.scryfall.com/cards/named?${path}=${encodeURIComponent(queryText)}`
   );
 
   const exactResponse = await request('exact');
@@ -91,7 +89,6 @@ export async function resolveCommanderColorOptions(
       colorIdentity: match.colorIdentity,
     } : (existing || { name, imageUrl: null, colorIdentity: [] }));
 
-    await delay(SCRYFALL_REQUEST_GAP_MS);
   }
 
   return uniqueCommanderOptions(resolved.filter((option) => option.name));
@@ -198,7 +195,6 @@ export async function syncDeckCommanderColors(
       // Continue with the remaining decks.
     }
 
-    await delay(SCRYFALL_REQUEST_GAP_MS);
   }
 
   return resolved;
@@ -226,7 +222,6 @@ export async function syncDecksColorMetadata(
       // Continue with the remaining decks.
     }
 
-    await delay(SCRYFALL_REQUEST_GAP_MS);
   }
 
   return resolved;

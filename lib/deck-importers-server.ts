@@ -1,3 +1,4 @@
+import { fetchScryfall } from '@/packages/data/scryfall-transport';
 import { resolveArchidektFaceIndex } from '@/lib/archidekt-commander-images';
 import { finalizeDeckColorIdentity } from '@/lib/deck-metadata';
 import {
@@ -206,9 +207,9 @@ async function fetchArchidektPrintingImage(card: ArchidektCard, commanderName: s
   if (!setCode || !collectorNumber) return null;
 
   try {
-    const response = await fetch(
+    const response = await fetchScryfall(
       `https://api.scryfall.com/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`,
-      { signal, headers: { Accept: 'application/json', 'User-Agent': '21Life/9.0 (https://app.phyrexianarena.dpdns.org)' } },
+      signal,
     );
     if (!response.ok) return null;
 
