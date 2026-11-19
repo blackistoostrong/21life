@@ -2,6 +2,17 @@
 
 Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring delle schermate parziale**, non attestazione di completamento del punto6.
 
+## Stato corrente — 19 novembre
+
+| Target | Righe non vuote | Stato |
+|---|---:|---|
+| Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
+| Tavolo web |3801|Catalogo/membership/guest e risorse idle ancora da separare |
+| Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
+| Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
+
+Profilo7b00ea55: quality772+3skip/71script/142floor, clean56route build/3.22MiB e80browser desktop/mobile PASS, cleanup Dev verificato. Ramo export web senza consumer eliminato, API export consumata da Expo preservata. Il gate sicurezza verifica chiamate autenticate negli owner e vieta trasporto privato diretto nella route. Le prove11d e gli altri tre target rimangono aperti; il solo target dimensionale del profilo non chiude il punto6.
+
 ## Confini già introdotti
 
 `packages/domain` contiene un'unica implementazione di win rate, identità partecipanti e visibilità ranking. Web e mobile mantengono adapter ai percorsi precedenti. Nessuna dipendenza React/Next/Expo/Supabase/storage nel dominio. Il controllo AST `verify-domain-boundaries.mjs` rifiuta import esterni, accesso a globali di piattaforma e cicli; entrambi i quality lo invocano.
@@ -418,3 +429,5 @@ The route now delegates every private operation to feature owners: it has no dir
 `useProfileCatalogActions` owns one pending archive/favorite/delete command. Permission predicates and query filters are preserved; parent-scope disposal aborts IO and prevents old feedback. The favorite rollback touches only its field and only if both optimistic value and source timestamp still match, preserving a newer authoritative server snapshot and unrelated metadata. Delete confirmation precedes IO; dismissal dispatches no mutation. Successful deletion delegates reloading to the existing catalog owner. Ordinary overlapping deck-write controls are disabled by composed controller busy states, without a global data context or generic command framework.
 
 The initial mechanical commit preserved five statement bodies. Real browser failures on the pre-tranche app prove uncanceled link import, uncanceled favorite PATCH and an older failed favorite write reverting a newer server snapshot after actual same-account Auth renewal. All Dev fixtures cleaned. The old security check depended on an unused authenticatedFetch import in the route; it now checks actual authenticated calls in the enumerated owners, plus a new AST invariant forbidding route-level private transports. No threshold is relaxed. Profile529 nonempty lines, catalog owner82, link owner98. Full consolidated build/browser validation remains pending.
+
+Consolidated private profile commands7b00ea55 verified:80/80 browser cases, quality772+3skip/71script/142floors, clean56route build/3.22MiB budget and Dev cleanup PASS. Real stale-rollback regression now preserves the newer server favorite snapshot after Auth renewal. Link and catalog IO cancellation, retry, duplicate submission, account transition and confirmation contracts pass against real controllers with only network/Auth-fixture boundaries controlled. No new product feature, dependency or SQL change. Next: arena catalog/membership and cancellable idle enrichment; all remaining architecture acceptance is still open.
