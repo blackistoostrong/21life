@@ -2,7 +2,7 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 
-type Context = { readonly key: string | null };
+type Context = { readonly key: string | null; readonly generation: unknown };
 type Epoch = { readonly context: Context; readonly enabled: boolean };
 type JobName = 'import' | 'arts' | 'save';
 type Entry = { controller: AbortController; pending: boolean };
@@ -15,8 +15,8 @@ export type ProfileCommandJob = {
 };
 
 /** Private profile commands belong to one committed account/role and modal phase. */
-export function useProfileCommandScope(key: string | null, enabled: boolean) {
-  const context = useMemo<Context>(() => ({ key }), [key]);
+export function useProfileCommandScope(key: string | null, enabled: boolean, generation?: unknown) {
+  const context = useMemo<Context>(() => ({ key, generation }), [key, generation]);
   const epoch = useMemo<Epoch>(() => ({ context, enabled }), [context, enabled]);
   const ownerRef = useRef<Owner | null>(null);
   useLayoutEffect(() => {

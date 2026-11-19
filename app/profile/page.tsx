@@ -661,6 +661,7 @@ export default function ProfilePage() {
   };
   const { savingDeck, savingUserDecks, overwriteConfirm, closeOverwriteConfirm,
     saveArchidektDeck, saveArchidektUserDecks, saveManualDeck } = useProfileDeckPersistence({
+    scopeKey: user && !adminLoading ? user.id + ':' + adminMode : null, open: showAddModal, mode: addMode,
     user, adminMode, decks, getTargetProfileId, getTargetProfileName, importedDeck, selectedImportedCommander,
     importedUserDecks, selectedUserDeckUrls, selectedUserDeckCommanders, selectedCommander,
     selectedPartnerCommander, customDeckName, closeAddModal, fetchDecks,
