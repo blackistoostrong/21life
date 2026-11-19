@@ -2,6 +2,12 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+### Avanzamento 19 novembre — persistenza verificata
+
+- [x] Controller persistenza `1645540b` verificato: quality web771+3skip,71 script,142 soglie coverage; cleanbuild56route,3.21/18MiB. **118/118 browser desktop/mobile PASS**,7.7min, finalize esatti2match e cleanup Dev verificati. Quattro regressioni rosse diventate verdi: scarto preview cancella metadata/write, bulk busy prima dei lookup/doppio invio, conferma cancellata al cambio account. Tutti i92precedenti,8baseline e18nuovi casi verdi; baseline art-opzionale preservata. Scope account/ruolo/target/modalità/valori, snapshot e timeout15s; promessa conferma risolta su cancel, ack vecchi respinti. Nessuna libreria/APIfeature aggiunta, nessun SQL/native/dispositivo/merge/deploy.
+- [ ] Prossimo owner: bozza manuale e art del comandante, ancora gestite nella pagina. Preservare selezione partner/nome composto e scelta automatica art corrente; verificare Back, cambio comandante/account, due aperture e risposte tardive. Separare estrazione meccanica dai fix. Poi presentazione del form, link/refresh/export e sezioni profilo; proseguire con gli altri tre entrypoint e il resto della specifica.
+- [ ] Atomicità del bulk amministratore ancora aperta: percorso esistente a insert/update separate preservato; una scrittura già accettata può committare. Non confondere abort client con rollback. Bozze manuali non ancora certificate tra account. Piano complessivo e punto6 restano aperti; collaudi su dispositivo tutti alla fine. Shutdown18nov completato una tantum, non ripetere al resume.
+
 ### Ripresa dopo il checkpoint del 18 novembre
 
 - [ ] Persistenza lifecycle, prebuild19-11: quality web771+3skip/71script/142floor PASS; quattro ROSSI validi e cleanup PASS, baseline art-opzionale2/2 PASS su827 per preservare scrittura mentre arriva una risposta equivalente. Scope fingerprint semantico, pronto solo con preview/comandante selezionato; snapshot per URL/manual/bulk, skip duplicati prima dei lookup inutili, conferme cancellabili e ack attivi. Nessuna soglia abbassata. Gate merge/prebuild riletti; fetch Dev0commitmancanti. Richiesti cleanbuild9.3.0 e118browser (92precedenti+8baseline+18lifecycle). Nuovi helper test riusano Authsessioni isolate/adapterSSR, guardie deny-by-default privatewrite e cataloghi filtrati per JWTsub A/B. Nessun SQL/native/dispositivo/merge/deploy. Atomicità adminbulk e manual draft ownership ancora aperti nel piano.
