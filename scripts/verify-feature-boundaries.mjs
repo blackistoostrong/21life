@@ -23,7 +23,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
-    'components/profile/profile-deck-overwrite-dialog.tsx', 'components/profile/profile-archidekt-settings-panel.tsx', 'components/profile/profile-account-panel.tsx', 'components/profile/profile-nickname-directory.tsx',
+    'components/profile/profile-manual-deck-form.tsx', 'components/profile/profile-deck-overwrite-dialog.tsx', 'components/profile/profile-archidekt-settings-panel.tsx', 'components/profile/profile-account-panel.tsx', 'components/profile/profile-nickname-directory.tsx',
     'components/arena/guest-directory.tsx',
     'components/arena/arena-data-status.tsx',
     'components/arena/arena-history-pagination.tsx',
@@ -37,6 +37,7 @@ export const featureOwners = {
   // Existing image container owns its own cache/network lifecycle. Composition
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
+    'components/profile/profile-manual-deck-form.tsx': ['components/deck-image.tsx'],
     'expo/components/table/table-guests-section.tsx': ['expo/components/deck/deck-image.tsx'],
     'components/live-game/web-tracker-wizard.tsx': ['components/arena/occasional-deck-form.tsx'],
   },

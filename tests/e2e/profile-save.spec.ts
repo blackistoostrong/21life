@@ -5,6 +5,12 @@ for (const source of ['URL', 'manual'] as const) {
   test(`profile persistence ${source} retains failed drafts and retries the owned insert`, async ({ page }) => {
     test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
     const save = await openProfileSaveFixture(page, source);
+    const capture = process.env.E2E_MANUAL_FORM_CAPTURE;
+    if (source === 'manual' && (capture === 'before' || capture === 'after')) {
+      await expect(page.getByText('Current art', { exact: true })).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({ path: `artifacts/dev26/manual-form-${capture}-${test.info().project.name}.png` });
+    }
     let attempts = 0;
     await page.route(/\/rest\/v1\/decks(?:\?|$)/, route => {
       if (route.request().method() !== 'POST') return route.continue();

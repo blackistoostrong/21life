@@ -68,6 +68,14 @@ export function useProfileManualDeck(scopeKey: string | null, enabled: boolean,
     })();
   };
   const manualPartnerMode = current.primary ? getManualPartnerMode(current.primary) : null;
+  const resetManualDeck = () => {
+    if (!committed()) return;
+    cancel('arts');
+    frozenArt.current = null;
+    update(() => empty(epoch));
+    search.setSearchQuery(''); search.setSearchResults([]);
+    search.setPartnerSearchQuery(''); search.setPartnerSearchResults([]);
+  };
   return {
     selectedCommander: current.primary, setSelectedCommander,
     selectedPartnerCommander: current.partner,
@@ -76,7 +84,7 @@ export function useProfileManualDeck(scopeKey: string | null, enabled: boolean,
     loadingManualCommanderArts: current.job?.epoch === epoch && current.job.active(), setLoadingManualCommanderArts,
     customDeckName: current.name, setCustomDeckName: (action: SetStateAction<string>) => assign('name', action),
     manualPartnerMode, manualPartnerCopy: manualPartnerMode ? getManualPartnerCopy(manualPartnerMode, t) : null,
-    handleSelectCommander, freezeManualSelection,
+    handleSelectCommander, freezeManualSelection, resetManualDeck,
   };
 }
 export type ProfileManualDeckControls = ReturnType<typeof useProfileManualDeck>;
