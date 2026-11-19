@@ -199,7 +199,7 @@ export function useArena(groupId: string | undefined, userId: string | undefined
         return;
       }
       void refresh(false);
-    });
+    }, { scopeKey: userId });
   }, [groupId, loadMemberDecks, refresh, userId,isCurrent]);
 
   const playerStats = useMemo(() => calculatePlayerStats(matches), [matches]);

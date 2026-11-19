@@ -85,7 +85,7 @@ import {
 import { fetchActiveLiveGame, fetchLiveGameByMatchId } from '@/lib/live-game-service';
 import type { LiveGameRecord } from '@/lib/live-game';
 import { formatGameDuration } from '@/lib/live-game-duration';
-import { subscribeToArenaCatalog } from '@/lib/arena-catalog-realtime';
+
 import { buildHistoricalLiveGameRecord } from '@/lib/live-game-recap';
 import { buildArenaAwards, type ArenaAward as DeckArenaAward, type DeckPerformanceStats } from '@/lib/deck-performance-analytics';
 import {
@@ -845,19 +845,6 @@ export default function TablePage() {
       return [...prev, participantKey];
     });
   };
-
-  useEffect(() => {
-    if (!user || !groupId) return;
-    return subscribeToArenaCatalog(supabase, groupId, (event) => {
-      if (event.entity === 'deck') {
-        void loadArenaDecks(members.map((member) => member.id));
-      } else if (event.entity === 'guest' || event.entity === 'guest_deck') {
-        void reloadGuests();
-      } else {
-        void fetchData();
-      }
-    });
-  }, [fetchData, groupId, loadArenaDecks, members, reloadGuests, user]);
 
   const resetGuestModal = () => {
     setShowGuestModal(false);

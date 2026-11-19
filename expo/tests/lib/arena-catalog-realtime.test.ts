@@ -27,7 +27,7 @@ describe('arena catalog realtime', () => {
       '11111111-1111-1111-1111-111111111111',
       onChange,
     );
-    await Promise.resolve();
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
 
     expect(client.channel).toHaveBeenCalledWith(
       'arena:11111111-1111-1111-1111-111111111111:catalog',
@@ -43,7 +43,7 @@ describe('arena catalog realtime', () => {
     expect(onChange).toHaveBeenCalledWith({ entity: 'deck', operation: 'UPDATE', id: '1' });
 
     unsubscribe();
-    expect(client.removeChannel).toHaveBeenCalledWith(channel);
+    await vi.waitFor(() => expect(client.removeChannel).toHaveBeenCalledWith(channel));
   });
 
   it('fans one catalog change to 50 concurrent arena subscribers', async () => {
@@ -70,6 +70,7 @@ describe('arena catalog realtime', () => {
       listener,
     ));
     await Promise.resolve();
+    expect(client.channel).toHaveBeenCalledTimes(1);
 
     handlers.forEach((handler) => handler({
       payload: { entity: 'deck', operation: 'INSERT', id: 'deck-new' },
@@ -85,6 +86,6 @@ describe('arena catalog realtime', () => {
       });
     });
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-    expect(client.removeChannel).toHaveBeenCalledTimes(50);
+    await vi.waitFor(() => expect(client.removeChannel).toHaveBeenCalledTimes(1));
   });
 });

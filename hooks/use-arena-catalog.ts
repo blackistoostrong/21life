@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
+import { subscribeToArenaCatalogBatch } from '@/lib/arena-catalog-realtime';
 import { supabase } from '@/lib/supabase';
 import { fetchArenaMemberDecks } from '@/lib/arena-catalog-read';
 import { runWhenIdle } from '@/lib/idle-work';
@@ -29,6 +30,8 @@ export function useArenaCatalog(userId: string | null, groupId: string, adminMod
   const key = userId && groupId ? `${userId}:${groupId}:${adminMode}` : null;
   const context = useMemo<Context>(() => ({ key }), [key]);
   const ownerRef = useRef<Owner | null>(null);
+  const connectionRef = useRef<{ context: Context; status: 'connecting' | 'ready' | 'failed'; restart: () => void } | null>(null);
+  const memberIdsRef = useRef<string[]>([]);
   const [state, setState] = useState<{ context: Context; data: State } | null>(null);
   useLayoutEffect(() => {
     const owner: Owner = { context, reads: new Map() };
@@ -100,6 +103,8 @@ export function useArenaCatalog(userId: string | null, groupId: string, adminMod
     } catch { job.commit(data => ({ ...data, guestsError: true })); }
   }, [begin, groupId]);
   const fetchData = useCallback(async () => {
+    const connection = connectionRef.current;
+    if (connection?.context === context && connection.status === 'failed') connection.restart();
     const job = begin('group');
     if (!job) return;
     job.owner.cancelIdle?.();
@@ -123,8 +128,40 @@ export function useArenaCatalog(userId: string | null, groupId: string, adminMod
       }, { timeoutMs: 2500 });
     } catch { job.commit(data => ({ ...data, catalogError: true })); }
     finally { job.commit(data => ({ ...data, loading: false })); }
-  }, [begin, groupId, loadArenaDecks, reloadGuests, router]);
+  }, [begin, context, groupId, loadArenaDecks, reloadGuests, router]);
   const current = state?.context === context ? state.data : EMPTY;
+  useLayoutEffect(() => { memberIdsRef.current = current.members.map(member => member.id); }, [context, current.members]);
+  useEffect(() => {
+    if (!context.key) return;
+    let disposed = false;
+    let disconnect = () => {};
+    const connection = { context, status: 'connecting' as 'connecting' | 'ready' | 'failed', restart: () => {} };
+    const active = () => !disposed && ownerRef.current?.context === context;
+    const start = () => {
+      if (!active()) return;
+      connection.status = 'connecting';
+      disconnect = subscribeToArenaCatalogBatch(supabase, groupId, events => {
+        if (!active()) return;
+        if (events.some(event => event.entity === 'member')) { void fetchData(); return; }
+        if (events.some(event => event.entity === 'deck')) void loadArenaDecks(memberIdsRef.current);
+        if (events.some(event => event.entity === 'guest' || event.entity === 'guest_deck')) void reloadGuests();
+      }, { scopeKey: context.key ?? '', onReady: () => {
+        if (!active()) return;
+        connection.status = 'ready'; void fetchData();
+      }, onError: () => { if (active()) connection.status = 'failed'; } });
+    };
+    connection.restart = () => { disconnect(); start(); };
+    connectionRef.current = connection; start();
+    const recover = () => { if (document.visibilityState === 'visible' && active()) void fetchData(); };
+    window.addEventListener('focus', recover); window.addEventListener('online', recover);
+    document.addEventListener('visibilitychange', recover);
+    return () => {
+      disposed = true; disconnect();
+      window.removeEventListener('focus', recover); window.removeEventListener('online', recover);
+      document.removeEventListener('visibilitychange', recover);
+      if (connectionRef.current === connection) connectionRef.current = null;
+    };
+  }, [context, fetchData, groupId, loadArenaDecks, reloadGuests]);
   const ensureArenaMemberDecksLoaded = useCallback(() => {
     if (current.decksLoading || current.decks.length || !current.members.length) return;
     void loadArenaDecks(current.members.map(member => member.id));

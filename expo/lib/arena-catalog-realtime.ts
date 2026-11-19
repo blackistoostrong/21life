@@ -1,39 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { subscribeArenaCatalogBatch, type ArenaCatalogEvent, type ArenaCatalogPort, type CatalogOptions } from '../../packages/data/arena-catalog-realtime';
+export type { ArenaCatalogEntity, ArenaCatalogEvent } from '../../packages/data/arena-catalog-realtime';
 
-export type ArenaCatalogEntity = 'deck' | 'member' | 'guest' | 'guest_deck';
-
-export type ArenaCatalogEvent = {
-  entity: ArenaCatalogEntity;
-  operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  id: string;
-};
-
-export function subscribeToArenaCatalog(
-  client: SupabaseClient,
-  groupId: string,
-  onChange: (event: ArenaCatalogEvent) => void,
-): () => void {
-  let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let latestEvent: ArenaCatalogEvent | null = null;
-  const channel = client
-    .channel(`arena:${groupId}:catalog`, { config: { private: true } })
-    .on('broadcast', { event: 'catalog_changed' }, ({ payload }) => {
-      latestEvent = payload as ArenaCatalogEvent;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        if (!disposed && latestEvent) onChange(latestEvent);
-      }, 120);
-    });
-
-  void client.realtime.setAuth().then(() => {
-    if (!disposed) channel.subscribe();
-  });
-
-  return () => {
-    disposed = true;
-    if (timer) clearTimeout(timer);
-    void client.removeChannel(channel);
+export function subscribeToArenaCatalogBatch(client: SupabaseClient, groupId: string,
+  changed: (events: readonly ArenaCatalogEvent[]) => void, options: CatalogOptions = {}) {
+  const port: ArenaCatalogPort = {
+    authenticate: () => client.realtime.setAuth(),
+    channel: (topic, receive) => {
+      const channel = client.channel(topic, { config: { private: true } })
+        .on('broadcast', { event: 'catalog_changed' }, ({ payload }) => receive(payload));
+      return { subscribe: status => channel.subscribe(status), remove: () => client.removeChannel(channel), teardown: () => channel.teardown() };
+    },
   };
+  return subscribeArenaCatalogBatch(client, port, groupId, changed, options);
+}
+export function subscribeToArenaCatalog(client: SupabaseClient, groupId: string,
+  changed: (event: ArenaCatalogEvent) => void, options: CatalogOptions = {}) {
+  return subscribeToArenaCatalogBatch(client, groupId, events => events.forEach(event => changed(event)), options);
 }

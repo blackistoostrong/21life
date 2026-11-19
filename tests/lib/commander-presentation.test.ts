@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePresentationCommanderCmc } from '@/packages/domain/commander-presentation';
+import { resolvePresentationCommanderCmc } from '../../packages/domain/commander-presentation';
 
 describe('commander presentation metadata', () => {
   it.each([
