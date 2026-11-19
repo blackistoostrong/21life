@@ -9,7 +9,7 @@ import {
   fetchScryfallArtOptionsFromBrowser,
   uniqueCommanderOptions,
 } from '@/lib/profile-commander';
-import type { CommanderSearchResult, CommanderArtOption } from '@/lib/profile-commander';
+import type { CommanderArtOption } from '@/lib/profile-commander';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
@@ -51,10 +51,7 @@ import {
 } from '@/lib/deck-metadata';
 import { lookupCommanderCmcInBrowser } from '@/lib/commander-cmc-client';
 import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
-import {
-  getCommanderPartnerCopy as getManualPartnerCopy,
-  getCommanderPartnerMode as getManualPartnerMode,
-} from '@/lib/commander-partners';
+
 import type { CommanderPartnerMode } from '@/lib/scryfall';
 import {
   buildArchidektBatchCommanderSelections,
@@ -83,7 +80,7 @@ import { useProfileCommanderEditor } from '@/hooks/use-profile-commander-editor'
 import { useProfileCommanderArts } from '@/hooks/use-profile-commander-arts';
 import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import';
 import { useProfileUrlImport } from '@/hooks/use-profile-url-import';
-import { useProfileCommanderSearch } from '@/hooks/use-profile-commander-search';
+import { useProfileManualDeck } from '@/hooks/use-profile-manual-deck';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
 import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
@@ -170,17 +167,15 @@ export default function ProfilePage() {
     showAddModal && addMode === 'archidekt-user', currentProfile?.archidekt_username || '');
   const archidektSettings = useProfileArchidektSettings(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, setProfiles);
-  const [selectedCommander, setSelectedCommander] = useState<CommanderSearchResult | null>(null);
-  const [selectedPartnerCommander, setSelectedPartnerCommander] = useState<CommanderSearchResult | null>(null);
   const {
+    selectedCommander, setSelectedCommander, selectedPartnerCommander, setSelectedPartnerCommander,
     searchQuery, setSearchQuery, searchResults, setSearchResults, searching,
-    partnerSearchQuery, setPartnerSearchQuery, partnerSearchResults, setPartnerSearchResults,
-    searchingPartner,
-  } = useProfileCommanderSearch(user && !adminLoading ? user.id + ':' + adminMode : null,
-    showAddModal && addMode === 'manual', selectedCommander, selectedPartnerCommander);
-  const [manualCommanderArts, setManualCommanderArts] = useState<CommanderArtOption[]>([]);
-  const [loadingManualCommanderArts, setLoadingManualCommanderArts] = useState(false);
-  const [customDeckName, setCustomDeckName] = useState('');
+    partnerSearchQuery, setPartnerSearchQuery, partnerSearchResults, setPartnerSearchResults, searchingPartner,
+    manualCommanderArts, setManualCommanderArts, loadingManualCommanderArts, setLoadingManualCommanderArts,
+    customDeckName, setCustomDeckName, manualPartnerMode, manualPartnerCopy, handleSelectCommander,
+  } = useProfileManualDeck(
+    user && !adminLoading ? user.id + ':' + adminMode : null,
+    showAddModal && addMode === 'manual', fetchCommanderArts);
   const [refreshingDecks, setRefreshingDecks] = useState(false);
   const [refreshingDeckIds, setRefreshingDeckIds] = useState<string[]>([]);
   const {
@@ -199,8 +194,6 @@ export default function ProfilePage() {
   const [deckSort, setDeckSort] = useState<'recent' | 'winRate' | 'gamesPlayed' | 'damage' | 'eliminations' | 'fastest'>('recent');
   const [detailsDeck, setDetailsDeck] = useState<Deck | null>(null);
   const targetProfiles = profiles.filter((profile) => !RESERVED_USERNAMES.has(profile.username.toLowerCase()));
-  const manualPartnerMode = selectedCommander ? getManualPartnerMode(selectedCommander) : null;
-  const manualPartnerCopy = manualPartnerMode ? getManualPartnerCopy(manualPartnerMode, t) : null;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -601,48 +594,6 @@ export default function ProfilePage() {
       setRefreshingDecks(false);
       setRefreshingDeckIds([]);
     }
-  };
-
-  const loadManualCommanderArts = async (commanderName: string, fallbackImageUrl: string | null) => {
-    setLoadingManualCommanderArts(true);
-    try {
-      const arts = await fetchCommanderArts(commanderName);
-      setManualCommanderArts(arts);
-      const firstArt = arts[0];
-      if (firstArt) {
-        setSelectedCommander((current) => current ? { ...current, imageUrl: firstArt.imageUrl } : current);
-      } else if (fallbackImageUrl) {
-        setManualCommanderArts([{
-          id: 'current',
-          name: commanderName,
-          imageUrl: fallbackImageUrl,
-          setName: t({ it: 'Art corrente', en: 'Current art' }),
-          collectorNumber: '',
-          releasedAt: null,
-        }]);
-      }
-    } catch {
-      setManualCommanderArts(fallbackImageUrl ? [{
-        id: 'current',
-        name: commanderName,
-        imageUrl: fallbackImageUrl,
-        setName: t({ it: 'Art corrente', en: 'Current art' }),
-        collectorNumber: '',
-        releasedAt: null,
-      }] : []);
-    } finally {
-      setLoadingManualCommanderArts(false);
-    }
-  };
-
-  const handleSelectCommander = (commander: CommanderSearchResult) => {
-    setSelectedCommander(commander);
-    setCustomDeckName(commander.name);
-    setPartnerSearchQuery('');
-    setPartnerSearchResults([]);
-    setSelectedPartnerCommander(null);
-    setManualCommanderArts([]);
-    void loadManualCommanderArts(commander.name, commander.imageUrl);
   };
   const closeAddModal = () => {
     setShowAddModal(false);
