@@ -7,12 +7,11 @@ import {
   resolveCommanderColorOptions,
   fetchCommanderSearchResults,
   fetchScryfallArtOptionsFromBrowser,
-  manualDeckColorFields,
   uniqueCommanderOptions,
 } from '@/lib/profile-commander';
 import type { CommanderSearchResult, CommanderArtOption } from '@/lib/profile-commander';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -76,6 +75,7 @@ import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/
 import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel } from '@/components/profile/profile-account-panel';
+import { useProfileDeckPersistence } from '@/hooks/use-profile-deck-persistence';
 import { useProfileArchidektAutosync } from '@/hooks/use-profile-archidekt-autosync';
 import { useProfileArchidektSettings } from '@/hooks/use-profile-archidekt-settings';
 import { ProfileArchidektSettingsPanel } from '@/components/profile/profile-archidekt-settings-panel';
@@ -101,7 +101,7 @@ import {
   type DeckPerformanceStats,
 } from '@/lib/deck-performance-analytics';
 import { getDeckMastery, getHighestMasteryDeck } from '@/lib/deck-mastery';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ProfileDeckOverwriteDialog } from '@/components/profile/profile-deck-overwrite-dialog';
 import {
   ArrowLeft,
   Plus,
@@ -170,13 +170,6 @@ export default function ProfilePage() {
     showAddModal && addMode === 'archidekt-user', currentProfile?.archidekt_username || '');
   const archidektSettings = useProfileArchidektSettings(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, setProfiles);
-  const [savingUserDecks, setSavingUserDecks] = useState(false);
-  const [overwriteConfirm, setOverwriteConfirm] = useState<
-    | { kind: 'single' }
-    | { kind: 'bulk'; count: number }
-    | null
-  >(null);
-  const overwriteResolver = useRef<((value: boolean | 'overwrite' | 'skip' | 'cancel') => void) | null>(null);
   const [selectedCommander, setSelectedCommander] = useState<CommanderSearchResult | null>(null);
   const [selectedPartnerCommander, setSelectedPartnerCommander] = useState<CommanderSearchResult | null>(null);
   const {
@@ -188,7 +181,6 @@ export default function ProfilePage() {
   const [manualCommanderArts, setManualCommanderArts] = useState<CommanderArtOption[]>([]);
   const [loadingManualCommanderArts, setLoadingManualCommanderArts] = useState(false);
   const [customDeckName, setCustomDeckName] = useState('');
-  const [savingDeck, setSavingDeck] = useState(false);
   const [refreshingDecks, setRefreshingDecks] = useState(false);
   const [refreshingDeckIds, setRefreshingDeckIds] = useState<string[]>([]);
   const {
@@ -652,265 +644,30 @@ export default function ProfilePage() {
     setManualCommanderArts([]);
     void loadManualCommanderArts(commander.name, commander.imageUrl);
   };
-
-  const closeOverwriteConfirm = (value: boolean | 'overwrite' | 'skip' | 'cancel') => {
-    overwriteResolver.current?.(value);
-    overwriteResolver.current = null;
-    setOverwriteConfirm(null);
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setAddMode('choose');
+    resetUrlImport();
+    resetArchidektImport();
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedCommander(null);
+    setPartnerSearchQuery('');
+    setPartnerSearchResults([]);
+    setSelectedPartnerCommander(null);
+    setManualCommanderArts([]);
+    setLoadingManualCommanderArts(false);
+    setCustomDeckName('');
   };
-
-  const confirmOverwriteSingle = () => new Promise<boolean>((resolve) => {
-    overwriteResolver.current = (value) => resolve(value === true);
-    setOverwriteConfirm({ kind: 'single' });
+  const { savingDeck, savingUserDecks, overwriteConfirm, closeOverwriteConfirm,
+    saveArchidektDeck, saveArchidektUserDecks, saveManualDeck } = useProfileDeckPersistence({
+    user, adminMode, decks, getTargetProfileId, getTargetProfileName, importedDeck, selectedImportedCommander,
+    importedUserDecks, selectedUserDeckUrls, selectedUserDeckCommanders, selectedCommander,
+    selectedPartnerCommander, customDeckName, closeAddModal, fetchDecks,
   });
-
-  const confirmOverwriteBulk = (count: number) => new Promise<'overwrite' | 'skip' | 'cancel'>((resolve) => {
-    overwriteResolver.current = (value) => {
-      if (value === 'overwrite' || value === 'skip' || value === 'cancel') {
-        resolve(value);
-        return;
-      }
-      resolve('cancel');
-    };
-    setOverwriteConfirm({ kind: 'bulk', count });
-  });
-
-  const saveArchidektDeck = async () => {
-    const targetProfileId = getTargetProfileId();
-    if (!importedDeck || !targetProfileId) return;
-
-    const existingDeck = decks.find((deck) =>
-      deck.user_id === targetProfileId && deck.source_url === importedDeck.sourceUrl
-    );
-
-    if (existingDeck) {
-      const overwrite = await confirmOverwriteSingle();
-      if (!overwrite) return;
-    }
-
-    setSavingDeck(true);
-    try {
-      const colorFields = deckDataToColorFields({
-        commanderOptions: importedDeck.commanderOptions || [],
-        colorIdentity: importedDeck.colorIdentity || [],
-      });
-      const selectedCommander = selectedImportedCommander || getDefaultImportedCommanderOption(importedDeck);
-      const commander = selectedCommander.name || importedDeck.commander;
-      const commanderCmc = await resolveDeckCommanderCmc(
-        { commander, commander_options: colorFields.commander_options },
-        lookupCommanderCmcInBrowser,
-      );
-      const commanderImage = await resolveImportedDeckCommanderImageForSave(
-        selectedCommander,
-        importedDeck,
-        existingDeck?.commander_image,
-      );
-      const payload = {
-        name: importedDeck.name,
-        commander,
-        commander_image: commanderImage,
-        source_url: importedDeck.sourceUrl,
-        source_type: importedDeck.sourceType,
-        bracket: importedDeck.bracket,
-        commander_cmc: commanderCmc,
-        ...colorFields,
-      };
-
-      const { error } = existingDeck
-        ? await supabase.from('decks').update(payload).eq('id', existingDeck.id)
-        : await supabase.from('decks').insert({
-          user_id: targetProfileId,
-          group_id: null,
-          ...payload,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: t({ it: existingDeck ? 'Mazzo aggiornato!' : 'Mazzo aggiunto!', en: existingDeck ? 'Deck updated!' : 'Deck added!' }),
-        description: adminMode && getTargetProfileName()
-          ? `${importedDeck.name} - ${getTargetProfileName()}`
-          : importedDeck.name,
-      });
-      closeAddModal();
-      fetchDecks();
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Salvataggio mazzo non riuscito', en: 'Failed to save deck' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingDeck(false);
-    }
-  };
-
-  const saveArchidektUserDecks = async () => {
-    const targetProfileId = getTargetProfileId();
-    if (!targetProfileId || importedUserDecks.length === 0) return;
-
-    const existingByUrl = new Map(
-      decks
-        .filter((deck) => deck.user_id === targetProfileId && deck.source_url)
-        .map((deck) => [deck.source_url as string, deck]),
-    );
-    const selectedDecks = importedUserDecks.filter((deck) => selectedUserDeckUrls.includes(deck.sourceUrl));
-    const duplicateCount = selectedDecks.filter((deck) => existingByUrl.has(deck.sourceUrl)).length;
-    let overwriteExisting = false;
-
-    if (duplicateCount > 0) {
-      const choice = await confirmOverwriteBulk(duplicateCount);
-      if (choice === 'cancel') return;
-      overwriteExisting = choice === 'overwrite';
-    }
-
-    const decksToInsert = [];
-    const decksToUpdate: Array<{ id: string; payload: Record<string, unknown> }> = [];
-
-    for (const deck of selectedDecks) {
-      const selectedCommander = selectedUserDeckCommanders[deck.sourceUrl] || getDefaultImportedCommanderOption(deck);
-      const colorFields = deckDataToColorFields({
-        commanderOptions: deck.commanderOptions || [],
-        colorIdentity: deck.colorIdentity || [],
-      });
-      const commanderCmc = await resolveDeckCommanderCmc(
-        { commander: selectedCommander.name, commander_options: colorFields.commander_options },
-        lookupCommanderCmcInBrowser,
-      );
-      const existingDeck = existingByUrl.get(deck.sourceUrl);
-      const commanderImage = await resolveImportedDeckCommanderImageForSave(
-        selectedCommander,
-        deck,
-        existingDeck?.commander_image,
-      );
-      const payload = {
-        name: deck.name,
-        commander: selectedCommander.name,
-        commander_image: commanderImage,
-        source_url: deck.sourceUrl,
-        source_type: deck.sourceType,
-        bracket: deck.bracket,
-        commander_cmc: commanderCmc,
-        ...colorFields,
-      };
-      if (existingDeck) {
-        if (overwriteExisting) {
-          decksToUpdate.push({ id: existingDeck.id, payload });
-        }
-      } else {
-        decksToInsert.push({
-          user_id: targetProfileId,
-          group_id: null,
-          ...payload,
-        });
-      }
-
-      await delay(SCRYFALL_REQUEST_GAP_MS);
-    }
-
-    if (decksToInsert.length === 0 && decksToUpdate.length === 0) {
-      toast({
-        title: t({ it: 'Nessun nuovo mazzo', en: 'No new decks' }),
-        description: t({ it: 'I mazzi pubblici trovati sono gia presenti in quel profilo.', en: 'The public decks found are already saved in that profile.' }),
-      });
-      return;
-    }
-
-    setSavingUserDecks(true);
-    try {
-      if (targetProfileId === user?.id) {
-        const { error } = await supabase.rpc('sync_archidekt_decks', {
-          p_decks: [
-            ...decksToInsert,
-            ...decksToUpdate.map((entry) => entry.payload),
-          ],
-        });
-        if (error) throw error;
-      } else {
-        if (decksToInsert.length > 0) {
-          const { error } = await supabase.from('decks').insert(decksToInsert);
-          if (error) throw error;
-        }
-        for (const deckUpdate of decksToUpdate) {
-          const { error } = await supabase.from('decks').update(deckUpdate.payload).eq('id', deckUpdate.id);
-          if (error) throw error;
-        }
-      }
-
-      toast({
-        title: t({ it: 'Mazzi importati!', en: 'Decks imported!' }),
-        description: t({
-          it: decksToUpdate.length > 0
-            ? `${decksToInsert.length} aggiunti · ${decksToUpdate.length} aggiornati`
-            : `${decksToInsert.length} ${decksToInsert.length === 1 ? 'mazzo aggiunto' : 'mazzi aggiunti'} al profilo.`,
-          en: decksToUpdate.length > 0
-            ? `${decksToInsert.length} added · ${decksToUpdate.length} updated`
-            : `${decksToInsert.length} ${decksToInsert.length === 1 ? 'deck added' : 'decks added'} to your profile.`,
-        }),
-      });
-      closeAddModal();
-      fetchDecks();
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Salvataggio mazzi non riuscito', en: 'Failed to save decks' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingUserDecks(false);
-    }
-  };
 
   useProfileArchidektAutosync(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, fetchDecks);
-
-  const saveManualDeck = async () => {
-    const targetProfileId = getTargetProfileId();
-    if (!selectedCommander || !targetProfileId) return;
-
-    setSavingDeck(true);
-    try {
-      const commanderDisplayName = selectedPartnerCommander
-        ? `${selectedCommander.name} // ${selectedPartnerCommander.name}`
-        : selectedCommander.name;
-      const colorFields = manualDeckColorFields(selectedCommander, selectedPartnerCommander);
-      const commanderCmc = await resolveDeckCommanderCmc(
-        { commander: commanderDisplayName, commander_options: colorFields.commander_options },
-        lookupCommanderCmcInBrowser,
-      );
-      const { error } = await supabase.from('decks').insert({
-        user_id: targetProfileId,
-        group_id: null,
-        name: customDeckName || commanderDisplayName,
-        commander: commanderDisplayName,
-        commander_image: selectedCommander.imageUrl,
-        source_url: null,
-        source_type: 'manual',
-        bracket: null,
-        commander_cmc: commanderCmc,
-        ...colorFields,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: t({ it: 'Mazzo creato!', en: 'Deck created!' }),
-        description: adminMode && getTargetProfileName()
-          ? `${customDeckName || commanderDisplayName} - ${getTargetProfileName()}`
-          : customDeckName || commanderDisplayName,
-      });
-      closeAddModal();
-      fetchDecks();
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Salvataggio mazzo non riuscito', en: 'Failed to save deck' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingDeck(false);
-    }
-  };
 
   const handleDeleteDeck = async (deckId: string, deckName: string) => {
     if (!confirm(t({
@@ -931,22 +688,6 @@ export default function ProfilePage() {
         variant: 'destructive',
       });
     }
-  };
-
-  const closeAddModal = () => {
-    setShowAddModal(false);
-    setAddMode('choose');
-    resetUrlImport();
-    resetArchidektImport();
-    setSearchQuery('');
-    setSearchResults([]);
-    setSelectedCommander(null);
-    setPartnerSearchQuery('');
-    setPartnerSearchResults([]);
-    setSelectedPartnerCommander(null);
-    setManualCommanderArts([]);
-    setLoadingManualCommanderArts(false);
-    setCustomDeckName('');
   };
 
   const getSourceBadge = (sourceType: string | null) => {
@@ -2183,62 +1924,7 @@ export default function ProfilePage() {
         </ModalOverlay>
       )}
 
-      <ConfirmDialog
-        open={overwriteConfirm !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeOverwriteConfirm(overwriteConfirm?.kind === 'bulk' ? 'cancel' : false);
-          }
-        }}
-        title={
-          overwriteConfirm?.kind === 'bulk'
-            ? t({ it: 'Mazzi gia presenti', en: 'Decks already saved' })
-            : t({ it: 'Mazzo gia presente', en: 'Deck already saved' })
-        }
-        message={
-          overwriteConfirm?.kind === 'bulk'
-            ? t({
-              it: `${overwriteConfirm.count} mazzi selezionati sono gia nella tua collezione. Vuoi sostituirli con l'import aggiornato?`,
-              en: `${overwriteConfirm.count} selected decks are already in your collection. Replace them with the latest import?`,
-            })
-            : t({
-              it: 'Questo link e gia nella tua collezione. Vuoi sostituirlo con l\'import aggiornato?',
-              en: 'This deck link is already in your collection. Replace it with the latest import?',
-            })
-        }
-        actions={
-          overwriteConfirm?.kind === 'bulk'
-            ? [
-                {
-                  label: t({ it: 'Annulla', en: 'Cancel' }),
-                  variant: 'outline',
-                  onClick: () => closeOverwriteConfirm('cancel'),
-                },
-                {
-                  label: t({ it: 'Solo nuovi', en: 'Import new only' }),
-                  variant: 'outline',
-                  onClick: () => closeOverwriteConfirm('skip'),
-                },
-                {
-                  label: t({ it: 'Sostituisci', en: 'Replace' }),
-                  variant: 'destructive',
-                  onClick: () => closeOverwriteConfirm('overwrite'),
-                },
-              ]
-            : [
-                {
-                  label: t({ it: 'Annulla', en: 'Cancel' }),
-                  variant: 'outline',
-                  onClick: () => closeOverwriteConfirm(false),
-                },
-                {
-                  label: t({ it: 'Sostituisci', en: 'Replace' }),
-                  variant: 'destructive',
-                  onClick: () => closeOverwriteConfirm(true),
-                },
-              ]
-        }
-      />
+      <ProfileDeckOverwriteDialog controls={{ overwriteConfirm, closeOverwriteConfirm }} />
     </div>
   );
 }
