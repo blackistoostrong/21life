@@ -451,13 +451,13 @@ I comandi metadata/immagini rimangono best-effort; annullare una richiesta non p
 Prova arricchimento bda6d650: quality788+3skip/71script/142floor, cleanbuild56route/3.22MiB e56browser desktop/mobile PASS; cleanup Dev verificato. CAS server reale accetta snapshot invariato(ACK1) e rifiuta modifica concorrente(ACK0), su entrambe le piattaforme. Matrice include import/SDK cancel per metadata/immagini su navigazione e accountA→B, mazzi altrui read-only, esclusione doppio lavoro e regressioni catalogo/guest/storico/settings/profilo. Sorgente pulita e identica al build; nessuna nuova dipendenza/schema/native. Subscription catalogo e CRUD rimangono aperti; nessun claim chiusura11d.
 
 
-## Subscription catalogo condivisa — in verifica19 novembre
+## Subscription catalogo condivisa — verificata19 novembre
 
 `packages/data/arena-catalog-realtime.ts` possiede coalescing per entità con finestra massima120ms, validazione payload e lease del canale per client/topic/actor. Gli adapter web/Expo conservano i rispettivi tipi SDK e forniscono porte pubbliche minime; nessuna dipendenza runtime Supabase/React nel core. Due schermate native index/play usano realmente useArena contemporaneamente: condividono un canale finché esiste un proprietario. Il cambio attore serializza remove prima della nuova channel(topic), perché SDK riusa il topic e removeChannel completa in modo asincrono. Su rimozione non-ok viene chiamato teardown pubblico prima del riuso. Backoff/reconnect/Auth generation restano dell’SDK installato.
 
 `useArenaCatalog` possiede la subscription web e i listener focus/online/visibility; gli eventi batch con membership richiedono una lettura completa, guest/deck si invalidano una sola volta. Subscribe/reconnect ricaricano lo snapshot; errore/closed viene registrato localmente e il successivo refresh/ritorno online riapre il canale. Native conserva il contratto evento singolo ma riceve tutte le entità del burst e passa scope utente. Le verifiche del lifecycle nativo completo restano nel suo blocco dedicato.
 
-14test portano a verde gli8ROSSI delle copie precedenti e provano condivisione, cambio account, rimozione timeout, Auth pendente/fallita e reconnect. Copertura del core raccolta automaticamente dalle configurazioni packages/data già esistenti; nessuna eccezione o nuova configurazione Metro. Prove consolidate pendenti.
+17test portano a verde gli8ROSSI delle copie precedenti e provano condivisione, cambio account, rimozione timeout/reject, setup sincrono fallito, Auth pendente/fallita e reconnect. Copertura del core raccolta automaticamente dalle configurazioni packages/data già esistenti; nessuna eccezione o nuova configurazione Metro.
 
 
 ### Correzione backend Realtime Dev
@@ -466,4 +466,4 @@ La prima prova reale del canale privato ha fallito prima del burst: il membro va
 
 Prove dopo correzione:4/4 browser desktop/mobile, guest+deck concorrenti visibili senza reload e fixture ripulite; query dirette sotto ruolo authenticated/claims fixture leggono2messaggi come membro e0come nonmembro. Questo Dev segnala il topic non leggibile come timeout SDK: il collaudo negativo richiede socket sano e nonmembership RPC verificata, oltre alla prova SQL effettiva. Nessun bypass o grant di pubblicazione.
 
-Build applicativa01fe6bc1: web56route/3.23MiB, export Android/iOS/9.33MiB PASS. Le sole aggiunte successive sono migrazione/test/docs, source native e package identici; export conservati su SHA esplicito senza dichiararli build di un altro commit. Manifest web104 e regressione consolidata ancora richiesti.
+Build applicativa01fe6bc1: web56route/3.23MiB, export Android/iOS/9.33MiB PASS. Le sole aggiunte successive sono migrazione/test/docs, source native e package identici; export conservati su SHA esplicito senza dichiararli build di un altro commit. Cleanbuild finale a73d786d con manifest104:56route/3.23MiB PASS. Quality web805+3skip/71script/143floor ed Expo546+3skip/133floor PASS; tutti i floor preesistenti invariati. Regressione consolidata60/60 desktop/mobile PASS, cleanup Dev verificato. Comprende catalogo, enrichment/CAS, burst reale e diniego nonmembro, guestUI, settings, storico e mutazioni profilo. Route3359nonempty, owner catalogo168, core realtime96. Ownership CRUD e lifecycle nativo completo restano aperti; nessun claim di chiusura punto6.
