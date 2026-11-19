@@ -94,3 +94,5 @@ export function useProfileUrlImport(key: string | null, enabled: boolean,
     importedCommanderArts: visible ? current.arts : [], loadingImportedCommanderArts: current.artsJob?.epoch === epoch,
     handleUrlImport, resetUrlImport, selectImportedCommander, selectImportedArt };
 }
+
+export type ProfileUrlImportControls = ReturnType<typeof useProfileUrlImport>;

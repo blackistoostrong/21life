@@ -97,3 +97,5 @@ export function useProfileArchidektImport(key: string | null, enabled: boolean, 
     selectedUserDeckUrls: visible ? current.urls : EMPTY_URLS, setSelectedUserDeckUrls,
     handleArchidektUserImport, clearArchidektPreview, resetArchidektImport };
 }
+
+export type ProfileArchidektImportControls = ReturnType<typeof useProfileArchidektImport>;

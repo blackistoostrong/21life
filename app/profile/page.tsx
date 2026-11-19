@@ -56,8 +56,6 @@ import type { CommanderPartnerMode } from '@/lib/scryfall';
 import {
   buildArchidektBatchCommanderSelections,
   deckDataToColorFields,
-  getDefaultImportedCommanderOption,
-  isImportedCommanderOptionSelected,
   isImportedDeckSource,
   repairImportedCommanderOptions,
   resolveImportedCommanderAfterArtsLoad,
@@ -80,6 +78,9 @@ import { useProfileCommanderEditor } from '@/hooks/use-profile-commander-editor'
 import { useProfileCommanderArts } from '@/hooks/use-profile-commander-arts';
 import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import';
 import { useProfileUrlImport } from '@/hooks/use-profile-url-import';
+import { ProfileDeckImportForms } from '@/components/profile/profile-deck-import-forms';
+import { CommanderArtPicker } from '@/components/profile/commander-art-picker';
+import { DeckSourceBadge } from '@/components/profile/deck-source-badge';
 import { ProfileManualDeckForm } from '@/components/profile/profile-manual-deck-form';
 import { useProfileManualDeck } from '@/hooks/use-profile-manual-deck';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
@@ -153,19 +154,17 @@ export default function ProfilePage() {
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
     useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
       user && !adminLoading ? user.id + ':' + adminMode : null);
-  const {
-    importDeckUrl, setImportDeckUrl, importingDeck, importedDeck, selectedImportedCommander,
-    importedCommanderArts, loadingImportedCommanderArts,
-    handleUrlImport, resetUrlImport, selectImportedCommander, selectImportedArt,
-  } = useProfileUrlImport(user && !adminLoading ? user.id + ':' + adminMode : null,
+  const urlImport = useProfileUrlImport(user && !adminLoading ? user.id + ':' + adminMode : null,
     showAddModal && addMode === 'import-url', fetchCommanderArts);
   const {
-    archidektUsername, setArchidektUsername, importingUserDecks,
-    importedUserDecks, selectedUserDeckCommanders, setSelectedUserDeckCommanders,
-    selectedUserDeckUrls, setSelectedUserDeckUrls, handleArchidektUserImport,
-    clearArchidektPreview, resetArchidektImport,
-  } = useProfileArchidektImport(user && !adminLoading ? user.id + ':' + adminMode : null,
+    importedDeck, selectedImportedCommander, resetUrlImport,
+  } = urlImport;
+  const archidektImport = useProfileArchidektImport(user && !adminLoading ? user.id + ':' + adminMode : null,
     showAddModal && addMode === 'archidekt-user', currentProfile?.archidekt_username || '');
+  const {
+    setArchidektUsername, importedUserDecks, selectedUserDeckCommanders,
+    selectedUserDeckUrls, resetArchidektImport,
+  } = archidektImport;
   const archidektSettings = useProfileArchidektSettings(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, setProfiles);
   const manual = useProfileManualDeck(
@@ -630,23 +629,7 @@ export default function ProfilePage() {
     }
   };
 
-  const getSourceBadge = (sourceType: string | null) => {
-    if (sourceType === 'archidekt') {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-          Archidekt
-        </span>
-      );
-    }
-    if (sourceType === 'moxfield') {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/30 bg-teal-500/20 px-2 py-0.5 text-xs text-teal-300">
-          Moxfield
-        </span>
-      );
-    }
-    return null;
-  };
+  const getSourceBadge = (sourceType: string | null) => <DeckSourceBadge sourceType={sourceType} />;
 
   const getSourceLinkLabel = (sourceType: string | null) => {
     if (sourceType === 'moxfield') return t({ it: 'Vedi su Moxfield', en: 'View on Moxfield' });
@@ -674,59 +657,10 @@ export default function ProfilePage() {
   };
 
   const renderCommanderArtPicker = (
-    arts: CommanderArtOption[],
-    selectedImageUrl: string | null | undefined,
-    onSelect: (art: CommanderArtOption) => void,
-    loadingArts: boolean
-  ) => (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-foreground">
-        {t({ it: 'Scegli art comandante', en: 'Choose commander art' })}
-      </p>
-      {loadingArts ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-background/35 px-3 py-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {t({ it: 'Caricamento art...', en: 'Loading arts...' })}
-        </div>
-      ) : arts.length > 0 ? (
-        <div className="overflow-x-auto pb-2">
-          <div className="grid grid-flow-col auto-cols-[132px] gap-3">
-            {arts.map((art) => {
-              const selected = selectedImageUrl === art.imageUrl;
-              return (
-                <button
-                  key={`${art.id}-${art.imageUrl}`}
-                  type="button"
-                  onClick={() => onSelect(art)}
-                  className={`rounded-lg border p-2 text-left transition-colors ${
-                    selected ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-background/25 hover:border-emerald-500/50'
-                  }`} disabled={savingDeck || savingUserDecks}
-                >
-                  <DeckImage
-                    src={art.imageUrl}
-                    alt={art.name}
-                    className="h-24 w-full rounded object-cover object-top"
-                  />
-                  <p className="mt-2 truncate text-xs font-medium text-foreground">
-                    {art.setName || t({ it: 'Stampa', en: 'Printing' })}
-                  </p>
-                  {(art.collectorNumber || art.releasedAt) && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[art.collectorNumber, art.releasedAt].filter(Boolean).join(' - ')}
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <p className="rounded-lg border border-border/70 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-          {t({ it: 'Nessuna art alternativa trovata su Scryfall.', en: 'No alternate art found on Scryfall.' })}
-        </p>
-      )}
-    </div>
-  );
+    arts: CommanderArtOption[], selectedImageUrl: string | null | undefined,
+    onSelect: (art: CommanderArtOption) => void, loadingArts: boolean
+  ) => <CommanderArtPicker arts={arts} selectedImageUrl={selectedImageUrl} onSelect={onSelect}
+    loadingArts={loadingArts} busy={savingDeck || savingUserDecks} />;
 
   if (authLoading || loading) {
     return <AppLoader label={t({ it: 'Caricamento profilo...', en: 'Loading profile...' })} />;
@@ -1188,315 +1122,14 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {addMode === 'archidekt-user' && importedUserDecks.length === 0 && (
-                <div className="space-y-4">
-                  <Input
-                    value={archidektUsername}
-                    disabled={importingUserDecks}
-                    onChange={(e) => setArchidektUsername(e.target.value)}
-                    placeholder={t({ it: 'Username Archidekt', en: 'Archidekt username' })}
-                    className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t({
-                      it: 'Precompilato dal profilo. Puoi modificarlo per questa importazione; Archidekt restituisce solo i mazzi pubblici.',
-                      en: 'Pre-filled from your profile. You can change it for this import; Archidekt returns public decks only.',
-                    })}
-                  </p>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-border text-foreground"
-                      onClick={() => setAddMode('choose')}
-                    >
-                      {t({ it: 'Indietro', en: 'Back' })}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                      onClick={handleArchidektUserImport}
-                      disabled={importingUserDecks || !archidektUsername.trim()}
-                    >
-                      {importingUserDecks ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t({ it: 'Caricamento...', en: 'Loading...' })}
-                        </>
-                      ) : (
-                        t({ it: 'Carica mazzi', en: 'Load Decks' })
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <ProfileDeckImportForms urlControls={urlImport} archidektControls={archidektImport}
+                addMode={addMode} savingDeck={savingDeck} savingUserDecks={savingUserDecks}
+                decks={decks} targetProfileId={getTargetProfileId()} onChooseMode={() => setAddMode('choose')}
+                onSaveUrl={saveArchidektDeck} onSaveBulk={saveArchidektUserDecks}
+                renderArtPicker={renderCommanderArtPicker} />
 
-              {addMode === 'archidekt-user' && importedUserDecks.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedUserDeckUrls.length}/{importedUserDecks.length} {t({ it: importedUserDecks.length === 1 ? 'mazzo selezionato' : 'mazzi selezionati', en: importedUserDecks.length === 1 ? 'deck selected' : 'decks selected' })}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t({
-                          it: 'Scegli quale comandante mostrare sui mazzi partner/DFC. Le art si cambiano dal profilo dopo l\'import.',
-                          en: 'Choose which commander to display on partner/DFC decks. Change art from your profile after import.',
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setSelectedUserDeckUrls(importedUserDecks.map((deck) => deck.sourceUrl))} disabled={savingDeck || savingUserDecks}
-                      >
-                        {t({ it: 'Tutti', en: 'All' })}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setSelectedUserDeckUrls([])} disabled={savingDeck || savingUserDecks}
-                      >
-                        {t({ it: 'Nessuno', en: 'None' })}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
-                    {importedUserDecks.map((deck) => {
-                      const selectedCommander = selectedUserDeckCommanders[deck.sourceUrl] || getDefaultImportedCommanderOption(deck);
-                      const alreadySaved = decks.some((savedDeck) =>
-                        savedDeck.user_id === getTargetProfileId() &&
-                        savedDeck.source_url === deck.sourceUrl
-                      );
-                      const selectedForImport = selectedUserDeckUrls.includes(deck.sourceUrl);
 
-                      return (
-                        <div key={deck.sourceUrl} className={`rounded-lg border p-3 transition-colors ${
-                          selectedForImport ? 'border-border bg-background/40' : 'border-border/60 bg-background/20 opacity-70'
-                        }`}>
-                          <div className="flex gap-3">
-                            <button
-                              type="button"
-                              className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
-                                selectedForImport
-                                  ? 'border-emerald-500 bg-emerald-500 text-white'
-                                  : 'border-border bg-background'
-                              }`}
-                              onClick={() => setSelectedUserDeckUrls((current) =>
-                                selectedForImport
-                                  ? current.filter((url) => url !== deck.sourceUrl)
-                                  : [...current, deck.sourceUrl]
-                              )}
-                              aria-label={selectedForImport
-                                ? t({ it: 'Escludi mazzo', en: 'Exclude deck' })
-                                : t({ it: 'Includi mazzo', en: 'Include deck' })} disabled={savingDeck || savingUserDecks}
-                            >
-                              {selectedForImport && <Check className="h-3.5 w-3.5" />}
-                            </button>
-                            <DeckImage
-                              src={selectedCommander.imageUrl}
-                              alt={selectedCommander.name}
-                              className="w-20 h-14 object-cover object-top rounded"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                {getSourceBadge(deck.sourceType)}
-                                <BracketBadge
-                                  bracket={deck.bracket}
-                                  className="rounded-full border border-emerald-500/30 px-2"
-                                />
-                                {alreadySaved && (
-                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
-                                    {t({ it: 'Gia presente', en: 'Already saved' })}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="font-semibold text-foreground truncate">{deck.name}</p>
-                              <p className="text-sm text-emerald-400 truncate">{selectedCommander.name}</p>
-                            </div>
-                          </div>
-                          {(deck.commanderOptions?.length || 0) > 1 && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {deck.commanderOptions?.map((commander) => {
-                                const selected = isImportedCommanderOptionSelected(selectedCommander, commander);
-                                return (
-                                  <button
-                                    key={`${deck.sourceUrl}-${commander.name}`}
-                                    type="button"
-                                    onClick={() => setSelectedUserDeckCommanders((current) => ({
-                                      ...current,
-                                      [deck.sourceUrl]: commander,
-                                    }))}
-                                    className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
-                                      selected
-                                        ? 'border-emerald-500 bg-emerald-500/10'
-                                        : 'border-border hover:border-emerald-500/50'
-                                    }`} disabled={savingDeck || savingUserDecks}
-                                  >
-                                    <DeckImage
-                                      src={commander.imageUrl}
-                                      alt={commander.name}
-                                      className="h-12 w-16 rounded object-cover object-top"
-                                    />
-                                    <span className="min-w-0 flex-1 text-xs font-medium text-foreground">{commander.name}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-border text-foreground"
-                      onClick={clearArchidektPreview}
-                  >
-                      {t({ it: 'Indietro', en: 'Back' })}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                      onClick={saveArchidektUserDecks}
-                      disabled={savingUserDecks || selectedUserDeckUrls.length === 0 || !getTargetProfileId()}
-                    >
-                      {savingUserDecks ? t({ it: 'Salvataggio...', en: 'Saving...' }) : t({ it: 'Salva mazzi', en: 'Save Decks' })}
-                    </Button>
-                  </div>
-                </div>
-              )}
 
-              {addMode === 'import-url' && !importedDeck && (
-                <div className="space-y-4">
-                  <Input
-                    value={importDeckUrl}
-                    disabled={importingDeck}
-                    onChange={(e) => setImportDeckUrl(e.target.value)}
-                    placeholder="https://archidekt.com/decks/123456 o https://www.moxfield.com/decks/..."
-                    className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t({
-                      it: 'Supporta link pubblici Archidekt e Moxfield. I mazzi privati non possono essere importati.',
-                      en: 'Supports public Archidekt and Moxfield links. Private decks cannot be imported.',
-                    })}
-                  </p>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-border text-foreground"
-                      onClick={() => setAddMode('choose')}
-                    >
-                      {t({ it: 'Indietro', en: 'Back' })}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                      onClick={handleUrlImport}
-                      disabled={importingDeck || !importDeckUrl.trim()}
-                    >
-                      {importingDeck ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t({ it: 'Analisi...', en: 'Importing...' })}
-                        </>
-                      ) : (
-                        t({ it: 'Analizza mazzo', en: 'Import Deck' })
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {addMode === 'import-url' && importedDeck && (
-                <div className="space-y-4">
-                  <div className="flex gap-4 p-4 rounded-lg bg-background/50 border-border">
-                    <DeckImage
-                      src={selectedImportedCommander?.imageUrl || importedDeck.commanderImageUrl}
-                      alt={selectedImportedCommander?.name || importedDeck.commander}
-                      className="w-28 h-20 object-cover object-top rounded"
-                    />
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        {getSourceBadge(importedDeck.sourceType)}
-                        <BracketBadge
-                          bracket={importedDeck.bracket}
-                          className="rounded-full border border-emerald-500/30 px-2"
-                        />
-                      </div>
-                      <h4 className="font-semibold text-foreground line-clamp-1">
-                        {importedDeck.name}
-                      </h4>
-                      <p className="text-sm text-emerald-400">{selectedImportedCommander?.name || importedDeck.commander}</p>
-                      <EdhrecDeckInsights
-                        commander={selectedImportedCommander?.name || importedDeck.commander}
-                        localBracket={importedDeck.bracket}
-                        showBracketComparison
-                        layout="stacked"
-                        linkVariant="chip"
-                        linkClassName="w-full sm:w-auto"
-                        className="mt-2"
-                      />
-                    </div>
-                  </div>
-                  {(importedDeck.commanderOptions?.length || 0) > 1 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {t({ it: 'Scegli comandante da mostrare', en: 'Choose commander to display' })}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {importedDeck.commanderOptions?.map((commander) => {
-                          const selected = isImportedCommanderOptionSelected(selectedImportedCommander, commander);
-                          return (
-                            <button
-                              key={commander.name}
-                              type="button"
-                              onClick={() => selectImportedCommander(commander)}
-                              className={`flex items-center gap-3 rounded-lg border p-2 text-left transition-colors ${
-                                selected
-                                  ? 'border-emerald-500 bg-emerald-500/10'
-                                  : 'border-border hover:border-emerald-500/50'
-                              }`} disabled={savingDeck || savingUserDecks}
-                            >
-                              <DeckImage
-                                src={commander.imageUrl}
-                                alt={commander.name}
-                                className="h-14 w-20 rounded object-cover object-top"
-                              />
-                              <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{commander.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {selectedImportedCommander && renderCommanderArtPicker(
-                    importedCommanderArts,
-                    selectedImportedCommander.imageUrl,
-                    selectImportedArt,
-                    loadingImportedCommanderArts
-                  )}
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-border text-foreground"
-                      onClick={resetUrlImport}
-                    >
-                      {t({ it: 'Annulla', en: 'Cancel' })}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                      onClick={saveArchidektDeck}
-                      disabled={savingDeck || !getTargetProfileId()}
-                    >
-                      {savingDeck ? t({ it: 'Salvataggio...', en: 'Saving...' }) : t({ it: 'Salva mazzo', en: 'Save Deck' })}
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               <ProfileManualDeckForm controls={manual} addMode={addMode} savingDeck={savingDeck}
                 savingUserDecks={savingUserDecks} hasTarget={Boolean(getTargetProfileId())} onSave={saveManualDeck}

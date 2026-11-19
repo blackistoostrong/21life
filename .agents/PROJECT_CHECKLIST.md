@@ -4,6 +4,10 @@
 
 ### Avanzamento 19 novembre — persistenza verificata
 
+- [ ] Import presentation prebuild19 novembre: quality771+3skip/71script/142floor PASS, confini/typecheck PASS; pagina1191righe, form345/art63/badge17. Mappa ownership aggiornata; quattro sezioni JSX preservate e deleghe ai soli container esistenti. Gate merge/prebuild riletti; cleanbuild locale9.3.0 e browser mirati richiesti. Nessun SQL/native/dispositivo/merge/deploy.
+
+- [ ] Presentazione import19 novembre: quattro sezioni JSX preservate con callback/target equivalenti in pannello tipizzato; artpicker condiviso e sourcebadge estratti, nessun CSS/fetch/salvataggio nuovo. Confini e typecheck PASS; confronto AST4sezioni/art/bodybadge acquisito, quality/build e browser URL/bulk/editor/manual/Auth richiesti. Deleghe strette ai container immagine/EDHREC esistenti, nessun owner dati nella presentazione. SoloDev9.3.0, niente SQL/native/dispositivo/merge/deploy.
+
 - [x] Form manuale5161b8f7 chiuso: quality771+3skip/71script/142floor PASS, cleanbuild56route/3.21MiB PASS. Browser mirati38/38 desktop/mobile PASS e cleanup Dev verificato. PNG desktop identici; confronto visivo mobile invariato nel form, sola notifica globale variabile tra fixture. Pagina1557righe, presentazione239, reset delegato e abort mantenuti. Proseguire pannelli import e art condivise; piano complessivo aperto. Nessun SQL/native/dispositivo/merge/deploy.
 
 - [ ] Form manuale prebuild19 novembre: quality771+3skip/71script/142floor PASS; lint mirato0warning/typecheck PASS dopo flag test capture prima/dopo. Baseline selezione manuale+retry2/2 su951a PASS, PNG desktop/mobile acquisiti in artifacts/dev26/manual-form-before-*.png; cleanup verificato. Gate merge/prebuild riletti. Build pulita e browser manual/search/persistenza/Auth richiesti; codice sposta solo presentazione e delega reset, nessuna nuova funzionalità. Nessun SQL/native/dispositivo/merge/deploy.
