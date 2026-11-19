@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |3598|Letture catalogo con owner129; comandi enrichment e ownership restante aperti |
+| Tavolo web |3372|Letture catalogo + enrichment156 verificati; subscription/CRUD e ownership restante aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -447,3 +447,5 @@ Prova tranche letture: appc5c65a3d, test6d64d993, quality finale779+3skip/71scri
 `useArenaDeckEnrichment` possiede metadata, immagini e colori: lease account/gruppo/ruolo, idle, delay, budget API/body/SDK, massimi3deck privati/5colori e2worker immagini. Esclusione per-deck impedisce import contemporanei metadata/immagini. `useCommandScope` riusa il runtime del profilo con emittedJS identico; il vecchio modulo offre solo i nomi compatibili. `arena-deck-enrichment` possiede selezione target e PATCH con confronto atomico dei campi sorgente/ACK reale. I merge locali confrontano ancora lo snapshot; il merge colori legge deck e override nello stesso update dell’owner catalogo. I resolver colori accettano un AbortSignal opzionale e propagano cancel senza proseguire su fallback/altre carte.
 
 I comandi metadata/immagini rimangono best-effort; annullare una richiesta non promette rollback di scritture già accettate. La pagina conserva CRUD guest/membership/match e subscription, ancora da isolare. La chiamata immagini attesa prima del salvataggio match rigetta il cancel per interrompere il seguito della vecchia azione; il controller match resta da rendere interamente scoped. Verifiche consolidate pendenti; nessun claim chiusura punto6.
+
+Prova arricchimento bda6d650: quality788+3skip/71script/142floor, cleanbuild56route/3.22MiB e56browser desktop/mobile PASS; cleanup Dev verificato. CAS server reale accetta snapshot invariato(ACK1) e rifiuta modifica concorrente(ACK0), su entrambe le piattaforme. Matrice include import/SDK cancel per metadata/immagini su navigazione e accountA→B, mazzi altrui read-only, esclusione doppio lavoro e regressioni catalogo/guest/storico/settings/profilo. Sorgente pulita e identica al build; nessuna nuova dipendenza/schema/native. Subscription catalogo e CRUD rimangono aperti; nessun claim chiusura11d.
