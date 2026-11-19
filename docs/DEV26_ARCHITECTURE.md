@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |3136|Letture/subscription168 + enrichment156; membership135/dialoghi134 in verifica, guest/match aperti |
+| Tavolo web |3136|Letture/subscription168 + enrichment156 + membership135/dialoghi134 verificati; guest/match aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -467,3 +467,9 @@ La prima prova reale del canale privato ha fallito prima del burst: il membro va
 Prove dopo correzione:4/4 browser desktop/mobile, guest+deck concorrenti visibili senza reload e fixture ripulite; query dirette sotto ruolo authenticated/claims fixture leggono2messaggi come membro e0come nonmembro. Questo Dev segnala il topic non leggibile come timeout SDK: il collaudo negativo richiede socket sano e nonmembership RPC verificata, oltre alla prova SQL effettiva. Nessun bypass o grant di pubblicazione.
 
 Build applicativa01fe6bc1: web56route/3.23MiB, export Android/iOS/9.33MiB PASS. Le sole aggiunte successive sono migrazione/test/docs, source native e package identici; export conservati su SHA esplicito senza dichiararli build di un altro commit. Cleanbuild finale a73d786d con manifest104:56route/3.23MiB PASS. Quality web805+3skip/71script/143floor ed Expo546+3skip/133floor PASS; tutti i floor preesistenti invariati. Regressione consolidata60/60 desktop/mobile PASS, cleanup Dev verificato. Comprende catalogo, enrichment/CAS, burst reale e diniego nonmembro, guestUI, settings, storico e mutazioni profilo. Route3359nonempty, owner catalogo168, core realtime96. Ownership CRUD e lifecycle nativo completo restano aperti; nessun claim di chiusura punto6.
+
+## Tavolo: membership verificata — 19 novembre
+
+Owner useArenaMembership135nonempty: unico slot per kick/leave/delete, draft con epoch account/gruppo/creator/nome/ruolo, SDK cancellabile con deadline15s, guard prima trasporto e dopo ACK. Conferma leave verificata nel comando; ACK richiede riga identificata, risultato vuoto non produce successo. Componenti dialoghi134nonempty conservano layout e testi; niente SDK/subscription. Route3359→3136nonempty. Commit meccanico8190a7cc conserva12statement e JSX; fix02028ff3 separato, test ROSSO kickBack0cancel/1request prima della correzione.
+
+Quality805+3skip/71script/143floor, cleanbuild56route/3.23MiB e36browser desktop/mobile PASS.28casi membership includono6eliminazioni Dev reali con verifica DB e cleanup, cancel Back/account, A→B→A senza riapparizione draft, doppio invio,503/retry e ACK0/ACK1. Regrediscono anche Realtime reale, guestUI e settings. Test iniziale sincronizzato con completamento NextLink prima di leggere heading; codice app identico al build. Nessun nuovo schema/native/pacchetto o soglia ridotta. Analisi screenshot e collaudi fisici rinviati al finale su istruzione PM; nessuna attestazione di confronto pixel. Guest/match e altri target restano aperti.

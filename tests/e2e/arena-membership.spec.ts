@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 
 type Operation = 'kick' | 'leave' | 'delete';
 async function openCommand(page: Page, operation: Operation) {
+  await expect(page).toHaveURL(/\/table\/[^/]+$/);
+  await expect(page.getByRole('button', { name: 'Back to home', exact: true })).toBeVisible();
   if (operation === 'kick') {
     await page.getByRole('tab', { name: /Players/ }).click();
     return page.getByTitle('Remove member', { exact: true });
@@ -21,7 +23,7 @@ async function openCommand(page: Page, operation: Operation) {
   return page.getByRole('button', { name: 'Delete Playgroup', exact: true });
 }
 
-test('arena membership dialogs preserve confirmation, cancel and layout on reopening', async ({ page }) => {
+test('arena membership dialogs preserve confirmation, cancel and reopening', async ({ page }) => {
   test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
   await fixtureLogin(page);
   await page.locator(`a[href="/table/${process.env.E2E_GROUP_ID!}"]`).first().click();
@@ -31,8 +33,8 @@ test('arena membership dialogs preserve confirmation, cancel and layout on reope
       : page.getByPlaceholder('IMP synthetic playgroup', { exact: true });
     await input.fill('invalid confirmation');
     await expect(page.getByRole('button', { name: operation === 'leave' ? 'Leave' : 'Delete Playgroup', exact: true })).toBeDisabled();
-    await page.getByRole('dialog').locator('.max-w-md').screenshot({
-      path: `artifacts/dev26/membership-${operation}-${test.info().project.name}-${process.env.E2E_MEMBERSHIP_CAPTURE ?? 'after'}.png`, animations: 'disabled',
+    if (process.env.E2E_MEMBERSHIP_CAPTURE) await page.getByRole('dialog').locator('.max-w-md').screenshot({
+      path: `artifacts/dev26/membership-${operation}-${test.info().project.name}-${process.env.E2E_MEMBERSHIP_CAPTURE}.png`, animations: 'disabled',
     });
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: operation === 'leave' ? 'Leave playgroup' : 'Delete playgroup', exact: true })
