@@ -1,4 +1,6 @@
 'use client';
+import { useArenaGuestCommands } from '@/hooks/use-arena-guest-commands';
+import { ArenaGuestDialog } from '@/components/arena/arena-guest-dialog';
 import { useArenaMembership } from '@/hooks/use-arena-membership';
 import { ArenaMembershipDialogs } from '@/components/arena/arena-membership-dialogs';
 import { useArenaDeckEnrichment } from '@/hooks/use-arena-deck-enrichment';
@@ -53,7 +55,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { OccasionalDeckForm } from '@/components/arena/occasional-deck-form';
-import { GuestCommanderPicker } from '@/components/arena/guest-commander-picker';
+
 import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
 import { MatchParticipantRow, toDeckOption } from '@/components/arena/match-participant-row';
 import { BracketBadge } from '@/components/deck/bracket-badge';
@@ -78,7 +80,7 @@ import {
   type ArenaGuestDeck,
   type MatchParticipantRecord,
 } from '@/lib/arena-participants';
-import { buildPairedCommanderColorFields, buildPairedCommanderName } from '@/lib/commander-partners';
+
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import {
@@ -113,54 +115,11 @@ import {
   matchDateToIso,
   toMatchDateValue,
 } from '@/lib/match-datetime';
-import {
-  normalizeGuestName,
-  parseParticipantKey,
-  toGuestParticipantKey,
-  toUserParticipantKey,
-  type ParticipantKey,
-} from '@/lib/participant-keys';
-import type { CommanderSearchResult } from '@/lib/scryfall';
+import { parseParticipantKey, toGuestParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+
 import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
-import {
-  Swords,
-  ArrowLeft,
-  Users,
-  Trophy,
-
-  Plus,
-  Trash2,
-  Copy,
-  Calendar,
-  ChevronDown,
-  Download,
-  User,
-  UserPlus,
-  Target,
-  Skull,
-  TrendingUp,
-  Medal,
-  BarChart3,
-  Pencil,
-  Search,
-  Eye,
-  EyeOff,
-  Share2,
-  Palette,
-  Loader2,
-  DoorOpen,
-  UserMinus,
-  Award,
-  Gauge,
-  Flame,
-  Crosshair,
-  Crown,
-  Clock3,
-  QrCode,
-  Shield,
-  Flag,
-} from 'lucide-react';
+import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, UserPlus, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Search, Eye, EyeOff, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, Clock3, QrCode, Shield, Flag } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
 
 const MATCHES_SELECT = `
@@ -400,15 +359,6 @@ export default function TablePage() {
   const [matchNotes, setMatchNotes] = useState('');
   const [matchPlayedAt, setMatchPlayedAt] = useState(() => toMatchDateValue());
   const [savingMatch, setSavingMatch] = useState(false);
-  const [showGuestModal, setShowGuestModal] = useState(false);
-  const [guestModalMode, setGuestModalMode] = useState<'pick-existing' | 'create' | 'manage-create' | 'add-deck'>('pick-existing');
-  const [guestDeckTargetId, setGuestDeckTargetId] = useState<string | null>(null);
-  const [guestName, setGuestName] = useState('');
-  const [guestDeckName, setGuestDeckName] = useState('');
-  const [guestSelectedCommander, setGuestSelectedCommander] = useState<CommanderSearchResult | null>(null);
-  const [guestSelectedPartnerCommander, setGuestSelectedPartnerCommander] = useState<CommanderSearchResult | null>(null);
-  const [savingGuest, setSavingGuest] = useState(false);
-  const [deletingGuestIds, setDeletingGuestIds] = useState<string[]>([]);
 
   // Edit arena modal state
   const arenaSettingsContext = user ? JSON.stringify([user.id, groupId]) : null;
@@ -724,223 +674,9 @@ export default function TablePage() {
     });
   };
 
-  const resetGuestModal = () => {
-    setShowGuestModal(false);
-    setGuestName('');
-    setGuestDeckName('');
-    setGuestSelectedCommander(null);
-    setGuestSelectedPartnerCommander(null);
-    setGuestDeckTargetId(null);
-    setGuestModalMode('pick-existing');
-  };
-
-  const addGuestDeck = async (
-    guestId: string,
-    commander: CommanderSearchResult,
-    deckName?: string,
-    partnerCommander?: CommanderSearchResult | null,
-    options?: { addToMatch?: boolean },
-  ) => {
-    const commanderDisplayName = buildPairedCommanderName(commander, partnerCommander);
-    const colorFields = buildPairedCommanderColorFields(commander, partnerCommander);
-
-    const { data: createdDeck, error: deckError } = await supabase
-      .from('arena_guest_decks')
-      .insert({
-        guest_id: guestId,
-        group_id: groupId,
-        name: deckName?.trim() || commanderDisplayName,
-        commander: commanderDisplayName,
-        commander_image: commander.imageUrl,
-        ...colorFields,
-        bracket: null,
-      })
-      .select('id, guest_id, group_id, name, commander, commander_image, color_identity, bracket, created_at')
-      .single();
-
-    if (deckError) throw deckError;
-
-    await supabase
-      .from('arena_guests')
-      .update({ last_played_at: new Date().toISOString() })
-      .eq('id', guestId);
-
-    await reloadGuests();
-
-    const participantKey = toGuestParticipantKey(guestId);
-    if (options?.addToMatch !== false) {
-      setSelectedParticipantKeys((prev) => prev.includes(participantKey) ? prev : [...prev, participantKey]);
-      setParticipantDecks((prev) => ({ ...prev, [participantKey]: createdDeck.id }));
-    }
-    if (createdDeck.color_identity?.length) {
-      updateDeckColors((prev) => ({ ...prev, [createdDeck.id]: createdDeck.color_identity }));
-    }
-
-    return createdDeck;
-  };
-
-  const upsertGuestWithDeck = async (
-    displayName: string,
-    commander: CommanderSearchResult,
-    deckName?: string,
-    partnerCommander?: CommanderSearchResult | null,
-    options?: { addToMatch?: boolean },
-  ) => {
-    const normalized = normalizeGuestName(displayName);
-    if (!normalized) throw new Error('Guest name is required');
-
-    let guest = guests.find((entry) => normalizeGuestName(entry.display_name) === normalized) || null;
-
-    if (!guest) {
-      const { data: createdGuest, error: guestError } = await supabase
-        .from('arena_guests')
-        .insert({
-          group_id: groupId,
-          display_name: displayName.trim(),
-          normalized_name: normalized,
-        })
-        .select('id, group_id, display_name, last_played_at')
-        .single();
-
-      if (guestError) throw guestError;
-      guest = { ...createdGuest, arena_guest_decks: [] } as ArenaGuest;
-    }
-
-    const createdDeck = await addGuestDeck(guest.id, commander, deckName, partnerCommander, options);
-
-    return {
-      guestId: guest.id,
-      deckId: createdDeck.id,
-      participantKey: toGuestParticipantKey(guest.id),
-    };
-  };
-
-  const openAddGuestDeckModal = (guest: ArenaGuest) => {
-    setGuestDeckTargetId(guest.id);
-    setGuestName(guest.display_name);
-    setGuestDeckName('');
-    setGuestSelectedCommander(null);
-    setGuestSelectedPartnerCommander(null);
-    setGuestModalMode('add-deck');
-    setShowGuestModal(true);
-  };
-
-  const handleSaveGuestModal = async () => {
-    if (guestModalMode === 'add-deck') {
-      if (!guestDeckTargetId || !guestSelectedCommander) {
-        toast({
-          title: t({ it: 'Errore', en: 'Error' }),
-          description: t({ it: 'Seleziona un comandante per il nuovo mazzo', en: 'Select a commander for the new deck' }),
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setSavingGuest(true);
-      try {
-        await addGuestDeck(
-          guestDeckTargetId,
-          guestSelectedCommander,
-          guestDeckName,
-          guestSelectedPartnerCommander,
-          { addToMatch: false },
-        );
-        resetGuestModal();
-        toast({
-          title: t({ it: 'Mazzo aggiunto', en: 'Deck added' }),
-          description: t({ it: 'Il mazzo è stato aggiunto al guest', en: 'Deck added to guest' }),
-        });
-      } catch (error: unknown) {
-        toast({
-          title: t({ it: 'Errore', en: 'Error' }),
-          description: getSupabaseErrorMessage(error, t({ it: 'Impossibile salvare il mazzo', en: 'Failed to save deck' })),
-          variant: 'destructive',
-        });
-      } finally {
-        setSavingGuest(false);
-      }
-      return;
-    }
-
-    if (!guestName.trim() || !guestSelectedCommander) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Inserisci nome guest e seleziona un comandante', en: 'Enter a guest name and select a commander' }),
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSavingGuest(true);
-    try {
-      await upsertGuestWithDeck(guestName, guestSelectedCommander, guestDeckName, guestSelectedPartnerCommander, {addToMatch:guestModalMode!=='manage-create'});
-      resetGuestModal();
-      toast({
-        title: t({ it: 'Guest aggiunto', en: 'Guest added' }),
-        description: guestModalMode==='manage-create' ? t({it:'Guest e mazzo aggiunti al playgroup',en:'Guest and deck added to playgroup'}) : t({ it: 'Il guest è stato aggiunto alla partita', en: 'Guest added to this battle' }),
-      });
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile salvare il guest', en: 'Failed to save guest' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingGuest(false);
-    }
-  };
-
-  const addExistingGuestToMatch = (guest: ArenaGuest) => {
-    const participantKey = toGuestParticipantKey(guest.id);
-    toggleParticipantSelection(participantKey);
-    setShowGuestModal(false);
-  };
-
-  const handleDeleteGuest = async (guest: ArenaGuest) => {
-    if (!canManageGroup) return;
-
-    const deckCount = guest.arena_guest_decks?.length || 0;
-    const confirmed = confirm(t({
-      it: `Eliminare il guest "${guest.display_name}"? Verranno rimossi anche ${deckCount} ${deckCount === 1 ? 'mazzo' : 'mazzi'} e le sue presenze nelle partite registrate.`,
-      en: `Delete guest "${guest.display_name}"? This also removes ${deckCount} ${deckCount === 1 ? 'deck' : 'decks'} and their entries from recorded battles.`,
-    }));
-    if (!confirmed) return;
-
-    setDeletingGuestIds((ids) => [...ids, guest.id]);
-    try {
-      const { error } = await supabase
-        .from('arena_guests')
-        .delete()
-        .eq('id', guest.id)
-        .eq('group_id', groupId);
-
-      if (error) throw error;
-
-      const guestParticipantKey = toGuestParticipantKey(guest.id);
-      setSelectedParticipantKeys((keys) => keys.filter((key) => key !== guestParticipantKey));
-      setParticipantDecks((current) => {
-        const next = { ...current };
-        delete next[guestParticipantKey];
-        return next;
-      });
-      if (winnerKey === guestParticipantKey) setWinnerKey('');
-
-      await reloadGuests();
-      refreshMatches();
-      toast({
-        title: t({ it: 'Guest eliminato', en: 'Guest deleted' }),
-        description: guest.display_name,
-      });
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile eliminare il guest', en: 'Failed to delete guest' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setDeletingGuestIds((ids) => ids.filter((id) => id !== guest.id));
-    }
-  };
+  const guestCommands = useArenaGuestCommands({ groupId, guests, canManageGroup, reloadGuests, refreshMatches,
+    setSelectedParticipantKeys, setParticipantDecks, updateDeckColors, winnerKey, setWinnerKey, toggleParticipantSelection });
+  const { deletingGuestIds, handleDeleteGuest, resetGuestModal, setGuestModalMode, setShowGuestModal, setGuestDeckTargetId, openAddGuestDeckModal } = guestCommands;
 
   const resetMatchForm = () => {
     setShowMatchModal(false);
@@ -3172,154 +2908,7 @@ export default function TablePage() {
         </ModalOverlay>
       )}
 
-      {showGuestModal && (
-        <ModalOverlay>
-          <ModalCard>
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                {guestModalMode === 'add-deck' ? <Plus className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                {guestModalMode === 'add-deck'
-                  ? t({ it: 'Aggiungi mazzo guest', en: 'Add guest deck' })
-                  : t({ it: 'Aggiungi guest', en: 'Add guest' })}
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {guestModalMode === 'pick-existing'
-                  ? t({ it: 'Scegli un guest già presente nel playgroup o creane uno nuovo', en: 'Pick an existing playgroup guest or create a new one' })
-                  : guestModalMode === 'add-deck'
-                    ? t({ it: 'Aggiungi un altro mazzo a questo guest', en: 'Add another deck to this guest' })
-                    : t({ it: 'Crea un guest con nome e comandante', en: 'Create a guest with a name and commander' })}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {guestModalMode === 'pick-existing' && guests.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    {t({ it: 'Guest esistenti', en: 'Existing guests' })}
-                  </label>
-                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                    {guests.map((guest) => (
-                      <div
-                        key={guest.id}
-                        className="flex items-center gap-2 rounded-lg border border-border bg-background/30 px-2 py-2 transition-colors hover:border-emerald-500/50"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => addExistingGuestToMatch(guest)}
-                          className="flex min-w-0 flex-1 items-center justify-between px-1 text-left"
-                        >
-                          <span className="font-medium text-foreground">{guest.display_name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {guest.arena_guest_decks?.length || 0} {t({ it: 'mazzi', en: 'decks' })}
-                          </span>
-                        </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-emerald-300"
-                          onClick={() => openAddGuestDeckModal(guest)}
-                          title={t({ it: 'Aggiungi mazzo', en: 'Add deck' })}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full border-border text-foreground"
-                    onClick={() => setGuestModalMode('create')}
-                  >
-                    {t({ it: 'Crea nuovo guest', en: 'Create new guest' })}
-                  </Button>
-                </div>
-              )}
-
-              {(guestModalMode === 'create' || guestModalMode === 'manage-create' || guestModalMode === 'add-deck' || guests.length === 0) && (
-                <div className="space-y-4">
-                  {guests.length > 0 && guestModalMode !== 'add-deck' && guestModalMode !== 'manage-create' && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="px-0 text-muted-foreground"
-                      onClick={() => setGuestModalMode('pick-existing')}
-                    >
-                      {t({ it: 'Torna ai guest esistenti', en: 'Back to existing guests' })}
-                    </Button>
-                  )}
-                  {guests.length > 0 && guestModalMode === 'add-deck' && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="px-0 text-muted-foreground"
-                      onClick={() => {
-                        setGuestDeckTargetId(null);
-                        setGuestModalMode('pick-existing');
-                      }}
-                    >
-                      {t({ it: 'Torna ai guest esistenti', en: 'Back to existing guests' })}
-                    </Button>
-                  )}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      {t({ it: 'Nome guest', en: 'Guest name' })}
-                    </label>
-                    <Input
-                      value={guestName}
-                      onChange={(event) => setGuestName(event.target.value)}
-                      placeholder={t({ it: 'Es. Marco', en: 'e.g. Marco' })}
-                      className="bg-background/50 border-border text-foreground"
-                      disabled={savingGuest || guestModalMode === 'add-deck'}
-                    />
-                  </div>
-                  <GuestCommanderPicker
-                    deckName={guestDeckName}
-                    onDeckNameChange={setGuestDeckName}
-                    onSelectCommander={setGuestSelectedCommander}
-                    selectedCommander={guestSelectedCommander}
-                    selectedPartnerCommander={guestSelectedPartnerCommander}
-                    onSelectPartnerCommander={setGuestSelectedPartnerCommander}
-                    disabled={savingGuest}
-                  />
-                </div>
-              )}
-            </CardContent>
-            {(guestModalMode === 'create' || guestModalMode === 'manage-create' || guestModalMode === 'add-deck' || guests.length === 0) && (
-              <div className="border-t border-border/70 px-6 py-4">
-                <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1 border-border text-foreground"
-                    onClick={resetGuestModal}
-                    disabled={savingGuest}
-                  >
-                    {t({ it: 'Annulla', en: 'Cancel' })}
-                  </Button>
-                  <Button
-                    className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                    onClick={handleSaveGuestModal}
-                    disabled={
-                      savingGuest ||
-                      !guestSelectedCommander ||
-                      (guestModalMode === 'add-deck' ? !guestDeckTargetId : !guestName.trim())
-                    }
-                  >
-                    {savingGuest
-                      ? t({ it: 'Salvataggio...', en: 'Saving...' })
-                      : guestModalMode === 'add-deck'
-                        ? t({ it: 'Salva mazzo', en: 'Save deck' })
-                        : t({ it: 'Aggiungi guest', en: 'Add guest' })}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </ModalCard>
-        </ModalOverlay>
-      )}
+      <ArenaGuestDialog guests={guests} controls={guestCommands} />
     </div>
   );
 }
