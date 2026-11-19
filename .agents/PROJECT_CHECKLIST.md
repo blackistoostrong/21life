@@ -4,6 +4,8 @@
 
 ### Avanzamento 19 novembre — persistenza verificata
 
+- [x] Import presentation5bb107f7 chiusa: quality771+3skip/71script/142floor PASS; cleanbuild56route/3.21MiB PASS; browser desktop/mobile66/66 PASS per URL/bulk/editor/manuale/persistenza/Auth, cleanup Dev verificato. Pagina1191, panel345/art63/badge17, quattro sezioni preservate. Prossimo blocco collezione: filtri/ordinamento/aggregazioni locali e griglia con callback, caratterizzazione UI reale prima estrazione. Nessun SQL/native/dispositivo/merge/deploy.
+
 - [ ] Import presentation prebuild19 novembre: quality771+3skip/71script/142floor PASS, confini/typecheck PASS; pagina1191righe, form345/art63/badge17. Mappa ownership aggiornata; quattro sezioni JSX preservate e deleghe ai soli container esistenti. Gate merge/prebuild riletti; cleanbuild locale9.3.0 e browser mirati richiesti. Nessun SQL/native/dispositivo/merge/deploy.
 
 - [ ] Presentazione import19 novembre: quattro sezioni JSX preservate con callback/target equivalenti in pannello tipizzato; artpicker condiviso e sourcebadge estratti, nessun CSS/fetch/salvataggio nuovo. Confini e typecheck PASS; confronto AST4sezioni/art/bodybadge acquisito, quality/build e browser URL/bulk/editor/manual/Auth richiesti. Deleghe strette ai container immagine/EDHREC esistenti, nessun owner dati nella presentazione. SoloDev9.3.0, niente SQL/native/dispositivo/merge/deploy.
