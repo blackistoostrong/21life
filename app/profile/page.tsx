@@ -173,6 +173,7 @@ export default function ProfilePage() {
     partnerSearchQuery, setPartnerSearchQuery, partnerSearchResults, setPartnerSearchResults, searchingPartner,
     manualCommanderArts, setManualCommanderArts, loadingManualCommanderArts, setLoadingManualCommanderArts,
     customDeckName, setCustomDeckName, manualPartnerMode, manualPartnerCopy, handleSelectCommander,
+    freezeManualSelection,
   } = useProfileManualDeck(
     user && !adminLoading ? user.id + ':' + adminMode : null,
     showAddModal && addMode === 'manual', fetchCommanderArts);
@@ -615,7 +616,7 @@ export default function ProfilePage() {
     scopeKey: user && !adminLoading ? user.id + ':' + adminMode : null, open: showAddModal, mode: addMode,
     user, adminMode, decks, getTargetProfileId, getTargetProfileName, importedDeck, selectedImportedCommander,
     importedUserDecks, selectedUserDeckUrls, selectedUserDeckCommanders, selectedCommander,
-    selectedPartnerCommander, customDeckName, closeAddModal, fetchDecks,
+    selectedPartnerCommander, customDeckName, closeAddModal, fetchDecks, freezeManualSelection,
   });
 
   useProfileArchidektAutosync(user && !adminLoading ? user.id + ':' + adminMode : null,
@@ -712,7 +713,7 @@ export default function ProfilePage() {
                   onClick={() => onSelect(art)}
                   className={`rounded-lg border p-2 text-left transition-colors ${
                     selected ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-background/25 hover:border-emerald-500/50'
-                  }`}
+                  }`} disabled={savingDeck || savingUserDecks}
                 >
                   <DeckImage
                     src={art.imageUrl}
@@ -1137,7 +1138,7 @@ export default function ProfilePage() {
                   <Select
                     value={selectedTargetProfileId}
                     onValueChange={setSelectedTargetProfileId}
-                    disabled={targetProfiles.length === 0}
+                    disabled={targetProfiles.length === 0 || savingDeck || savingUserDecks}
                   >
                     <SelectTrigger className="border-border bg-background/50 text-foreground">
                       <SelectValue placeholder={t({ it: 'Seleziona giocatore', en: 'Select player' })} />
@@ -1261,7 +1262,7 @@ export default function ProfilePage() {
                         variant="ghost"
                         size="sm"
                         className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setSelectedUserDeckUrls(importedUserDecks.map((deck) => deck.sourceUrl))}
+                        onClick={() => setSelectedUserDeckUrls(importedUserDecks.map((deck) => deck.sourceUrl))} disabled={savingDeck || savingUserDecks}
                       >
                         {t({ it: 'Tutti', en: 'All' })}
                       </Button>
@@ -1270,7 +1271,7 @@ export default function ProfilePage() {
                         variant="ghost"
                         size="sm"
                         className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setSelectedUserDeckUrls([])}
+                        onClick={() => setSelectedUserDeckUrls([])} disabled={savingDeck || savingUserDecks}
                       >
                         {t({ it: 'Nessuno', en: 'None' })}
                       </Button>
@@ -1304,7 +1305,7 @@ export default function ProfilePage() {
                               )}
                               aria-label={selectedForImport
                                 ? t({ it: 'Escludi mazzo', en: 'Exclude deck' })
-                                : t({ it: 'Includi mazzo', en: 'Include deck' })}
+                                : t({ it: 'Includi mazzo', en: 'Include deck' })} disabled={savingDeck || savingUserDecks}
                             >
                               {selectedForImport && <Check className="h-3.5 w-3.5" />}
                             </button>
@@ -1346,7 +1347,7 @@ export default function ProfilePage() {
                                       selected
                                         ? 'border-emerald-500 bg-emerald-500/10'
                                         : 'border-border hover:border-emerald-500/50'
-                                    }`}
+                                    }`} disabled={savingDeck || savingUserDecks}
                                   >
                                     <DeckImage
                                       src={commander.imageUrl}
@@ -1471,7 +1472,7 @@ export default function ProfilePage() {
                                 selected
                                   ? 'border-emerald-500 bg-emerald-500/10'
                                   : 'border-border hover:border-emerald-500/50'
-                              }`}
+                              }`} disabled={savingDeck || savingUserDecks}
                             >
                               <DeckImage
                                 src={commander.imageUrl}
@@ -1518,7 +1519,7 @@ export default function ProfilePage() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={t({ it: 'Cerca comandante per nome...', en: 'Search commander by name...' })}
-                      className="pl-9 bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
+                      className="pl-9 bg-background/50 border-border text-foreground placeholder:text-muted-foreground" disabled={savingDeck || savingUserDecks}
                     />
                     {searching && (
                       <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
@@ -1638,7 +1639,7 @@ export default function ProfilePage() {
                               setPartnerSearchQuery('');
                               setPartnerSearchResults([]);
                               if (customDeckName === combinedName) setCustomDeckName(selectedCommander.name);
-                            }}
+                            }} disabled={savingDeck || savingUserDecks}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -1651,7 +1652,7 @@ export default function ProfilePage() {
                           value={partnerSearchQuery}
                           onChange={(e) => setPartnerSearchQuery(e.target.value)}
                           placeholder={manualPartnerCopy.placeholder}
-                          className="pl-9 bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
+                          className="pl-9 bg-background/50 border-border text-foreground placeholder:text-muted-foreground" disabled={savingDeck || savingUserDecks}
                         />
                         {searchingPartner && (
                           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
@@ -1671,7 +1672,7 @@ export default function ProfilePage() {
                                 setPartnerSearchResults([]);
                                 const combinedName = `${selectedCommander.name} // ${result.name}`;
                                 if (!customDeckName || customDeckName === selectedCommander.name) setCustomDeckName(combinedName);
-                              }}
+                              }} disabled={savingDeck || savingUserDecks}
                             >
                               {result.imageUrl ? (
                                 <DeckImage
@@ -1707,7 +1708,7 @@ export default function ProfilePage() {
                       value={customDeckName}
                       onChange={(e) => setCustomDeckName(e.target.value)}
                       placeholder={`${selectedCommander.name}`}
-                      className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
+                      className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground" disabled={savingDeck || savingUserDecks}
                     />
                   </div>
 

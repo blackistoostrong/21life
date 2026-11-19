@@ -24,6 +24,7 @@ type Input = {
   selectedUserDeckCommanders: Record<string, ImportedCommanderOption>;
   selectedCommander: CommanderSearchResult | null; selectedPartnerCommander: CommanderSearchResult | null;
   customDeckName: string; closeAddModal: () => void; fetchDecks: () => Promise<void>;
+  freezeManualSelection: () => void;
 };
 type Scope = ReturnType<typeof useProfileCommandScope>;
 type Kind = 'single' | 'bulk';
@@ -181,6 +182,7 @@ export function useProfileDeckPersistence(input: Input) {
   const saveManualDeck = async () => {
     if (!input.selectedCommander || !targetId) return;
     await execute('single', async job => {
+      input.freezeManualSelection();
       const primary = structuredClone(input.selectedCommander!);
       const partner = structuredClone(input.selectedPartnerCommander);
       const displayName = partner ? `${primary.name} // ${partner.name}` : primary.name;
