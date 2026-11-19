@@ -674,9 +674,9 @@ export default function TablePage() {
     });
   };
 
-  const guestCommands = useArenaGuestCommands({ groupId, guests, canManageGroup, reloadGuests, refreshMatches,
-    setSelectedParticipantKeys, setParticipantDecks, updateDeckColors, winnerKey, setWinnerKey, toggleParticipantSelection });
-  const { deletingGuestIds, handleDeleteGuest, resetGuestModal, setGuestModalMode, setShowGuestModal, setGuestDeckTargetId, openAddGuestDeckModal } = guestCommands;
+  const guestCommands = useArenaGuestCommands({ userId: user?.id ?? null, adminMode, groupId, guests, canManageGroup, reloadGuests, refreshMatches,
+    setSelectedParticipantKeys, setParticipantDecks, updateDeckColors, setWinnerKey, toggleParticipantSelection });
+  const { deletingGuestIds, handleDeleteGuest, openGuestModal, openAddGuestDeckModal } = guestCommands;
 
   const resetMatchForm = () => {
     setShowMatchModal(false);
@@ -1992,7 +1992,7 @@ export default function TablePage() {
                       <CardDescription>{t({it:'Trova un guest o un comandante e gestisci i mazzi associati.',en:'Find a guest or commander and manage their decks.'})}</CardDescription>
                     </CardHeader>
                     <CardContent>{!guestsError && <GuestDirectory key={`${user?.id}:${groupId}`} guests={guests} deletingIds={deletingGuestIds}
-                      onAdd={()=>{resetGuestModal();setGuestModalMode('manage-create');setShowGuestModal(true);}}
+                      onAdd={()=>openGuestModal('manage-create')}
                       onAddDeck={openAddGuestDeckModal} onDelete={handleDeleteGuest} />}</CardContent>
                   </Card>
                 )}
@@ -2290,9 +2290,7 @@ export default function TablePage() {
                       size="sm"
                       className="border-border text-foreground"
                       onClick={() => {
-                        setGuestDeckTargetId(null);
-                        setGuestModalMode(guests.length > 0 ? 'pick-existing' : 'create');
-                        setShowGuestModal(true);
+                        openGuestModal(guests.length > 0 ? 'pick-existing' : 'create');
                       }}
                     >
                       <UserPlus className="mr-2 h-4 w-4" />
@@ -2908,7 +2906,7 @@ export default function TablePage() {
         </ModalOverlay>
       )}
 
-      <ArenaGuestDialog guests={guests} controls={guestCommands} />
+      <ArenaGuestDialog key={guestCommands.dialogKey} guests={guests} controls={guestCommands} />
     </div>
   );
 }

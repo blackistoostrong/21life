@@ -7,6 +7,7 @@ import { DeckImage } from '@/components/deck-image';
 import { useLanguage } from '@/components/language-provider';
 import { getCommanderPartnerCopy, getCommanderPartnerMode } from '@/lib/commander-partners';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { withRequestDeadline } from '@/packages/data/request-deadline';
 import type { CommanderSearchResult } from '@/lib/scryfall';
 import { Loader2, Search, Swords, X } from 'lucide-react';
 
@@ -40,10 +41,11 @@ export function GuestCommanderPicker({
   const partnerMode = selectedCommander ? getCommanderPartnerMode(selectedCommander) : null;
   const partnerCopy = partnerMode ? getCommanderPartnerCopy(partnerMode, t) : null;
 
-  const searchCommanders = useCallback(async (query: string, mode: typeof partnerMode = null) => {
+  const searchCommanders = useCallback(async (query: string, signal: AbortSignal, mode: typeof partnerMode = null) => {
+    if (signal.aborted) return;
     if (query.trim().length < 2) {
-      if (mode) setPartnerSearchResults([]);
-      else setSearchResults([]);
+      if (mode) { setPartnerSearchResults([]); setSearchingPartner(false); }
+      else { setSearchResults([]); setSearching(false); }
       return;
     }
 
@@ -53,44 +55,54 @@ export function GuestCommanderPicker({
     try {
       const params = new URLSearchParams({ q: query.trim() });
       if (mode) params.set('partnerMode', mode);
-      const response = await authenticatedFetch(`/api/scryfall-commanders?${params.toString()}`);
-      if (!response.ok) throw new Error('Search failed');
-      const payload = await response.json();
+      const payload = await withRequestDeadline({ abortSignal: async requestSignal => {
+        const response = await authenticatedFetch(`/api/scryfall-commanders?${params.toString()}`, { signal: requestSignal });
+        if (!response.ok) throw new Error('Search failed');
+        return await response.json();
+      } }, 15000, signal);
+      if (signal.aborted) return;
       const results = Array.isArray(payload.data) ? payload.data as CommanderSearchResult[] : [];
       if (mode) setPartnerSearchResults(results);
       else setSearchResults(results);
     } catch {
+      if (signal.aborted) return;
       if (mode) setPartnerSearchResults([]);
       else setSearchResults([]);
     } finally {
-      if (mode) setSearchingPartner(false);
-      else setSearching(false);
+      if (!signal.aborted) {
+        if (mode) setSearchingPartner(false);
+        else setSearching(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchCommanders(searchQuery);
+      void searchCommanders(searchQuery, controller.signal);
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [searchQuery, searchCommanders]);
 
   useEffect(() => {
     if (!partnerMode || !selectedCommander) {
       setPartnerSearchQuery('');
       setPartnerSearchResults([]);
+      setSearchingPartner(false);
       return;
     }
 
     if (selectedPartnerCommander && partnerSearchQuery === selectedPartnerCommander.name) {
+      setSearchingPartner(false);
       return;
     }
 
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchCommanders(partnerSearchQuery, partnerMode);
+      void searchCommanders(partnerSearchQuery, controller.signal, partnerMode);
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [partnerMode, partnerSearchQuery, searchCommanders, selectedCommander, selectedPartnerCommander]);
 
   const handleSelectCommander = (commander: CommanderSearchResult) => {

@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |3136|Letture/subscription168 + enrichment156 + membership135/dialoghi134 verificati; guest/match aperti |
+| Tavolo web |2747|Letture/subscription168 + enrichment156 + membership135 verificati; guest152/servizio61/dialogo163 in verifica, match aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
