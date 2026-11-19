@@ -4,6 +4,8 @@
 
 ### Avanzamento 19 novembre — persistenza verificata
 
+- [x] Form manuale5161b8f7 chiuso: quality771+3skip/71script/142floor PASS, cleanbuild56route/3.21MiB PASS. Browser mirati38/38 desktop/mobile PASS e cleanup Dev verificato. PNG desktop identici; confronto visivo mobile invariato nel form, sola notifica globale variabile tra fixture. Pagina1557righe, presentazione239, reset delegato e abort mantenuti. Proseguire pannelli import e art condivise; piano complessivo aperto. Nessun SQL/native/dispositivo/merge/deploy.
+
 - [ ] Form manuale prebuild19 novembre: quality771+3skip/71script/142floor PASS; lint mirato0warning/typecheck PASS dopo flag test capture prima/dopo. Baseline selezione manuale+retry2/2 su951a PASS, PNG desktop/mobile acquisiti in artifacts/dev26/manual-form-before-*.png; cleanup verificato. Gate merge/prebuild riletti. Build pulita e browser manual/search/persistenza/Auth richiesti; codice sposta solo presentazione e delega reset, nessuna nuova funzionalità. Nessun SQL/native/dispositivo/merge/deploy.
 
 - [ ] Form manuale19 novembre: due sezioni JSX esistenti spostate in componente di presentazione239righe; pagina1557 (prima1781 circa), senza minificazione. Callback save/art/target equivalenti e tutti stili preservati; reset completo delegato all'owner inun comando con guardia e abort, non più11setter nella route. Primo import DeckImage sbagliato corretto al percorso reale components/deck-image, delega stretta nel gate. Richiesti typecheck/confini/quality/build e browser manuale/search/persistenza/Auth. Nessun SQL/native/dispositivo/merge/deploy.
