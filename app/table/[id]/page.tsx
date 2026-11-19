@@ -439,7 +439,7 @@ export default function TablePage() {
   const currentUserIsMember = isArenaMember(members, user?.id);
   const canLeaveCurrentArena = canLeaveArena(members.length, currentUserIsMember);
   const membership = useArenaMembership(user, group, adminMode, canLeaveCurrentArena, setMembers);
-  const { kickingMemberIds, handleKickMember, openDeleteArenaModal, openLeaveArenaModal } = membership;
+  const { kickingMemberIds, membershipBusy, handleKickMember, openDeleteArenaModal, openLeaveArenaModal } = membership;
 
   const editMatchPlayerOptions = useMemo(() => {
     const options = new Map<ParticipantKey, string>();
@@ -1609,6 +1609,7 @@ export default function TablePage() {
                   variant="ghost"
                   size="icon"
                   onClick={openLeaveArenaModal}
+                  disabled={membershipBusy}
                   className="h-10 w-10 text-muted-foreground hover:text-foreground"
                   title={t({ it: 'Esci dal playgroup', en: 'Leave playgroup' })}
                   aria-label={t({ it: 'Esci dal playgroup', en: 'Leave playgroup' })}
@@ -1622,6 +1623,7 @@ export default function TablePage() {
                   variant="ghost"
                   size="icon"
                   onClick={openDeleteArenaModal}
+                  disabled={membershipBusy}
                   className="h-10 w-10 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   title={t({ it: 'Elimina playgroup', en: 'Delete playgroup' })}
                   aria-label={t({ it: 'Elimina playgroup', en: 'Delete playgroup' })}
@@ -2234,7 +2236,7 @@ export default function TablePage() {
                                 size="icon"
                                 className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
                                 onClick={() => handleKickMember(member)}
-                                disabled={kickingMemberIds.includes(member.id)}
+                                disabled={membershipBusy}
                                 title={t({ it: 'Rimuovi membro', en: 'Remove member' })}
                               >
                                 <UserMinus className={`h-4 w-4 ${kickingMemberIds.includes(member.id) ? 'animate-pulse' : ''}`} />
@@ -2473,6 +2475,7 @@ export default function TablePage() {
                   type="button"
                   variant="outline"
                   onClick={openLeaveArenaModal}
+                  disabled={membershipBusy}
                   className="h-11 justify-start border-border text-foreground"
                 >
                   <DoorOpen className="mr-2 h-4 w-4" />
@@ -2484,6 +2487,7 @@ export default function TablePage() {
                   type="button"
                   variant="outline"
                   onClick={openDeleteArenaModal}
+                  disabled={membershipBusy}
                   className="h-11 justify-start border-destructive/35 text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

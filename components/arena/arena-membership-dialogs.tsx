@@ -12,8 +12,7 @@ import type { useArenaMembership } from '@/hooks/use-arena-membership';
 export function ArenaMembershipDialogs({group, controls}: {group: Group | null; controls: ReturnType<typeof useArenaMembership>}) {
   const { copy: t } = useLanguage();
   const { showDeleteArenaModal, showLeaveArenaModal, leaveArenaConfirmation, deleteArenaConfirmation,
-    leavingArena, deletingArena, setShowLeaveArenaModal, setLeaveArenaConfirmation,
-    setDeleteArenaConfirmation, setShowDeleteArenaModal, handleDeleteGroup, handleLeaveArena } = controls;
+    leavingArena, deletingArena, closeDialog, setConfirmation, handleDeleteGroup, handleLeaveArena } = controls;
   return <>
       {showLeaveArenaModal && group && (
         <ModalOverlay>
@@ -43,7 +42,8 @@ export function ArenaMembershipDialogs({group, controls}: {group: Group | null; 
                   <Input
                     id="leaveArenaConfirmation"
                     value={leaveArenaConfirmation}
-                    onChange={(e) => setLeaveArenaConfirmation(e.target.value)}
+                    disabled={leavingArena}
+                    onChange={(e) => setConfirmation(e.target.value)}
                     placeholder="confirm"
                     className="border-border bg-background/50 text-foreground placeholder:text-muted-foreground"
                     autoComplete="off"
@@ -54,10 +54,7 @@ export function ArenaMembershipDialogs({group, controls}: {group: Group | null; 
                   <Button
                     variant="outline"
                     className="flex-1 border-border text-foreground"
-                    onClick={() => {
-                      setShowLeaveArenaModal(false);
-                      setLeaveArenaConfirmation('');
-                    }}
+                    onClick={closeDialog}
                     disabled={leavingArena}
                   >
                     {t({ it: 'Annulla', en: 'Cancel' })}
@@ -103,7 +100,8 @@ export function ArenaMembershipDialogs({group, controls}: {group: Group | null; 
                   </label>
                   <Input
                     value={deleteArenaConfirmation}
-                    onChange={(e) => setDeleteArenaConfirmation(e.target.value)}
+                    disabled={deletingArena}
+                    onChange={(e) => setConfirmation(e.target.value)}
                     placeholder={group.name}
                     className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
                     autoFocus
@@ -114,7 +112,7 @@ export function ArenaMembershipDialogs({group, controls}: {group: Group | null; 
                     type="button"
                     variant="outline"
                     className="flex-1 border-border text-foreground"
-                    onClick={() => setShowDeleteArenaModal(false)}
+                    onClick={closeDialog}
                     disabled={deletingArena}
                   >
                     {t({ it: 'Annulla', en: 'Cancel' })}
