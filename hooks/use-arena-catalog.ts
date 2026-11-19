@@ -51,7 +51,9 @@ export function useArenaCatalog(userId: string | null, groupId: string, adminMod
   const setGroup = useCallback((action: SetStateAction<Group | null>) => setField('group', action), [setField]);
   const setMembers = useCallback((action: SetStateAction<Profile[]>) => setField('members', action), [setField]);
   const setDecks = useCallback((action: SetStateAction<Deck[]>) => setField('decks', action), [setField]);
-  const setDeckColorOverrides = useCallback((action: SetStateAction<Record<string, string[]>>) => setField('deckColorOverrides', action), [setField]);
+  const updateDeckColors = useCallback((action: (colors: Record<string, string[]>, decks: Deck[]) => Record<string, string[]>) => {
+    update(data => ({ ...data, deckColorOverrides: action(data.deckColorOverrides, data.decks) }));
+  }, [update]);
   const begin = useCallback((resource: Resource) => {
     const owner = ownerRef.current;
     if (!context.key || owner?.context !== context) return null;
@@ -127,6 +129,6 @@ export function useArenaCatalog(userId: string | null, groupId: string, adminMod
     if (current.decksLoading || current.decks.length || !current.members.length) return;
     void loadArenaDecks(current.members.map(member => member.id));
   }, [current.decksLoading, current.decks.length, current.members, loadArenaDecks]);
-  return { ...current, setGroup, setMembers, setDecks, setDeckColorOverrides,
+  return { ...current, setGroup, setMembers, setDecks, updateDeckColors,
     fetchData, reloadGuests, loadArenaDecks, ensureArenaMemberDecksLoaded };
 }

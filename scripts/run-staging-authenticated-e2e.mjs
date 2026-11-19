@@ -130,6 +130,7 @@ try {
       'tests/e2e/profile-manual-lifecycle.spec.ts',
       'tests/e2e/history-v2.spec.ts',
       'tests/e2e/arena-catalog.spec.ts',
+      'tests/e2e/arena-enrichment.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
     ], { stdio: 'inherit' });

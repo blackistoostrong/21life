@@ -1,4 +1,5 @@
 'use client';
+import { useArenaDeckEnrichment } from '@/hooks/use-arena-deck-enrichment';
 import { useArenaCatalog } from '@/hooks/use-arena-catalog';
 import type { Profile, Deck } from '@/lib/types/arena-catalog';
 import { ArenaCatalogError } from '@/components/arena/arena-catalog-error';
@@ -11,7 +12,7 @@ import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
 import {ArenaHistoryPagination} from '@/components/arena/arena-history-pagination';
 import {ArenaDataStatus} from '@/components/arena/arena-data-status';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
@@ -39,7 +40,7 @@ import { useLanguage } from '@/components/language-provider';
 import { usePlatformAdmin } from '@/hooks/use-platform-admin';
 
 import { MANA_COLOR_LABELS } from '@/lib/mana-colors';
-import { syncDeckCommanderColors, type DeckCommanderColorTarget } from '@/lib/deck-color-sync';
+
 import { ManaColorPairs, ManaColorReport } from '@/components/arena/mana-color-charts';
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 
@@ -55,8 +56,7 @@ import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
 import { MatchParticipantRow, toDeckOption } from '@/components/arena/match-participant-row';
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecBadge } from '@/components/deck/edhrec-badge';
-import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
-import { runWhenIdle } from '@/lib/idle-work';
+
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { buildArenaShareText } from '@/lib/arena-share';
 import {
@@ -160,12 +160,6 @@ import {
   Flag,
 } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
-
-const ARENA_METADATA_SYNC_DELAY_MS = 2000;
-const ARENA_METADATA_SYNC_GAP_MS = 200;
-const MAX_ARENA_COLOR_SYNC_DECKS = 5;
-const MAX_ARENA_IMAGE_REFRESH_DECKS = 3;
-const DECK_IMPORT_CONCURRENCY = 2;
 
 const MATCHES_SELECT = `
   *,
@@ -332,7 +326,7 @@ export default function TablePage() {
   const { copy: t, language } = useLanguage();
   const { adminMode } = usePlatformAdmin();
   const { group, setGroup, decks, setDecks, members, setMembers, guests, loading, decksLoading,
-    deckColorOverrides, setDeckColorOverrides, catalogError, guestsError, decksError,
+    deckColorOverrides, updateDeckColors, catalogError, guestsError, decksError,
     fetchData, reloadGuests, loadArenaDecks, ensureArenaMemberDecksLoaded } = useArenaCatalog(user?.id ?? null, groupId, adminMode);
   const season=useArenaSeasonContext(user?.id,groupId);
   const seasonContext=season.data;
@@ -343,10 +337,6 @@ export default function TablePage() {
   const [bracketFilter, setBracketFilter] = useState('all');
   const [deckStatsSort, setDeckStatsSort] = useState<'winRate' | 'gamesPlayed'>('winRate');
   const [showProvisionalDecks, setShowProvisionalDecks] = useState(false);
-  const [syncingDeckColors, setSyncingDeckColors] = useState(false);
-  const colorSyncInFlightRef = useRef(false);
-  const imageRefreshInFlightRef = useRef(false);
-  const arenaMetadataSyncInFlightRef = useRef(false);
   const getStatsSinceDate = useCallback(() => {
     if(!season.ready)return null;
     const seasonStart = seasonContext
@@ -480,153 +470,9 @@ export default function TablePage() {
     [visibleDeckStats, deckStatsSort]
   );
 
-  const syncArenaDeckMetadata = useCallback(async (loadedDecks: Deck[]) => {
-    if (!user || arenaMetadataSyncInFlightRef.current) return;
+  const { refreshMissingImportedDeckImages, scheduleArenaDeckColors, syncingDeckColors } = useArenaDeckEnrichment(
+    user?.id ?? null, groupId, adminMode, isDemoUser(user), decks, deckColorOverrides, matches, setDecks, updateDeckColors);
 
-    const MAX_AUTO_SYNC_DECKS = 3;
-    const decksToSync = loadedDecks.filter((deck) =>
-      (adminMode || deck.user_id === user.id) &&
-      (deck.source_type === 'archidekt' || deck.source_type === 'moxfield') &&
-      deck.source_url &&
-      (!deck.bracket || !deck.commander_image)
-    ).slice(0, MAX_AUTO_SYNC_DECKS);
-
-    if (decksToSync.length === 0) return;
-
-    arenaMetadataSyncInFlightRef.current = true;
-
-    try {
-      await delay(ARENA_METADATA_SYNC_DELAY_MS * 2);
-
-      const successfulUpdates: Array<Partial<Deck> & { id: string }> = [];
-
-      for (const deck of decksToSync) {
-      try {
-        const response = await authenticatedFetch('/api/deck-import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: deck.source_url }),
-        });
-
-        if (!response.ok) continue;
-
-        const imported = await response.json();
-        const bracket = typeof imported.bracket === 'string' ? imported.bracket : null;
-        const updatePayload: Partial<Deck> = {};
-
-        if (!deck.bracket && bracket) updatePayload.bracket = bracket;
-        if (!deck.commander_image && imported.commanderImageUrl) {
-          updatePayload.commander_image = imported.commanderImageUrl;
-        }
-
-        if (Object.keys(updatePayload).length === 0) continue;
-
-        const { error } = await supabase
-          .from('decks')
-          .update(updatePayload)
-          .eq('id', deck.id);
-
-        if (!error) {
-          successfulUpdates.push({ id: deck.id, ...updatePayload });
-        }
-      } catch {
-        // Keep syncing the remaining decks.
-      }
-
-        await delay(ARENA_METADATA_SYNC_GAP_MS);
-      }
-
-      if (successfulUpdates.length === 0) return;
-
-      setDecks((currentDecks) => currentDecks.map((deck) => {
-        const update = successfulUpdates.find((item) => item.id === deck.id);
-        return update ? { ...deck, ...update } : deck;
-      }));
-
-    } finally {
-      arenaMetadataSyncInFlightRef.current = false;
-    }
-  }, [adminMode, user, setDecks]);
-
-  useEffect(() => {
-    if (!decks.length) return;
-    return runWhenIdle(() => syncArenaDeckMetadata(decks), { timeoutMs: 8000 });
-  }, [decks, syncArenaDeckMetadata]);
-
-  const buildArenaColorTargets = useCallback((deckIds: string[]) => {
-    const deckById = new Map(decks.map((deck) => [deck.id, deck]));
-    const targets: DeckCommanderColorTarget[] = [];
-    const seen = new Set<string>();
-
-    deckIds.forEach((deckId) => {
-      if (!deckId || seen.has(deckId) || deckColorOverrides[deckId]?.length) return;
-
-      const deck = deckById.get(deckId);
-      if (deck && (deck.color_identity?.length || deck.commander?.trim())) {
-        seen.add(deckId);
-        targets.push({
-          id: deck.id,
-          commander: deck.commander,
-          source_type: deck.source_type,
-          source_url: deck.source_url,
-          color_identity: deck.color_identity,
-        });
-        return;
-      }
-
-      for (const match of matches) {
-        const participant = match.match_participants.find((entry) =>
-          entry.deck_id === deckId || entry.guest_deck_id === deckId,
-        );
-        const deckSnapshot = participant?.decks || participant?.arena_guest_decks;
-        if (!deckSnapshot?.commander?.trim()) continue;
-
-        seen.add(deckId);
-        targets.push({
-          id: deckId,
-          commander: deckSnapshot.commander,
-          source_type: participant?.decks?.source_type ?? null,
-          source_url: null,
-          color_identity: deckSnapshot.color_identity,
-        });
-        break;
-      }
-    });
-
-    return targets;
-  }, [deckColorOverrides, decks, matches]);
-
-  const ensureArenaDeckColors = useCallback(async (deckIds: string[]) => {
-    if (!user || deckIds.length === 0 || colorSyncInFlightRef.current) return;
-
-    const targets = buildArenaColorTargets(deckIds).slice(0, MAX_ARENA_COLOR_SYNC_DECKS);
-    if (targets.length === 0) return;
-
-    colorSyncInFlightRef.current = true;
-    setSyncingDeckColors(true);
-    try {
-      const resolved = await syncDeckCommanderColors(
-        targets,
-        deckColorOverrides,
-        MAX_ARENA_COLOR_SYNC_DECKS,
-      );
-      if (resolved.size === 0) return;
-
-      setDeckColorOverrides((current) => {
-        const next = { ...current };
-        resolved.forEach((colors, deckId) => {
-          next[deckId] = colors;
-        });
-        return next;
-      });
-    } finally {
-      colorSyncInFlightRef.current = false;
-      setSyncingDeckColors(false);
-    }
-  }, [buildArenaColorTargets, deckColorOverrides, setDeckColorOverrides, user]);
-
-  // Keep refreshMatches stable when loading matches changes the color-sync callback.
-  const ensureArenaDeckColorsRef = useRef(ensureArenaDeckColors);
   useEffect(() => {
     if (!detailsMatch?.id || detailsMatch.tracking_version == null) {
       setDetailsLiveGame(null);
@@ -647,10 +493,6 @@ export default function TablePage() {
     return () => { active = false; };
   }, [detailsMatch?.id, detailsMatch?.tracking_version]);
 
-  useEffect(() => {
-    ensureArenaDeckColorsRef.current = ensureArenaDeckColors;
-  }, [ensureArenaDeckColors]);
-
   const refreshActiveLiveGame = useCallback(async () => {
     if (!groupId || !user) {
       setActiveLiveGameId(null);
@@ -670,8 +512,8 @@ export default function TablePage() {
   const refreshMatches=useCallback(async()=>{
     const [page]=await Promise.all([reloadHistory(),reloadAnalytics()]);
     const ids=extractMatchDeckIds((page?.matches??[]) as unknown as Match[]);
-    if(ids.length)runWhenIdle(()=>ensureArenaDeckColorsRef.current(ids),{timeoutMs:5000});
-  },[reloadHistory,reloadAnalytics]);
+    if(ids.length)scheduleArenaDeckColors(ids,5000,(page?.matches??[]) as unknown as Match[]);
+  },[reloadHistory,reloadAnalytics,scheduleArenaDeckColors]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -749,8 +591,8 @@ export default function TablePage() {
 
   useEffect(() => {
     if (activeTab !== 'meta' || loading) return;
-    runWhenIdle(() => ensureArenaDeckColors(deckIdsInMatches), { timeoutMs: 2000 });
-  }, [activeTab, deckIdsInMatches, ensureArenaDeckColors, loading]);
+    return scheduleArenaDeckColors(deckIdsInMatches, 2000);
+  }, [activeTab, deckIdsInMatches, scheduleArenaDeckColors, loading]);
 
   const colorAnalytics = analyticsBundle.colors;
   const deckPerformance = analyticsBundle.decks;
@@ -1066,7 +908,7 @@ export default function TablePage() {
       setParticipantDecks((prev) => ({ ...prev, [participantKey]: createdDeck.id }));
     }
     if (createdDeck.color_identity?.length) {
-      setDeckColorOverrides((prev) => ({ ...prev, [createdDeck.id]: createdDeck.color_identity }));
+      updateDeckColors((prev) => ({ ...prev, [createdDeck.id]: createdDeck.color_identity }));
     }
 
     return createdDeck;
@@ -1234,120 +1076,6 @@ export default function TablePage() {
       setDeletingGuestIds((ids) => ids.filter((id) => id !== guest.id));
     }
   };
-
-  const refreshMissingImportedDeckImages = useCallback(async (deckIds: string[]) => {
-    const uniqueDeckIds = Array.from(new Set(deckIds.filter(Boolean)));
-    const demoAccount = isDemoUser(user);
-    const decksToRefresh = uniqueDeckIds
-      .map((deckId) => decks.find((deck) => deck.id === deckId))
-      .filter((deck): deck is Deck => {
-        if (deck === undefined || deck.commander_image || !deck.commander) return false;
-        if ((deck.source_type === 'archidekt' || deck.source_type === 'moxfield') && deck.source_url) {
-          return true;
-        }
-        return demoAccount;
-      })
-      .slice(0, MAX_ARENA_IMAGE_REFRESH_DECKS);
-
-    if (decksToRefresh.length === 0) return;
-
-    const updates = await runTasksWithConcurrency(
-      decksToRefresh,
-      DECK_IMPORT_CONCURRENCY,
-      async (deck) => {
-        try {
-          let refreshedDeck: {
-            name: string;
-            commander: string;
-            commander_image: string | null;
-            bracket: string | null;
-          };
-
-          if ((deck.source_type === 'archidekt' || deck.source_type === 'moxfield') && deck.source_url) {
-            const response = await authenticatedFetch('/api/deck-import', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: deck.source_url }),
-            });
-
-            if (!response.ok) return null;
-
-            const imported = await response.json();
-            refreshedDeck = {
-              name: imported.name || deck.name,
-              commander: imported.commander || deck.commander,
-              commander_image: imported.commanderImageUrl || deck.commander_image,
-              bracket: typeof imported.bracket === 'string' ? imported.bracket : deck.bracket,
-            };
-          } else {
-            const response = await authenticatedFetch(
-              `/api/scryfall-card-arts?name=${encodeURIComponent(deck.commander)}`,
-            );
-            if (!response.ok) return null;
-
-            const payload = await response.json() as { data?: Array<{ imageUrl?: string }> };
-            const imageUrl = payload.data?.[0]?.imageUrl ?? null;
-            if (!imageUrl) return null;
-
-            refreshedDeck = {
-              name: deck.name,
-              commander: deck.commander,
-              commander_image: imageUrl,
-              bracket: deck.bracket,
-            };
-          }
-
-          if (!refreshedDeck.commander_image) return null;
-
-          const { error } = await supabase
-            .from('decks')
-            .update(refreshedDeck)
-            .eq('id', deck.id);
-
-          if (error) return null;
-          return { id: deck.id, ...refreshedDeck };
-        } catch {
-          return null;
-        }
-      },
-    );
-
-    const successfulUpdates = updates.filter((update): update is NonNullable<typeof update> => Boolean(update));
-    if (successfulUpdates.length === 0) return;
-
-    setDecks((currentDecks) => currentDecks.map((deck) => {
-      const update = successfulUpdates.find((item) => item.id === deck.id);
-      return update ? { ...deck, ...update } : deck;
-    }));
-
-  }, [decks, user, setDecks]);
-
-  useEffect(() => {
-    if (imageRefreshInFlightRef.current) return;
-
-    const demoAccount = isDemoUser(user);
-    const missingImageDeckIds = decks
-      .filter((deck) => {
-        if (deck.commander_image || !deck.commander) return false;
-        if ((deck.source_type === 'archidekt' || deck.source_type === 'moxfield') && deck.source_url) {
-          return true;
-        }
-        return demoAccount;
-      })
-      .map((deck) => deck.id)
-      .slice(0, MAX_ARENA_IMAGE_REFRESH_DECKS);
-
-    if (missingImageDeckIds.length === 0) return;
-
-    runWhenIdle(() => {
-      if (imageRefreshInFlightRef.current) return;
-
-      imageRefreshInFlightRef.current = true;
-      void refreshMissingImportedDeckImages(missingImageDeckIds).finally(() => {
-        imageRefreshInFlightRef.current = false;
-      });
-    }, { timeoutMs: 6000 });
-  }, [decks, user, refreshMissingImportedDeckImages]);
 
   const resetMatchForm = () => {
     setShowMatchModal(false);
@@ -1809,7 +1537,7 @@ export default function TablePage() {
         const deckId = deckMap[participant.id];
         return deckId && getParticipantKey(participant)?.startsWith('user:') ? [deckId] : [];
       }),
-    );
+    ).catch(() => {});
   };
 
   const handleSaveEditMatch = async () => {
