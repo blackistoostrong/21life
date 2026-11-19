@@ -119,6 +119,7 @@ try {
       'tests/e2e/analytics-v2.spec.ts',
         'tests/e2e/profile-account.spec.ts',
       'tests/e2e/profile-import.spec.ts',
+      'tests/e2e/profile-link.spec.ts',
       'tests/e2e/profile-editor.spec.ts',
       'tests/e2e/profile-settings.spec.ts',
       'tests/e2e/profile-autosync.spec.ts',

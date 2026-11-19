@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
 import { MotionPanel } from '@/components/ui/motion';
 import {
   Select,
@@ -31,12 +31,7 @@ import { usePlatformAdmin } from '@/hooks/use-platform-admin';
 import { RESERVED_USERNAMES } from '@/lib/reserved-usernames';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { getDeckDisplayColors } from '@/lib/deck-metadata';
-import { lookupCommanderCmcInBrowser } from '@/lib/commander-cmc-client';
 
-import { deckDataToColorFields, isImportedDeckSource } from '@/lib/deck-importers';
-import {
-  resolveDeckCommanderCmc,
-} from '@/lib/deck-commander-cmc';
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel } from '@/components/profile/profile-account-panel';
@@ -56,11 +51,13 @@ import { useProfileManualDeck } from '@/hooks/use-profile-manual-deck';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
 import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
+import { useProfileDeckLink } from '@/hooks/use-profile-deck-link';
+import { ProfileDeckLinkDialog } from '@/components/profile/profile-deck-link-dialog';
 import { useProfileDeckRefresh } from '@/hooks/use-profile-deck-refresh';
 import { useProfileDeckCollection } from '@/hooks/use-profile-deck-collection';
 import { ProfileDeckFilters } from '@/components/profile/profile-deck-filters';
 import { useProfileCatalog } from '@/hooks/use-profile-catalog';
-import type { ProfileDeck as Deck, ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
+import type { ProfileDeck as Deck } from '@/lib/types/profile-deck';
 import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
 import { useProfileMetrics } from '@/hooks/use-profile-metrics';
 import { getProfileDisplayName } from '@/lib/profile-display';
@@ -70,7 +67,7 @@ import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 import { ProfileDeckOverwriteDialog } from '@/components/profile/profile-deck-overwrite-dialog';
-import { ArrowLeft, Plus, ExternalLink, Swords, Trophy, Crown, Search, User as UserIcon, RefreshCw, Check, Link2, Star, Archive } from 'lucide-react';
+import { ArrowLeft, Plus, ExternalLink, Swords, Trophy, Crown, Search, User as UserIcon, RefreshCw, Check, Star, Archive } from 'lucide-react';
 import Link from 'next/link';
 
 type AddDeckMode = 'choose' | 'import-url' | 'archidekt-user' | 'manual';
@@ -125,9 +122,8 @@ export default function ProfilePage() {
     saveDeckCommanderPresentation, closeCommanderEditor,
   } = useProfileCommanderEditor(user && !adminLoading ? user.id + ':' + adminMode : null,
     fetchCommanderArts, setDecks);
-  const [linkingDeck, setLinkingDeck] = useState<Deck | null>(null);
-  const [linkDeckUrl, setLinkDeckUrl] = useState('');
-  const [savingDeckLink, setSavingDeckLink] = useState(false);
+  const deckLink = useProfileDeckLink(decks, setDecks);
+  const { setLinkingDeck, setLinkDeckUrl } = deckLink;
 
   const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
   const collection = useProfileDeckCollection(decks, adminMode, user?.id, deckPerformance);
@@ -218,69 +214,6 @@ export default function ProfilePage() {
       toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
     } finally {
       setExportingAccount(false);
-    }
-  };
-
-  const handleLinkDeckToExternalSource = async () => {
-    if (!linkingDeck || !linkDeckUrl.trim()) return;
-    setSavingDeckLink(true);
-    try {
-      const response = await authenticatedFetch('/api/deck-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: linkDeckUrl }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || t({ it: 'Link non valido.', en: 'Invalid link.' }));
-      }
-
-      const imported = await response.json() as ImportedDeckPreview;
-      if (!isImportedDeckSource(imported.sourceType) || !imported.sourceUrl) {
-        throw new Error(t({ it: 'Sono supportati solo Archidekt e Moxfield.', en: 'Only Archidekt and Moxfield are supported.' }));
-      }
-      const duplicate = decks.find((deck) =>
-        deck.id !== linkingDeck.id
-        && deck.user_id === linkingDeck.user_id
-        && deck.source_url === imported.sourceUrl,
-      );
-      if (duplicate) {
-        throw new Error(t({ it: 'Questa lista e gia collegata a un altro tuo mazzo.', en: 'This list is already linked to another one of your decks.' }));
-      }
-
-      const colorFields = deckDataToColorFields({
-        commanderOptions: imported.commanderOptions || [],
-        colorIdentity: imported.colorIdentity || [],
-      });
-      const commanderCmc = await resolveDeckCommanderCmc(
-        { commander: linkingDeck.commander, commander_options: colorFields.commander_options },
-        lookupCommanderCmcInBrowser,
-      );
-      const update = {
-        source_url: imported.sourceUrl,
-        source_type: imported.sourceType,
-        bracket: imported.bracket,
-        commander_cmc: commanderCmc ?? linkingDeck.commander_cmc,
-        ...colorFields,
-      };
-      const { error } = await supabase.from('decks').update(update).eq('id', linkingDeck.id);
-      if (error) throw error;
-
-      setDecks((current) => current.map((deck) => deck.id === linkingDeck.id ? { ...deck, ...update } : deck));
-      setLinkingDeck(null);
-      setLinkDeckUrl('');
-      toast({
-        title: t({ it: 'Lista collegata', en: 'List linked' }),
-        description: t({ it: 'Il mazzo manterra comandante e nome; da ora puo aggiornarsi dalla sorgente.', en: 'The deck keeps its commander and name; it can now refresh from its source.' }),
-      });
-    } catch (error) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: getSupabaseErrorMessage(error, t({ it: 'Impossibile collegare la lista.', en: 'Unable to link the list.' })),
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingDeckLink(false);
     }
   };
 
@@ -697,53 +630,7 @@ export default function ProfilePage() {
         </ModalOverlay>
       )}
 
-      {linkingDeck && (
-        <ModalOverlay>
-          <ModalCard size="md">
-            <CardHeader className="shrink-0 border-b border-border/70">
-              <CardTitle className="text-foreground">{t({ it: 'Collega lista esterna', en: 'Link external list' })}</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {t({
-                  it: 'Il nome e il comandante attuali restano invariati. Il link abilita aggiornamenti, bracket e metadati dalla lista.',
-                  en: 'Your current name and commander stay unchanged. The link enables source refreshes, bracket and metadata.',
-                })}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 py-6">
-              <Input
-                value={linkDeckUrl}
-                onChange={(event) => setLinkDeckUrl(event.target.value)}
-                placeholder="https://archidekt.com/decks/... oppure https://moxfield.com/decks/..."
-                autoFocus
-                className="bg-background/50 border-border text-foreground placeholder:text-muted-foreground"
-              />
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-border text-foreground"
-                  disabled={savingDeckLink}
-                  onClick={() => {
-                    setLinkingDeck(null);
-                    setLinkDeckUrl('');
-                  }}
-                >
-                  {t({ it: 'Annulla', en: 'Cancel' })}
-                </Button>
-                <Button
-                  type="button"
-                  disabled={savingDeckLink || !linkDeckUrl.trim()}
-                  className="bg-gradient-to-r from-emerald-600 to-teal-700"
-                  onClick={() => void handleLinkDeckToExternalSource()}
-                >
-                  <Link2 className="mr-2 h-4 w-4" />
-                  {savingDeckLink ? t({ it: 'Collegamento...', en: 'Linking...' }) : t({ it: 'Collega lista', en: 'Link list' })}
-                </Button>
-              </div>
-            </CardContent>
-          </ModalCard>
-        </ModalOverlay>
-      )}
+      <ProfileDeckLinkDialog controls={deckLink} />
 
       <ProfileDeckOverwriteDialog controls={{ overwriteConfirm, closeOverwriteConfirm }} />
     </div>

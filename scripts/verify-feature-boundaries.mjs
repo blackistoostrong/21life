@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-profile-deck-link.ts',
     'hooks/use-profile-deck-refresh.ts',
     'hooks/use-profile-deck-collection.ts',
     'app/table/[id]/page.tsx', 'app/profile/page.tsx',
@@ -25,6 +26,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/profile/profile-deck-link-dialog.tsx',
     'components/profile/profile-deck-filters.tsx',
     'components/profile/profile-deck-grid.tsx',
     'components/profile/profile-deck-import-forms.tsx', 'components/profile/commander-art-picker.tsx', 'components/profile/deck-source-badge.tsx',
