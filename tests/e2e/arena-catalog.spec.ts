@@ -56,9 +56,13 @@ for (const resource of ['group', 'guests', 'decks'] as const) {
     test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
     await fixtureLogin(page);
     const groupId = process.env.E2E_GROUP_ID!;
-    let fail = true; let fallbackReads = 0;
+    let fail = true; let fallbackReads = 0; let succeeded = 0;
     await page.route('**/rest/v1/decks?*', route => { fallbackReads += 1; return route.fallback(); });
     const path = resource === 'group' ? 'groups?*' : resource === 'guests' ? 'arena_guests?*' : 'rpc/get_arena_member_decks';
+    page.on('response', response => {
+      const url = new URL(response.url());
+      if (!fail && response.ok() && url.pathname === `/rest/v1/${path.replace('?*', '')}`) succeeded += 1;
+    });
     await page.route(`**/rest/v1/${path}`, route => fail
       ? route.fulfill({ status: 503, json: { code: 'XX000', message: 'Synthetic catalog failure' } }) : route.fallback());
     await page.locator(`a[href="/table/${groupId}"]`).first().click();
@@ -70,6 +74,7 @@ for (const resource of ['group', 'guests', 'decks'] as const) {
     if (resource === 'decks') expect(fallbackReads).toBe(0);
     fail = false;
     await alert.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect.poll(() => succeeded).toBeGreaterThan(0);
     await expect(alert).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Back to home', exact: true })).toBeVisible();
     if (resource === 'guests') await expect(page.getByLabel('Search guest, deck or commander', { exact: true })).toBeVisible();
