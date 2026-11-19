@@ -262,7 +262,7 @@ test('profile collection preserves favorite priority, search, colors and metric 
   } }));
   await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2', route => {
     const report = profileCatalogFixture(); report.userId = userId; report.total = decks.length;
-    report.decks = decks.map(deck => ({ ...report.decks[0], deck_id: deck.id, games_played: deck.games }));
+    report.decks = decks.map(deck => ({ ...report.decks[0], deck_id: deck.id, games_played: deck.games, mastery_points: deck.games + 2 }));
     return route.fulfill({ status: 200, json: report });
   });
   await page.route(/\/rest\/v1\/decks(?:\?|$)/, route => route.fulfill({ status: 403 }));
@@ -271,6 +271,7 @@ test('profile collection preserves favorite priority, search, colors and metric 
   await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
   const grid = page.locator('.web-deck-grid');
   const names = grid.locator('h3');
+  await expect(grid.getByTitle('1 wins in 10 games', { exact: true })).toBeVisible();
   await expect(names).toHaveText(['Collection Alpha', 'Collection Gamma', 'Collection Beta']);
   await page.getByRole('combobox', { name: 'Sort decks', exact: true }).click();
   await page.getByRole('option', { name: 'Games played', exact: true }).click();
@@ -286,6 +287,12 @@ test('profile collection preserves favorite priority, search, colors and metric 
   await expect(names).toHaveText(['Collection Alpha', 'Collection Beta', 'Collection Gamma']);
   const phase = process.env.E2E_COLLECTION_CAPTURE;
   if (phase === 'before' || phase === 'after') {
+    // Functional checks above keep the normal viewport and motion. Capture the
+    // whole grid without sticky/global overlays or a staggered transition.
+    await page.setViewportSize({ width: page.viewportSize()!.width, height: 5000 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => grid.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
     await page.evaluate(() => document.fonts.ready);
     await grid.screenshot({ path: `artifacts/dev26/collection-${phase}-${test.info().project.name}.png`, animations: 'disabled' });
   }

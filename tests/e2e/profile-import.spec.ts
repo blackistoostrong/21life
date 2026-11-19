@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openPasswordFixture } from './profile-fixture';
+import { profileCatalogFixture } from '../fixtures/profile-catalog';
 
 test('profile URL import preserves a failed draft and retries to a preview without saving a deck', async ({ page }) => {
   test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
@@ -179,3 +180,70 @@ test('profile URL import cancels an older art selection without replacing the ne
     expect(primaryRequests).toBe(1); expect(partnerRequests).toBe(1);
   } finally { release(); }
 });
+
+for (const mode of ['single', 'bulk'] as const) {
+  test(`profile source refresh ${mode} preserves errors, retry and the existing update payload`, async ({ page }) => {
+    test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+    const userId = process.env.E2E_USER_ID!;
+    const deckId = '00000000-0000-4000-8000-000000000020';
+    const commander = 'External refresh commander';
+    let writes = 0;
+    let imports = 0;
+    let budgetAllowed = false;
+    let budgetRequests = 0;
+    await openPasswordFixture(page);
+    await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2', route => route.fulfill({ status: 200, json: {
+      schemaVersion: 2, scope: 'personal', userId, revision: 'd'.repeat(32), total: 1, next: null,
+      decks: [{ id: deckId, user_id: userId, group_id: null, name: 'External refresh fixture', commander,
+        commander_image: '/favicon.ico?refresh-current', commander_cmc: 4,
+        commander_options: [{ name: commander, imageUrl: '/favicon.ico?refresh-current', colorIdentity: ['U'] }],
+        color_identity: ['U'], bracket: '3', source_type: 'archidekt', source_url: 'https://archidekt.com/decks/345678',
+        is_favorite: false, is_archived: false, created_at: '2026-01-01T00:00:00Z', updated_at: null }],
+    } }));
+    await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2', route => {
+      const report = profileCatalogFixture(); report.userId = userId; report.decks[0].deck_id = deckId;
+      return route.fulfill({ status: 200, json: report });
+    });
+    await page.route('**/api/profile/deck-refresh-budget', route => {
+      budgetRequests += 1;
+      return route.fulfill({ status: budgetAllowed ? 200 : 429, json: {} });
+    });
+    await page.route('**/api/deck-import', route => {
+      expect(route.request().postDataJSON()).toEqual({ url: 'https://archidekt.com/decks/345678', fresh: true });
+      imports += 1;
+      return route.fulfill({ status: 200, json: { name: 'Refreshed external fixture', commander,
+        commanderImageUrl: '/favicon.ico?refresh-source', commanderOptions: [{ name: commander,
+          imageUrl: '/favicon.ico?refresh-source', colorIdentity: ['U'] }], colorIdentity: ['U'],
+        bracket: '4', sourceType: 'archidekt', sourceUrl: 'https://archidekt.com/decks/345678' } });
+    });
+    await page.route('https://api.scryfall.com/cards/named?*', route => route.fulfill({ status: 200,
+      json: { object: 'card', name: commander, cmc: 4 } }));
+    await page.route('**/api/edhrec-*', route => route.fulfill({ status: 404, json: {} }));
+    await page.route(/\/rest\/v1\/decks(?:\?|$)/, route => {
+      if (route.request().method() !== 'PATCH') return route.fulfill({ status: 403 });
+      expect(new URL(route.request().url()).searchParams.get('id')).toBe(`eq.${deckId}`);
+      expect(route.request().postDataJSON()).toMatchObject({ name: 'Refreshed external fixture', commander,
+        commander_image: '/favicon.ico?refresh-current', commander_cmc: 4, bracket: '4', color_identity: ['U'] });
+      writes += 1;
+      return mode === 'single' && writes === 1
+        ? route.fulfill({ status: 503, json: { message: 'Synthetic external refresh failure' } })
+        : route.fulfill({ status: 204 });
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'External refresh fixture', exact: true })).toBeVisible();
+    const refresh = mode === 'single' ? page.getByTitle('Refresh from source', { exact: true })
+      : page.getByRole('button', { name: 'Refresh Decks', exact: true });
+    await refresh.click();
+    await expect(page.getByText(mode === 'single' ? 'Deck not refreshed' : 'No decks updated', { exact: true })).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'External refresh fixture', exact: true })).toBeVisible();
+    expect(writes).toBe(mode === 'single' ? 1 : 0);
+    expect(imports).toBe(mode === 'single' ? 1 : 0);
+    budgetAllowed = true;
+    await refresh.click();
+    await expect(page.getByRole('heading', { name: 'Refreshed external fixture', exact: true })).toBeVisible();
+    await expect(page.getByText(mode === 'single' ? 'Deck refreshed' : 'Refresh completed', { exact: true })).toBeVisible();
+    expect(writes).toBe(mode === 'single' ? 2 : 1);
+    expect(budgetRequests).toBe(mode === 'single' ? 0 : 2);
+  });
+}
