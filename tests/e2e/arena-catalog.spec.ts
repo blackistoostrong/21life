@@ -63,8 +63,14 @@ for (const resource of ['group', 'guests', 'decks'] as const) {
       const url = new URL(response.url());
       if (!fail && response.ok() && url.pathname === `/rest/v1/${path.replace('?*', '')}`) succeeded += 1;
     });
-    await page.route(`**/rest/v1/${path}`, route => fail
-      ? route.fulfill({ status: 503, json: { code: 'XX000', message: 'Synthetic catalog failure' } }) : route.fallback());
+    await page.route(`**/rest/v1/${path}`, route => {
+      const request = route.request();
+      const query = new URL(request.url()).searchParams;
+      const owned = resource === 'decks' ? request.postDataJSON()?.p_group_id === groupId
+        : query.get(resource === 'group' ? 'id' : 'group_id') === `eq.${groupId}`;
+      if (!owned) return route.fallback();
+      return fail ? route.fulfill({ status: 503, json: { code: 'XX000', message: 'Synthetic catalog failure' } }) : route.fallback();
+    });
     await page.locator(`a[href="/table/${groupId}"]`).first().click();
     const message = resource === 'group' ? 'Playgroup unavailable.' : resource === 'guests' ? 'Guests unavailable.' : 'Member decks unavailable.';
     if (resource === 'guests') await page.getByRole('tab', { name: /Players/ }).click();
