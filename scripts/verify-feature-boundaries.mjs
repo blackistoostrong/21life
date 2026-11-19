@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-profile-deck-refresh.ts',
     'hooks/use-profile-deck-collection.ts',
     'app/table/[id]/page.tsx', 'app/profile/page.tsx',
     'components/live-game/web-live-game.tsx',
