@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |3801|Catalogo/membership/guest e risorse idle ancora da separare |
+| Tavolo web |3598|Letture catalogo con owner129; comandi enrichment e ownership restante aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -431,3 +431,10 @@ The route now delegates every private operation to feature owners: it has no dir
 The initial mechanical commit preserved five statement bodies. Real browser failures on the pre-tranche app prove uncanceled link import, uncanceled favorite PATCH and an older failed favorite write reverting a newer server snapshot after actual same-account Auth renewal. All Dev fixtures cleaned. The old security check depended on an unused authenticatedFetch import in the route; it now checks actual authenticated calls in the enumerated owners, plus a new AST invariant forbidding route-level private transports. No threshold is relaxed. Profile529 nonempty lines, catalog owner82, link owner98. Full consolidated build/browser validation remains pending.
 
 Consolidated private profile commands7b00ea55 verified:80/80 browser cases, quality772+3skip/71script/142floors, clean56route build/3.22MiB budget and Dev cleanup PASS. Real stale-rollback regression now preserves the newer server favorite snapshot after Auth renewal. Link and catalog IO cancellation, retry, duplicate submission, account transition and confirmation contracts pass against real controllers with only network/Auth-fixture boundaries controlled. No new product feature, dependency or SQL change. Next: arena catalog/membership and cancellable idle enrichment; all remaining architecture acceptance is still open.
+
+
+## Tavolo: letture catalogo — 19 novembre
+
+`hooks/use-arena-catalog.ts` possiede snapshot account/gruppo/ruolo, gruppi/membri/guest/deck, generazioni distinte per risorsa, cancellazione/deadline e coda idle del caricamento mazzi. I setter verificano contesto sia al dispatch sia quando React applica l’update; le letture sostituite verificano anche generazione. Il rinnovo Auth conserva il contesto ma sostituisce le letture. `lib/arena-catalog-read.ts` possiede RPC e fallback legacy solo per funzione assente, senza pubblicare successi parziali; errori e cancellazione interrompono i trasporti fratelli. DTO in `lib/types/arena-catalog.ts`; UI errore/retry pura in `ArenaCatalogError`.
+
+La select guest iniziale/reload ha un unico owner. Un errore groups non viene confuso con un risultato RLS vuoto, guest/deck non disponibili sono segnalati e ritentabili. La coda metadata8000 ha ora cleanup prima dell’avvio; trasporti dei comandi metadata/immagini/colori già avviati e subscription catalogo rimangono da isolare nel blocco successivo. La tranche letture non certifica l’intera sessione tavolo, i draft o i comandi privati. Nessun SQL o nuova feature.

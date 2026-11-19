@@ -1,4 +1,7 @@
 'use client';
+import { useArenaCatalog } from '@/hooks/use-arena-catalog';
+import type { Profile, Deck } from '@/lib/types/arena-catalog';
+import { ArenaCatalogError } from '@/components/arena/arena-catalog-error';
 import { ArenaSettingsEditor } from '@/components/arena/arena-settings-editor';
 import {GuestDirectory} from '@/components/arena/guest-directory';
 import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
@@ -44,7 +47,7 @@ import { PanelWithActions } from '@/components/ui/panel-with-actions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { Textarea } from '@/components/ui/textarea';
+
 import { Checkbox } from '@/components/ui/checkbox';
 import { OccasionalDeckForm } from '@/components/arena/occasional-deck-form';
 import { GuestCommanderPicker } from '@/components/arena/guest-commander-picker';
@@ -91,7 +94,7 @@ import {
   isProvisionalDeckRanking,
 } from '@/lib/deck-ranking-visibility';
 
-import { formatDayGroupLabel, groupMatchesByDay } from '@/lib/arena-session';
+import { groupMatchesByDay } from '@/lib/arena-session';
 import {
   buildArenaSessionExportText,
   type ArenaSessionExportMatch,
@@ -116,7 +119,7 @@ import {
   type ParticipantKey,
 } from '@/lib/participant-keys';
 import type { CommanderSearchResult } from '@/lib/scryfall';
-import { format, parse, subDays, isAfter, startOfDay } from 'date-fns';
+import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
 import {
   Swords,
@@ -157,24 +160,6 @@ import {
   Flag,
 } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
-
-const ARENA_DECK_PICKER_COLUMNS = `
-  id,
-  user_id,
-  group_id,
-  name,
-  commander,
-  commander_image,
-  source_url,
-  source_type,
-  bracket,
-  color_identity,
-  is_favorite,
-  created_at
-`;
-
-const ARENA_MEMBER_DECK_LIMIT = 120;
-const ARENA_MEMBER_FETCH_CONCURRENCY = 4;
 
 const ARENA_METADATA_SYNC_DELAY_MS = 2000;
 const ARENA_METADATA_SYNC_GAP_MS = 200;
@@ -232,67 +217,6 @@ function extractMatchDeckIds(matches: Match[]) {
   )) as string[];
 }
 
-async function fetchArenaMemberDecks(groupId: string, memberIds: string[]) {
-  if (memberIds.length === 0) return [] as Deck[];
-
-  const { data, error } = await supabase.rpc('get_arena_member_decks', {
-    p_group_id: groupId,
-    p_user_ids: memberIds,
-    p_limit_per_user: ARENA_MEMBER_DECK_LIMIT,
-  });
-  if (!error) return (data || []) as Deck[];
-
-  // Compatibility fallback while a new deployment is waiting for migrations.
-  const decks: Deck[] = [];
-
-  for (let index = 0; index < memberIds.length; index += ARENA_MEMBER_FETCH_CONCURRENCY) {
-    const chunk = memberIds.slice(index, index + ARENA_MEMBER_FETCH_CONCURRENCY);
-    const chunkResults = await Promise.all(chunk.map(async (memberId) => {
-      const { data, error } = await supabase
-        .from('decks')
-        .select(ARENA_DECK_PICKER_COLUMNS)
-        .eq('user_id', memberId)
-        .is('group_id', null)
-        .or('source_type.is.null,source_type.neq.occasional')
-        .order('is_favorite', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(ARENA_MEMBER_DECK_LIMIT);
-
-      if (error) {
-        console.error('Error fetching member decks:', getSupabaseErrorMessage(error, 'Failed to fetch member decks'));
-        return [] as Deck[];
-      }
-
-      return (data || []) as Deck[];
-    }));
-
-    decks.push(...chunkResults.flat());
-  }
-
-  return decks;
-}
-
-interface Profile {
-  id: string;
-  username: string;
-  display_name: string | null;
-}
-
-interface Deck {
-  id: string;
-  user_id: string;
-  group_id: string | null;
-  name: string;
-  commander: string;
-  commander_image: string | null;
-  source_url: string | null;
-  source_type: string | null;
-  bracket: string | null;
-  color_identity: string[] | null;
-  is_favorite: boolean;
-  created_at: string;
-}
-
 type MatchParticipant = MatchParticipantRecord;
 
 interface Match {
@@ -312,23 +236,6 @@ interface Match {
   winner: Profile | null;
   winner_guest?: { id: string; display_name: string } | null;
   match_participants: MatchParticipant[];
-}
-
-interface Group {
-  id: string;
-  name: string;
-  description: string | null;
-  invite_code: string;
-  created_by: string;
-  created_at: string;
-  is_public?: boolean;
-  seasons_enabled?: boolean;
-  season_reset_month?: number;
-  profiles: Profile;
-  group_members: Array<{
-    user_id: string;
-    profiles: Profile;
-  }>;
 }
 
 interface PlayerStats extends MatchRecord {
@@ -424,16 +331,11 @@ export default function TablePage() {
   const { toast } = useToast();
   const { copy: t, language } = useLanguage();
   const { adminMode } = usePlatformAdmin();
-  const [group, setGroup] = useState<Group | null>(null);
-
-
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [members, setMembers] = useState<Profile[]>([]);
-  const [guests, setGuests] = useState<ArenaGuest[]>([]);
+  const { group, setGroup, decks, setDecks, members, setMembers, guests, loading, decksLoading,
+    deckColorOverrides, setDeckColorOverrides, catalogError, guestsError, decksError,
+    fetchData, reloadGuests, loadArenaDecks, ensureArenaMemberDecksLoaded } = useArenaCatalog(user?.id ?? null, groupId, adminMode);
   const season=useArenaSeasonContext(user?.id,groupId);
   const seasonContext=season.data;
-  const [loading, setLoading] = useState(true);
-  const [decksLoading, setDecksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
   const [awardsView, setAwardsView] = useState<'players' | 'decks'>('decks');
   const [activeLiveGameId, setActiveLiveGameId] = useState<string | null>(null);
@@ -442,7 +344,6 @@ export default function TablePage() {
   const [deckStatsSort, setDeckStatsSort] = useState<'winRate' | 'gamesPlayed'>('winRate');
   const [showProvisionalDecks, setShowProvisionalDecks] = useState(false);
   const [syncingDeckColors, setSyncingDeckColors] = useState(false);
-  const [deckColorOverrides, setDeckColorOverrides] = useState<Record<string, string[]>>({});
   const colorSyncInFlightRef = useRef(false);
   const imageRefreshInFlightRef = useRef(false);
   const arenaMetadataSyncInFlightRef = useRef(false);
@@ -642,11 +543,15 @@ export default function TablePage() {
         return update ? { ...deck, ...update } : deck;
       }));
 
-
     } finally {
       arenaMetadataSyncInFlightRef.current = false;
     }
-  }, [adminMode, user]);
+  }, [adminMode, user, setDecks]);
+
+  useEffect(() => {
+    if (!decks.length) return;
+    return runWhenIdle(() => syncArenaDeckMetadata(decks), { timeoutMs: 8000 });
+  }, [decks, syncArenaDeckMetadata]);
 
   const buildArenaColorTargets = useCallback((deckIds: string[]) => {
     const deckById = new Map(decks.map((deck) => [deck.id, deck]));
@@ -718,7 +623,7 @@ export default function TablePage() {
       colorSyncInFlightRef.current = false;
       setSyncingDeckColors(false);
     }
-  }, [buildArenaColorTargets, deckColorOverrides, user]);
+  }, [buildArenaColorTargets, deckColorOverrides, setDeckColorOverrides, user]);
 
   // Keep refreshMatches stable when loading matches changes the color-sync callback.
   const ensureArenaDeckColorsRef = useRef(ensureArenaDeckColors);
@@ -746,36 +651,6 @@ export default function TablePage() {
     ensureArenaDeckColorsRef.current = ensureArenaDeckColors;
   }, [ensureArenaDeckColors]);
 
-  const loadArenaDecks = useCallback(async (memberIds: string[]) => {
-    if (memberIds.length === 0) {
-      setDecks([]);
-      return;
-    }
-
-    setDecksLoading(true);
-    try {
-      const pickerDecks = await fetchArenaMemberDecks(groupId, memberIds);
-      setDecks(pickerDecks);
-      setDeckColorOverrides((current) => {
-        const next = { ...current };
-        pickerDecks.forEach((deck) => {
-          if (deck.color_identity?.length) {
-            next[deck.id] = deck.color_identity;
-          }
-        });
-        return next;
-      });
-      runWhenIdle(() => syncArenaDeckMetadata(pickerDecks), { timeoutMs: 8000 });
-    } finally {
-      setDecksLoading(false);
-    }
-  }, [groupId, syncArenaDeckMetadata]);
-
-  const ensureArenaMemberDecksLoaded = useCallback(() => {
-    if (decksLoading || decks.length > 0 || members.length === 0) return;
-    void loadArenaDecks(members.map((member) => member.id));
-  }, [decks.length, decksLoading, loadArenaDecks, members]);
-
   const refreshActiveLiveGame = useCallback(async () => {
     if (!groupId || !user) {
       setActiveLiveGameId(null);
@@ -798,84 +673,6 @@ export default function TablePage() {
     if(ids.length)runWhenIdle(()=>ensureArenaDeckColorsRef.current(ids),{timeoutMs:5000});
   },[reloadHistory,reloadAnalytics]);
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const [{ data: groupData }, guestResult] = await Promise.all([
-        supabase
-          .from('groups')
-          .select(`
-            *,
-            profiles:created_by (id, username, display_name),
-            group_members (
-              user_id,
-              profiles (id, username, display_name)
-            )
-          `)
-          .eq('id', groupId)
-          .maybeSingle(),
-        supabase
-          .from('arena_guests')
-          .select(`
-            id,
-            group_id,
-            display_name,
-            last_played_at,
-            arena_guest_decks (
-              id,
-              guest_id,
-              group_id,
-              name,
-              commander,
-              commander_image,
-              color_identity,
-              bracket,
-              created_at
-            )
-          `)
-          .eq('group_id', groupId)
-          .order('last_played_at', { ascending: false, nullsFirst: false }),
-      ]);
-
-      if (!groupData) {
-        router.push('/dashboard');
-        return;
-      }
-
-      setGroup(groupData as unknown as Group);
-      setMembers((groupData as unknown as Group).group_members.map((gm) => gm.profiles));
-
-
-      const { data: guestData, error: guestError } = guestResult;
-
-      if (guestError) {
-        console.error('Error fetching guests:', getSupabaseErrorMessage(guestError, 'Failed to fetch guests'));
-        setGuests([]);
-      } else {
-        setGuests((guestData || []) as ArenaGuest[]);
-        setDeckColorOverrides((current) => {
-          const next = { ...current };
-          (guestData || []).forEach((guest) => {
-            guest.arena_guest_decks?.forEach((deck: ArenaGuestDeck) => {
-              if (deck.color_identity?.length) next[deck.id] = deck.color_identity;
-            });
-          });
-          return next;
-        });
-      }
-
-      const memberIds = (groupData as unknown as Group).group_members.map((gm) => gm.user_id);
-      runWhenIdle(() => {
-        void loadArenaDecks(memberIds);
-      }, { timeoutMs: 2500 });
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId, loadArenaDecks, router, user]);
-
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
   }, [user, authLoading, router]);
@@ -883,8 +680,6 @@ export default function TablePage() {
   useEffect(() => {
     if (user) fetchData();
   }, [user, fetchData]);
-
-
 
   useEffect(() => {
     if (!user) return;
@@ -945,8 +740,6 @@ export default function TablePage() {
   }, [editingMatch, editMatchPlayerDecks]);
 
   const bracketOptions = analyticsPayload.bracketOptions??[];
-
-
 
   const deckIdsInMatches = useMemo(() => Array.from(new Set(
     getFilteredMatches().flatMap((match) =>
@@ -1210,37 +1003,6 @@ export default function TablePage() {
       return [...prev, participantKey];
     });
   };
-
-  const reloadGuests = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('arena_guests')
-      .select(`
-        id,
-        group_id,
-        display_name,
-        last_played_at,
-        arena_guest_decks (
-          id,
-          guest_id,
-          group_id,
-          name,
-          commander,
-          commander_image,
-          color_identity,
-          bracket,
-          created_at
-        )
-      `)
-      .eq('group_id', groupId)
-      .order('last_played_at', { ascending: false, nullsFirst: false });
-
-    if (error) {
-      console.error('Error reloading guests:', getSupabaseErrorMessage(error, 'Failed to reload guests'));
-      return;
-    }
-
-    setGuests((data || []) as ArenaGuest[]);
-  }, [groupId]);
 
   useEffect(() => {
     if (!user || !groupId) return;
@@ -1558,8 +1320,7 @@ export default function TablePage() {
       return update ? { ...deck, ...update } : deck;
     }));
 
-
-  }, [decks, user]);
+  }, [decks, user, setDecks]);
 
   useEffect(() => {
     if (imageRefreshInFlightRef.current) return;
@@ -2147,6 +1908,7 @@ export default function TablePage() {
     return <AppLoader label={t({ it: 'Caricamento playgroup...', en: 'Loading playgroup...' })} />;
   }
 
+  if (catalogError) return <ArenaCatalogError resource="group" onRetry={fetchData} />;
   if (!group) return null;
 
   return (
@@ -2185,6 +1947,8 @@ export default function TablePage() {
       </header>
 
       <main className="web-container max-w-7xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
+        {guestsError && <ArenaCatalogError resource="guests" onRetry={reloadGuests} />}
+        {decksError && <ArenaCatalogError resource="decks" onRetry={() => loadArenaDecks(members.map(member => member.id))} />}
         <PanelWithActions
           variant="strong"
           className="relative mb-5 sm:mb-8"
@@ -2896,9 +2660,9 @@ export default function TablePage() {
                     <CardHeader><CardTitle>{t({it:'Guest e mazzi del playgroup',en:'Playgroup guests and decks'})}</CardTitle>
                       <CardDescription>{t({it:'Trova un guest o un comandante e gestisci i mazzi associati.',en:'Find a guest or commander and manage their decks.'})}</CardDescription>
                     </CardHeader>
-                    <CardContent><GuestDirectory key={`${user?.id}:${groupId}`} guests={guests} deletingIds={deletingGuestIds}
+                    <CardContent>{!guestsError && <GuestDirectory key={`${user?.id}:${groupId}`} guests={guests} deletingIds={deletingGuestIds}
                       onAdd={()=>{resetGuestModal();setGuestModalMode('manage-create');setShowGuestModal(true);}}
-                      onAddDeck={openAddGuestDeckModal} onDelete={handleDeleteGuest} /></CardContent>
+                      onAddDeck={openAddGuestDeckModal} onDelete={handleDeleteGuest} />}</CardContent>
                   </Card>
                 )}
             </div>
