@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-profile-deck-collection.ts',
     'app/table/[id]/page.tsx', 'app/profile/page.tsx',
     'components/live-game/web-live-game.tsx',
     'components/arena/arena-settings-editor.tsx',
@@ -23,6 +24,8 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/profile/profile-deck-filters.tsx',
+    'components/profile/profile-deck-grid.tsx',
     'components/profile/profile-deck-import-forms.tsx', 'components/profile/commander-art-picker.tsx', 'components/profile/deck-source-badge.tsx',
     'components/profile/profile-manual-deck-form.tsx', 'components/profile/profile-deck-overwrite-dialog.tsx', 'components/profile/profile-archidekt-settings-panel.tsx', 'components/profile/profile-account-panel.tsx', 'components/profile/profile-nickname-directory.tsx',
     'components/arena/guest-directory.tsx',
@@ -38,6 +41,7 @@ export const featureOwners = {
   // Existing image container owns its own cache/network lifecycle. Composition
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
+    'components/profile/profile-deck-grid.tsx': ['components/deck-image.tsx', 'components/deck/edhrec-badge.tsx'],
     'components/profile/profile-deck-import-forms.tsx': ['components/deck-image.tsx', 'components/deck/edhrec-badge.tsx'],
     'components/profile/commander-art-picker.tsx': ['components/deck-image.tsx'],
     'components/profile/profile-manual-deck-form.tsx': ['components/deck-image.tsx'],

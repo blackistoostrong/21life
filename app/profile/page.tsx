@@ -1,24 +1,16 @@
 'use client';
 
-import {
-  SCRYFALL_REQUEST_GAP_MS,
-  normalizeImportedDeckPreview,
-  resolveImportedDeckCommanderImageForSave,
-  resolveCommanderColorOptions,
-  fetchCommanderSearchResults,
-  fetchScryfallArtOptionsFromBrowser,
-  uniqueCommanderOptions,
-} from '@/lib/profile-commander';
+import { resolveCommanderColorOptions } from '@/lib/profile-commander';
 import type { CommanderArtOption } from '@/lib/profile-commander';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MotionItem, MotionList, MotionPanel } from '@/components/ui/motion';
+import { MotionPanel } from '@/components/ui/motion';
 import {
   Select,
   SelectContent,
@@ -32,42 +24,22 @@ import { ManaLogo } from '@/components/ui/mana-logo';
 import { AppProfileButton } from '@/components/navigation/app-profile-button';
 import { DeckPerformancePanel } from '@/components/profile/deck-performance-panel';
 import { DeckCollectionInsights } from '@/components/profile/deck-collection-insights';
-import { DeckMasteryBadge } from '@/components/profile/deck-mastery-badge';
 import { DeckImage } from '@/components/deck-image';
 import { useLanguage } from '@/components/language-provider';
 import { usePlatformAdmin } from '@/hooks/use-platform-admin';
 
 import { RESERVED_USERNAMES } from '@/lib/reserved-usernames';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import {
-  buildDeckColorFields,
-  deckHasColorIdentity,
-  filterSelectableCommanderOptions,
-  getCommanderOptions,
-  getDeckDisplayColors,
-  mergeDeckColorFields,
-  normalizeDeckColorIdentity,
-  resolveSelectedCommanderOption,
-} from '@/lib/deck-metadata';
+import { getDeckDisplayColors } from '@/lib/deck-metadata';
 import { lookupCommanderCmcInBrowser } from '@/lib/commander-cmc-client';
-import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
 
-import type { CommanderPartnerMode } from '@/lib/scryfall';
-import {
-  buildArchidektBatchCommanderSelections,
-  deckDataToColorFields,
-  isImportedDeckSource,
-  repairImportedCommanderOptions,
-  resolveImportedCommanderAfterArtsLoad,
-  resolveImportedDeckCommanderImage,
-} from '@/lib/deck-importers';
+import { deckDataToColorFields, isImportedDeckSource } from '@/lib/deck-importers';
 import {
   resolveDeckCommanderCmc,
 } from '@/lib/deck-commander-cmc';
-import { DeckExternalLinkChip } from '@/components/deck/deck-external-link-chip';
 import { BracketBadge } from '@/components/deck/bracket-badge';
-import { EdhrecDeckInsights, hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
-import { delay, runTasksWithConcurrency } from '@/lib/async-utils';
+import { hasFreshEdhrecBadge, prefetchEdhrecStats } from '@/components/deck/edhrec-badge';
+import { runTasksWithConcurrency } from '@/lib/async-utils';
 import { useProfileAccountCredentials } from '@/hooks/use-profile-account-credentials';
 import { ProfileAccountPanel } from '@/components/profile/profile-account-panel';
 import { useProfileDeckPersistence } from '@/hooks/use-profile-deck-persistence';
@@ -80,51 +52,27 @@ import { useProfileArchidektImport } from '@/hooks/use-profile-archidekt-import'
 import { useProfileUrlImport } from '@/hooks/use-profile-url-import';
 import { ProfileDeckImportForms } from '@/components/profile/profile-deck-import-forms';
 import { CommanderArtPicker } from '@/components/profile/commander-art-picker';
-import { DeckSourceBadge } from '@/components/profile/deck-source-badge';
+import { ProfileDeckGrid } from '@/components/profile/profile-deck-grid';
 import { ProfileManualDeckForm } from '@/components/profile/profile-manual-deck-form';
 import { useProfileManualDeck } from '@/hooks/use-profile-manual-deck';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
 import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
+import { useProfileDeckCollection } from '@/hooks/use-profile-deck-collection';
+import { ProfileDeckFilters } from '@/components/profile/profile-deck-filters';
 import { useProfileCatalog } from '@/hooks/use-profile-catalog';
 import type { ProfileDeck as Deck, ProfileImportedDeckPreview as ImportedDeckPreview } from '@/lib/types/profile-deck';
 import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
 import { useProfileMetrics } from '@/hooks/use-profile-metrics';
-import { MANA_COLOR_LABELS, MANA_COLOR_ORDER } from '@/lib/mana-colors';
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { ManaColorPills } from '@/components/ui/mana-color-pills';
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  type DeckPerformanceStats,
-} from '@/lib/deck-performance-analytics';
-import { getDeckMastery, getHighestMasteryDeck } from '@/lib/deck-mastery';
+
 import { ProfileDeckOverwriteDialog } from '@/components/profile/profile-deck-overwrite-dialog';
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  ExternalLink,
-  Swords,
-  Trophy,
-  Crown,
-  Loader2,
-  Search,
-  User as UserIcon,
-  RefreshCw,
-  Save,
-  X,
-  Check,
-  Image as ImageIcon,
-  ChevronRight,
-  Link2,
-  Star,
-  Archive,
-  Download,
-} from 'lucide-react';
+import { ArrowLeft, Plus, ExternalLink, Swords, Trophy, Crown, Search, User as UserIcon, RefreshCw, Check, Link2, Star, Archive } from 'lucide-react';
 import Link from 'next/link';
-import { buildMatchRecord, formatMatchRecord } from '@/lib/win-rate';
 
 type AddDeckMode = 'choose' | 'import-url' | 'archidekt-user' | 'manual';
 
@@ -182,11 +130,11 @@ export default function ProfilePage() {
   const [linkingDeck, setLinkingDeck] = useState<Deck | null>(null);
   const [linkDeckUrl, setLinkDeckUrl] = useState('');
   const [savingDeckLink, setSavingDeckLink] = useState(false);
-  const [deckSearchQuery, setDeckSearchQuery] = useState('');
-  const [deckColorFilter, setDeckColorFilter] = useState<string[]>([]);
-  const [deckPlayerFilter, setDeckPlayerFilter] = useState('all');
+
+  
   const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
-  const [deckSort, setDeckSort] = useState<'recent' | 'winRate' | 'gamesPlayed' | 'damage' | 'eliminations' | 'fastest'>('recent');
+  const collection = useProfileDeckCollection(decks, adminMode, user?.id, deckPerformance);
+  const { visibleDecks, archivedDecks, filteredDecks, personalSnapshot, deckPlayerFilter } = collection;
   const [detailsDeck, setDetailsDeck] = useState<Deck | null>(null);
   const targetProfiles = profiles.filter((profile) => !RESERVED_USERNAMES.has(profile.username.toLowerCase()));
 
@@ -202,23 +150,13 @@ export default function ProfilePage() {
     setSelectedTargetProfileId(firstPlayer.id);
   }, [adminMode, targetProfiles, selectedTargetProfileId, user?.id]);
 
-
   const fetchDecks = useCallback(async () => {
     const loaded = await loadCatalog();
     if (!loaded) return;
     scheduleEnrichment(loaded.decks, loaded.signal);
   }, [loadCatalog, scheduleEnrichment]);
 
-  const visibleDecks = useMemo(() => {
-    const activeDecks = decks.filter((deck) => !deck.is_archived);
-    if (!adminMode || deckPlayerFilter === 'all') {
-      return activeDecks;
-    }
-
-    return activeDecks.filter((deck) => deck.user_id === deckPlayerFilter);
-  }, [adminMode, deckPlayerFilter, decks]);
-
-  const archivedDecks = useMemo(() => decks.filter((deck) => deck.is_archived && deck.user_id === user?.id), [decks, user?.id]);
+  
 
   const setDeckArchived = useCallback(async (deck: Deck, archived: boolean) => {
     if (!user || deck.user_id !== user.id || deck.group_id !== null) return;
@@ -229,51 +167,7 @@ export default function ProfilePage() {
     toast({ title: t(archived ? { it: 'Mazzo archiviato', en: 'Deck archived' } : { it: 'Mazzo ripristinato', en: 'Deck restored' }) });
   }, [setDecks, t, toast, user]);
 
-  const filteredDecks = useMemo(() => {
-    const normalizedQuery = deckSearchQuery.trim().toLowerCase();
-
-    const matching = visibleDecks.filter((deck) => {
-      if (deckColorFilter.length) {
-        const colors = getDeckDisplayColors(deck);
-        if (!deckColorFilter.every((color) => colors.includes(color))) {
-          return false;
-        }
-      }
-
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const haystack = `${deck.name} ${deck.commander}`.toLowerCase();
-      return haystack.includes(normalizedQuery);
-    });
-
-    return matching.sort((left, right) => {
-      const favoriteOrder = Number(right.is_favorite) - Number(left.is_favorite);
-      if (favoriteOrder !== 0) return favoriteOrder;
-      const a = deckPerformance.get(left.id);
-      const b = deckPerformance.get(right.id);
-      if (deckSort === 'winRate') return (b?.winRate || 0) - (a?.winRate || 0) || (b?.gamesPlayed || 0) - (a?.gamesPlayed || 0);
-      if (deckSort === 'gamesPlayed') return (b?.gamesPlayed || 0) - (a?.gamesPlayed || 0);
-      if (deckSort === 'damage') return (b?.totalDamageDealt || 0) - (a?.totalDamageDealt || 0);
-      if (deckSort === 'eliminations') return (b?.eliminations || 0) - (a?.eliminations || 0);
-      if (deckSort === 'fastest') {
-        return (a?.medianWinningDurationSeconds ?? Number.MAX_SAFE_INTEGER)
-          - (b?.medianWinningDurationSeconds ?? Number.MAX_SAFE_INTEGER);
-      }
-      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
-    });
-  }, [deckColorFilter, deckPerformance, deckSearchQuery, deckSort, visibleDecks]);
-
-  const personalSnapshot = useMemo(() => {
-    const performances = visibleDecks.map((deck) => deckPerformance.get(deck.id)).filter((entry): entry is DeckPerformanceStats => Boolean(entry));
-    const games = performances.reduce((total, entry) => total + entry.gamesPlayed, 0);
-    const wins = performances.reduce((total, entry) => total + entry.wins, 0);
-    const favorite = getHighestMasteryDeck(visibleDecks, (deck) => deckPerformance.get(deck.id));
-    const mostPlayed = [...visibleDecks].sort((a, b) => (deckPerformance.get(b.id)?.gamesPlayed || 0) - (deckPerformance.get(a.id)?.gamesPlayed || 0))[0];
-    const draws=performances.reduce((total,entry)=>total+entry.draws,0);
-    return { games, wins, winRate: buildMatchRecord({gamesPlayed:games,wins,draws}).winRate, favorite, mostPlayed };
-  }, [deckPerformance, visibleDecks]);
+  
 
   const toggleDeckFavorite = useCallback(async (deck: Deck) => {
     if (!user || deck.user_id !== user.id) return;
@@ -629,32 +523,7 @@ export default function ProfilePage() {
     }
   };
 
-  const getSourceBadge = (sourceType: string | null) => <DeckSourceBadge sourceType={sourceType} />;
-
-  const getSourceLinkLabel = (sourceType: string | null) => {
-    if (sourceType === 'moxfield') return t({ it: 'Vedi su Moxfield', en: 'View on Moxfield' });
-    if (sourceType === 'archidekt') return t({ it: 'Vedi su Archidekt', en: 'View on Archidekt' });
-    return t({ it: 'Vedi sorgente', en: 'View source' });
-  };
-
-  const getDeckWinRateBadge = (deckId: string) => {
-    const stats = deckWinRates.get(deckId);
-    if (!stats || stats.gamesPlayed === 0) return null;
-
-    return (
-      <span
-        title={t({
-          it: `${stats.wins} vittorie su ${stats.gamesPlayed} partite`,
-          en: `${stats.wins} wins in ${stats.gamesPlayed} games`,
-        })}
-        className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200"
-      >
-        <Trophy className="h-3 w-3" />
-        {stats.winRate}%
-        <span className="opacity-75">· {formatMatchRecord(stats)}</span>
-      </span>
-    );
-  };
+  
 
   const renderCommanderArtPicker = (
     arts: CommanderArtOption[], selectedImageUrl: string | null | undefined,
@@ -753,57 +622,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {visibleDecks.length > 0 && (
-          <div className="mb-6 grid gap-3 rounded-lg border border-border/70 bg-black/20 p-3 md:grid-cols-2 xl:grid-cols-4">
-            {adminMode && (
-              <Select
-                value={deckPlayerFilter}
-                onValueChange={setDeckPlayerFilter}
-                disabled={targetProfiles.length === 0}
-              >
-                <SelectTrigger className="border-border bg-background/50 text-foreground md:col-span-2 xl:col-span-1">
-                  <SelectValue placeholder={t({ it: 'Filtra per giocatore', en: 'Filter by player' })} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    {t({ it: 'Tutti i giocatori', en: 'All players' })}
-                  </SelectItem>
-                  {targetProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {getProfileDisplayName(profile)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <div className="relative min-w-0">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={deckSearchQuery}
-                onChange={(event) => setDeckSearchQuery(event.target.value)}
-                placeholder={t({ it: 'Cerca per nome o comandante...', en: 'Search by name or commander...' })}
-                className="border-border bg-background/50 pl-9 text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-            <div className="flex min-h-10 items-center gap-1 rounded-md border border-border bg-background/50 px-2" aria-label={t({ it: 'Filtra per colori', en: 'Filter by colors' })}>
-              <button type="button" onClick={() => setDeckColorFilter([])} className={`rounded px-1.5 py-1 text-xs font-bold ${deckColorFilter.length === 0 ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground'}`}>{t({ it: 'Tutti', en: 'All' })}</button>
-              {MANA_COLOR_ORDER.map((color) => <button key={color} type="button" onClick={() => setDeckColorFilter((current) => current.includes(color) ? current.filter((item) => item !== color) : [...current, color])} className={`grid h-7 w-7 place-items-center rounded-full text-xs font-black ${deckColorFilter.includes(color) ? 'bg-emerald-400 text-emerald-950' : 'bg-secondary text-muted-foreground'}`} title={t(MANA_COLOR_LABELS[color])}>{color}</button>)}
-            </div>
-            <Select value={deckSort} onValueChange={(value) => setDeckSort(value as typeof deckSort)}>
-              <SelectTrigger aria-label={t({ it: 'Ordina mazzi', en: 'Sort decks' })} className="border-border bg-background/50 text-foreground">
-                <SelectValue placeholder={t({ it: 'Ordina per', en: 'Sort by' })} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">{t({ it: 'Aggiunti di recente', en: 'Recently added' })}</SelectItem>
-                <SelectItem value="winRate">Win rate</SelectItem>
-                <SelectItem value="gamesPlayed">{t({ it: 'Partite giocate', en: 'Games played' })}</SelectItem>
-                <SelectItem value="damage">{t({ it: 'Danni inflitti', en: 'Damage dealt' })}</SelectItem>
-                <SelectItem value="eliminations">KO</SelectItem>
-                <SelectItem value="fastest">{t({ it: 'Vittoria più veloce', en: 'Fastest win' })}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <ProfileDeckFilters controls={collection} adminMode={adminMode} targetProfiles={targetProfiles} />
 
         {filteredDecks.length > 0 ? (
           <DeckCollectionInsights
@@ -856,157 +675,12 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         ) : (
-          <MotionList className="web-deck-grid space-y-3 sm:space-y-4">
-            {filteredDecks.map((deck) => {
-              const performance = deckPerformance.get(deck.id);
-              const gamesPlayed = performance?.gamesPlayed ?? 0;
-              const wins = performance?.wins ?? 0;
-              const mastery = getDeckMastery(gamesPlayed, wins);
-
-              return (
-                <MotionItem key={deck.id}>
-                  <Card
-                    className="phyrexian-panel group relative min-h-[15rem] cursor-pointer overflow-hidden border-2 transition-[border-color,box-shadow] hover:brightness-110"
-                    style={gamesPlayed > 0 ? {
-                      borderColor: mastery.color,
-                      boxShadow: `0 0 24px ${mastery.color}26`,
-                    } : undefined}
-                    onClick={() => setDetailsDeck(deck)}
-                  >
-                    <DeckImage
-                      src={deck.commander_image}
-                      alt={deck.commander}
-                      className="absolute inset-0 h-full w-full rounded-none object-cover object-top"
-                      fallbackClassName="absolute inset-0 h-full w-full rounded-none"
-                    />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/45" />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/35" />
-
-                    <CardContent className="relative flex min-h-[15rem] flex-col gap-4 p-4 sm:p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h3 className="line-clamp-2 text-lg font-black leading-tight text-white sm:text-xl">
-                            {deck.name}
-                          </h3>
-                          <p className="mt-1 line-clamp-2 text-sm font-semibold text-white/75">{deck.commander}</p>
-                        </div>
-                        <ManaColorPills colors={getDeckDisplayColors(deck)} size="xs" gap="tight" className="shrink-0" />
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {getSourceBadge(deck.source_type)}
-                        <BracketBadge bracket={deck.bracket} className="rounded-full border border-emerald-500/30 px-2" />
-                        {getDeckWinRateBadge(deck.id)}
-                        {adminMode && deck.profiles?.username ? (
-                          <span className="rounded-full border border-white/15 bg-black/35 px-2 py-1 text-[10px] text-white/70">
-                            {getProfileDisplayName(deck.profiles)}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                        {deck.source_url ? (
-                          <DeckExternalLinkChip
-                            href={deck.source_url}
-                            label={getSourceLinkLabel(deck.source_type)}
-                            tone={deck.source_type === 'moxfield' ? 'blue' : deck.source_type === 'archidekt' ? 'teal' : 'emerald'}
-                          />
-                        ) : null}
-                        <EdhrecDeckInsights
-                          commander={deck.commander}
-                          localBracket={deck.bracket}
-                          showBadge={false}
-                          showBracketComparison={false}
-                          linkVariant="chip"
-                        />
-                      </div>
-
-                      <div className="web-deck-footer mt-auto flex flex-col gap-3 lg:flex-row lg:items-end">
-                        <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-7">
-                          {!metricsLoading && !metricsError ? <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} /> : null}
-                          <div className="min-w-[4.75rem] text-center">
-                            <p className="text-2xl font-black text-white">{performance?.winRate ?? 0}%</p>
-                            <p className="text-xs text-white/60">Win rate</p>
-                          </div>
-                        </div>
-
-                        <div
-                          className="flex flex-wrap items-center justify-end gap-1 rounded-xl border border-white/10 bg-black/50 p-1"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {deck.user_id === user?.id ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-pressed={deck.is_favorite}
-                              className={`h-11 w-11 ${deck.is_favorite ? 'text-amber-300 hover:text-amber-200' : 'text-white/60 hover:text-amber-300'}`}
-                              onClick={() => void toggleDeckFavorite(deck)}
-                              title={t({
-                                it: deck.is_favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
-                                en: deck.is_favorite ? 'Remove from favorites' : 'Add to favorites',
-                              })}
-                            >
-                              <Star className={`h-4 w-4 ${deck.is_favorite ? 'fill-current' : ''}`} />
-                            </Button>
-                          ) : null}
-                          {deck.user_id === user?.id ? (
-                            <Button variant="ghost" size="icon" className="h-11 w-11 text-white/60 hover:text-emerald-300" onClick={() => void setDeckArchived(deck, true).catch((error) => toast({ title: t({ it: 'Errore', en: 'Error' }), description: getSupabaseErrorMessage(error, t({ it: 'Archiviazione non riuscita', en: 'Failed to archive deck' })), variant: 'destructive' }))} title={t({ it: 'Archivia mazzo', en: 'Archive deck' })}>
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          ) : null}
-                          <Button variant="ghost" size="sm" className="min-h-11 gap-1 px-3 text-emerald-200" onClick={() => setDetailsDeck(deck)}>
-                            {t({ it: 'Dettagli', en: 'Details' })} <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-11 w-11 text-white/60 hover:text-emerald-300"
-                            onClick={() => {
-                              setLinkingDeck(deck);
-                              setLinkDeckUrl(deck.source_url || '');
-                            }}
-                            title={t({ it: 'Collega lista Archidekt o Moxfield', en: 'Link an Archidekt or Moxfield list' })}
-                          >
-                            <Link2 className="h-4 w-4" />
-                          </Button>
-                          {isImportedDeckSource(deck.source_type) && deck.source_url ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-11 w-11 text-white/60 hover:text-emerald-300"
-                              onClick={() => handleRefreshImportedDeck(deck)}
-                              disabled={refreshingDeckIds.includes(deck.id)}
-                              title={t({ it: 'Aggiorna da sorgente', en: 'Refresh from source' })}
-                            >
-                              <RefreshCw className={`h-4 w-4 ${refreshingDeckIds.includes(deck.id) ? 'animate-spin' : ''}`} />
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-11 w-11 text-white/60 hover:text-white"
-                            onClick={() => openDeckArtEditor(deck)}
-                            title={t({ it: 'Modifica comandante', en: 'Edit commander' })}
-                          >
-                            <ImageIcon className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-11 w-11 text-white/60 hover:text-destructive"
-                            onClick={() => handleDeleteDeck(deck.id, deck.name)}
-                            title={t({ it: 'Elimina mazzo', en: 'Delete deck' })}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </MotionItem>
-              );
-            })}
-          </MotionList>
+          <ProfileDeckGrid filteredDecks={filteredDecks} deckPerformance={deckPerformance} deckWinRates={deckWinRates}
+            adminMode={adminMode} userId={user.id} metricsLoading={metricsLoading} metricsError={metricsError}
+            refreshingDeckIds={refreshingDeckIds} onDetails={setDetailsDeck} onFavorite={toggleDeckFavorite}
+            onArchive={(deck) => void setDeckArchived(deck, true).catch((error) => toast({ title: t({ it: 'Errore', en: 'Error' }), description: getSupabaseErrorMessage(error, t({ it: 'Archiviazione non riuscita', en: 'Failed to archive deck' })), variant: 'destructive' }))}
+            onLink={(deck) => { setLinkingDeck(deck); setLinkDeckUrl(deck.source_url || ''); }}
+            onRefresh={handleRefreshImportedDeck} onEditCommander={openDeckArtEditor} onDelete={handleDeleteDeck} />
         )}
       </main>
 
@@ -1128,14 +802,10 @@ export default function ProfilePage() {
                 onSaveUrl={saveArchidektDeck} onSaveBulk={saveArchidektUserDecks}
                 renderArtPicker={renderCommanderArtPicker} />
 
-
-
-
               <ProfileManualDeckForm controls={manual} addMode={addMode} savingDeck={savingDeck}
                 savingUserDecks={savingUserDecks} hasTarget={Boolean(getTargetProfileId())} onSave={saveManualDeck}
                 onChooseMode={() => setAddMode('choose')} renderArtPicker={renderCommanderArtPicker} />
 
-              
             </CardContent>
           </ModalCard>
         </ModalOverlay>

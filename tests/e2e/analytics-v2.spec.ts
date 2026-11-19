@@ -244,3 +244,49 @@ test('profile catalog enriches missing commander CMC once without replacing the 
   await expect(page.getByRole('heading',{name:'Enrichment fixture',exact:true})).toBeVisible();
   expect(lookups).toEqual([{names:['Catalog commander']}]);
 });
+
+test('profile collection preserves favorite priority, search, colors and metric sorting', async ({ page }) => {
+  test.skip(process.env.E2E_ANALYTICS_FLOW !== '1', 'Requires disposable authentication.');
+  const userId = process.env.E2E_USER_ID!;
+  const decks = [
+    { name: 'Collection Alpha', color: 'U', favorite: true, date: '2026-01-01', games: 3 },
+    { name: 'Collection Beta', color: 'R', favorite: false, date: '2026-01-02', games: 10 },
+    { name: 'Collection Gamma', color: 'U', favorite: false, date: '2026-01-03', games: 6 },
+  ].map((entry, index) => ({ ...entry, id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}` }));
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2', route => route.fulfill({ status: 200, json: {
+    schemaVersion: 2, scope: 'personal', userId, revision: 'c'.repeat(32), total: decks.length, next: null,
+    decks: decks.map(deck => ({ id: deck.id, user_id: userId, group_id: null, name: deck.name,
+      commander: `${deck.name} commander`, commander_image: null, commander_cmc: 4,
+      commander_options: [], color_identity: [deck.color], bracket: '3', source_type: 'manual', source_url: null,
+      is_favorite: deck.favorite, is_archived: false, created_at: `${deck.date}T00:00:00Z`, updated_at: null })),
+  } }));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2', route => {
+    const report = profileCatalogFixture(); report.userId = userId; report.total = decks.length;
+    report.decks = decks.map(deck => ({ ...report.decks[0], deck_id: deck.id, games_played: deck.games }));
+    return route.fulfill({ status: 200, json: report });
+  });
+  await page.route(/\/rest\/v1\/decks(?:\?|$)/, route => route.fulfill({ status: 403 }));
+  await page.route('**/api/edhrec-*', route => route.fulfill({ status: 404, json: {} }));
+  await fixtureLogin(page);
+  await page.getByRole('banner').getByRole('button', { name: 'Profile', exact: true }).click();
+  const grid = page.locator('.web-deck-grid');
+  const names = grid.locator('h3');
+  await expect(names).toHaveText(['Collection Alpha', 'Collection Gamma', 'Collection Beta']);
+  await page.getByRole('combobox', { name: 'Sort decks', exact: true }).click();
+  await page.getByRole('option', { name: 'Games played', exact: true }).click();
+  await expect(names).toHaveText(['Collection Alpha', 'Collection Beta', 'Collection Gamma']);
+  const colors = page.locator('[aria-label="Filter by colors"]');
+  await colors.getByRole('button', { name: 'U', exact: true }).click();
+  await expect(names).toHaveText(['Collection Alpha', 'Collection Gamma']);
+  const search = page.getByPlaceholder('Search by name or commander...', { exact: true });
+  await search.fill('Gamma commander');
+  await expect(names).toHaveText(['Collection Gamma']);
+  await search.clear();
+  await colors.getByRole('button', { name: 'All', exact: true }).click();
+  await expect(names).toHaveText(['Collection Alpha', 'Collection Beta', 'Collection Gamma']);
+  const phase = process.env.E2E_COLLECTION_CAPTURE;
+  if (phase === 'before' || phase === 'after') {
+    await page.evaluate(() => document.fonts.ready);
+    await grid.screenshot({ path: `artifacts/dev26/collection-${phase}-${test.info().project.name}.png`, animations: 'disabled' });
+  }
+});

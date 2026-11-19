@@ -4,6 +4,10 @@
 
 ### Avanzamento 19 novembre — persistenza verificata
 
+- [ ] Collezione prebuild19 novembre: quality771+3skip/71script/142floor PASS, confini e typecheck PASS; route876, owner67, griglia205, filtri71. Otto statement e due helper preservati, callback archive/link equivalenti, baseline2/2 e cleanup PASS. Mappa aggiornata, gate merge/prebuild riletti integralmente. Cleanbuild9.3.0 e browser catalogo/metriche/editor/archive/Auth/collezione richiesti, con screenshot before/after. Nessun SQL/native/dispositivo/merge/deploy.
+
+- [ ] Collezione19 novembre: baseline UI reale2/2 desktop/mobile PASS e PNG before, cleanup Dev verificato: priorità preferiti, ricerca per comandante, filtro colori e ordinamento metrica. Otto statement stato/derivazioni e due helper copiati, griglia e filtro preservati con callback equivalenti; owner locale senza rete, pannelli senza dati remoti. Typecheck iniziale segnala deckPlayerFilter ancora usato da empty-state: esportato/destrutturato stesso valore, poi PASS; confini PASS. Rimossi30import inutilizzati accumulati. Quality/build/browser e confronto PNG richiesti; nessun SQL/native/dispositivo/merge/deploy.
+
 - [x] Import presentation5bb107f7 chiusa: quality771+3skip/71script/142floor PASS; cleanbuild56route/3.21MiB PASS; browser desktop/mobile66/66 PASS per URL/bulk/editor/manuale/persistenza/Auth, cleanup Dev verificato. Pagina1191, panel345/art63/badge17, quattro sezioni preservate. Prossimo blocco collezione: filtri/ordinamento/aggregazioni locali e griglia con callback, caratterizzazione UI reale prima estrazione. Nessun SQL/native/dispositivo/merge/deploy.
 
 - [ ] Import presentation prebuild19 novembre: quality771+3skip/71script/142floor PASS, confini/typecheck PASS; pagina1191righe, form345/art63/badge17. Mappa ownership aggiornata; quattro sezioni JSX preservate e deleghe ai soli container esistenti. Gate merge/prebuild riletti; cleanbuild locale9.3.0 e browser mirati richiesti. Nessun SQL/native/dispositivo/merge/deploy.
