@@ -53,6 +53,7 @@ test('arena catalog releases queued member deck work before leaving the group', 
 
 for (const resource of ['group', 'guests', 'decks'] as const) {
   test(`arena catalog reports ${resource} failure and retries without inventing empty data`, async ({ page }) => {
+    test.setTimeout(60_000); // Includes SDK GET retries and the owned 15s deadline.
     test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
     await fixtureLogin(page);
     const groupId = process.env.E2E_GROUP_ID!;
@@ -75,7 +76,7 @@ for (const resource of ['group', 'guests', 'decks'] as const) {
     const message = resource === 'group' ? 'Playgroup unavailable.' : resource === 'guests' ? 'Guests unavailable.' : 'Member decks unavailable.';
     if (resource === 'guests') await page.getByRole('tab', { name: /Players/ }).click();
     const alert = page.getByRole('alert').filter({ hasText: message });
-    await expect(alert).toBeVisible();
+    await expect(alert).toBeVisible({ timeout: 20_000 });
     await expect(page).toHaveURL(new RegExp(`/table/${groupId}$`));
     if (resource === 'decks') expect(fallbackReads).toBe(0);
     fail = false;
@@ -83,7 +84,7 @@ for (const resource of ['group', 'guests', 'decks'] as const) {
     await expect.poll(() => succeeded).toBeGreaterThan(0);
     await expect(alert).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Back to home', exact: true })).toBeVisible();
-    if (resource === 'guests') await expect(page.getByLabel('Search guest, deck or commander', { exact: true })).toBeVisible();
+    if (resource === 'guests') await expect(page.getByText('No guests registered in this playgroup.', { exact: true })).toBeVisible();
   });
 }
 
