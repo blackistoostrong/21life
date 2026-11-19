@@ -7,6 +7,46 @@ import { createClient } from '@supabase/supabase-js';
 const commander = { id: 'guest-commander-fixture', name: 'Talrand, Sky Summoner', imageUrl: null,
   typeLine: 'Legendary Creature — Merfolk Wizard', colorIdentity: ['U'], oracleText: '', keywords: [] };
 
+async function openCreateGuest(page: Page) {
+  await page.getByRole('button', { name: 'Add guest', exact: true }).click();
+  try { await expect(page.getByRole('heading', { name: 'Add guest', exact: true })).toBeVisible(); }
+  catch (error) {
+    // Read only booleans/counts from the actual React owners, never identities,
+    // session values or draft text. Diagnose missed opening without retrying it.
+    const owners = await page.getByRole('button', { name: 'Add guest', exact: true }).evaluate(element => {
+      type Epoch = { context: { key: string | null }; enabled: boolean };
+      type Hook = { memoizedState: unknown; next: Hook | null };
+      type Fiber = { memoizedState: Hook | null; return: Fiber | null; alternate?: Fiber | null };
+      const key = Object.keys(element).find(key => key.startsWith('__reactFiber$'));
+      if (!key) return [];
+      const output: Array<{ owners: Array<{ parts: number; enabled: boolean; jobs: number }>; drafts: Array<{ mode: string; owned: boolean }> }> = [];
+      const inspect = (fiber: Fiber) => {
+        const states: unknown[] = [];
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) states.push(hook.memoizedState);
+        const leases = states.flatMap(state => {
+          const value = state as { current?: { epoch?: Epoch; jobs?: Map<string, unknown> } } | null;
+          return value?.current?.epoch && value.current.jobs instanceof Map ? [value.current] : [];
+        });
+        const drafts = states.flatMap(state => {
+          const value = state as { opening?: number; mode?: string; epoch?: Epoch } | null;
+          return value && typeof value.opening === 'number' && typeof value.mode === 'string'
+            ? [{ mode: value.mode, owned: leases.some(lease => lease.epoch === value.epoch) }] : [];
+        });
+        if (leases.length || drafts.length) output.push({ owners: leases.map(lease => {
+          let parts = 0;
+          try { const parsed = JSON.parse(lease.epoch!.context.key ?? 'null'); if (Array.isArray(parsed)) parts = parsed.length; } catch { /* Non-JSON public context. */ }
+          return { parts, enabled: lease.epoch!.enabled, jobs: lease.jobs!.size };
+        }), drafts });
+      };
+      let fiber = (element as unknown as Record<string, Fiber>)[key];
+      for (; fiber; fiber = fiber.return!) { inspect(fiber); if (fiber.alternate) inspect(fiber.alternate); }
+      return output;
+    });
+    await test.info().attach('guest-opening-owner-counts', { body: JSON.stringify(owners), contentType: 'application/json' });
+    throw error;
+  }
+}
+
 async function openGuests(page: Page, withGuest = false) {
   const groupId = process.env.E2E_GROUP_ID!, guestId = randomUUID();
   const guest = { id: guestId, group_id: groupId, display_name: 'Guest command fixture', last_played_at: null, arena_guest_decks: [] };
@@ -21,12 +61,112 @@ async function openGuests(page: Page, withGuest = false) {
 
 async function prepareGuest(page: Page, name = 'Guest command fixture') {
   await page.route('**/api/scryfall-commanders?*', route => route.fulfill({ status: 200, json: { data: [commander] } }));
-  await page.getByRole('button', { name: 'Add guest', exact: true }).click();
+  await openCreateGuest(page);
   await page.getByPlaceholder('e.g. Marco', { exact: true }).fill(name);
   await page.getByPlaceholder('Card name...', { exact: true }).fill('talrand');
   await page.getByRole('button', { name: /Talrand, Sky Summoner.*Legendary Creature/ }).click();
   return page.getByRole('button', { name: 'Add guest', exact: true });
 }
+
+test('arena guest save synchronously blocks duplicate submission and preserves failed drafts', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const guest = await openGuests(page);
+  const save = await prepareGuest(page);
+  let writes = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/rest/v1/arena_guests?*', async route => {
+    if (route.request().method() === 'GET') return route.fallback();
+    if (route.request().method() === 'PATCH') return route.fulfill({ status: 204 });
+    writes += 1;
+    if (writes === 1) {
+      await pending;
+      return route.fulfill({ status: 503, json: { message: 'Synthetic save failure' } });
+    }
+    return route.fulfill({ status: 201, json: guest });
+  });
+  await page.route('**/rest/v1/arena_guest_decks?*', route => route.fulfill({ status: 201, json: {
+    id: randomUUID(), guest_id: guest.id, group_id: guest.group_id, name: commander.name, commander: commander.name,
+    commander_image: null, color_identity: ['U'], bracket: null,
+  } }));
+  try {
+    await save.evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect.poll(() => writes).toBe(1);
+    await expect(page.getByRole('button', { name: 'Saving...', exact: true })).toBeDisabled();
+    release();
+    await expect(page.getByText('Synthetic save failure', { exact: true })).toBeVisible();
+    await expect(page.getByPlaceholder('e.g. Marco', { exact: true })).toHaveValue(guest.display_name);
+    await expect(save).toBeEnabled(); await save.click();
+    await expect(page.getByRole('heading', { name: 'Add guest', exact: true })).toHaveCount(0);
+    expect(writes).toBe(2);
+  } finally { release(); }
+});
+
+test('arena guest delete blocks duplicate confirmation and requires an acknowledged row', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const guest = await openGuests(page, true);
+  let prompts = 0, writes = 0, remaining = true;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  page.on('dialog', dialog => { prompts += 1; return dialog.accept(); });
+  await page.route('**/rest/v1/arena_guests?*', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: remaining ? [guest] : [] });
+    expect(route.request().method()).toBe('DELETE');
+    const query = new URL(route.request().url()).searchParams;
+    expect(query.get('group_id')).toBe(`eq.${guest.group_id}`); expect(query.get('id')).toBe(`eq.${guest.id}`);
+    writes += 1;
+    if (writes === 1) { await pending; return route.fulfill({ status: 200, json: [] }); }
+    remaining = false; return route.fulfill({ status: 200, json: [{ id: guest.id }] });
+  });
+  const remove = page.getByRole('button', { name: `Delete guest: ${guest.display_name}`, exact: true });
+  try {
+    await remove.evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect.poll(() => writes).toBe(1); expect(prompts).toBe(1);
+    release();
+    await expect(page.getByText('Guest was not deleted', { exact: true })).toBeVisible();
+    await expect(remove).toBeEnabled();
+    await remove.click();
+    await expect(remove).toHaveCount(0); expect(writes).toBe(2); expect(prompts).toBe(2);
+  } finally { release(); }
+});
+
+test('arena guest draft does not return after account A to B to A', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  await openGuests(page);
+  await prepareGuest(page);
+  await transitionFixtureSession(page, true);
+  await expect(page.getByRole('heading', { name: 'Add guest', exact: true })).toHaveCount(0);
+  await transitionFixtureSession(page, false);
+  await page.getByRole('tab', { name: /Players/ }).click();
+  await expect(page.getByRole('button', { name: 'Add guest', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Add guest', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add guest', exact: true }).click();
+  await expect(page.getByPlaceholder('e.g. Marco', { exact: true })).toHaveValue('');
+  await expect(page.getByPlaceholder('Card name...', { exact: true })).toHaveValue('');
+});
+
+test('arena guest repeated mounts reopen clean drafts without accumulating searches', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  await openGuests(page);
+  let searches = 0;
+  page.on('request', request => { if (request.url().includes('/api/scryfall-commanders?')) searches += 1; });
+  for (let cycle = 0; cycle < 2; cycle += 1) {
+    if (cycle > 0) {
+      await page.locator(`a[href="/table/${process.env.E2E_GROUP_ID!}"]`).first().click();
+      await page.getByRole('tab', { name: /Players/ }).click();
+    }
+    await prepareGuest(page);
+    await expect.poll(() => searches).toBe(cycle + 1);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await openCreateGuest(page);
+    await expect(page.getByPlaceholder('e.g. Marco', { exact: true })).toHaveValue('');
+    await expect(page.getByPlaceholder('Card name...', { exact: true })).toHaveValue('');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to home', exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  }
+  expect(searches).toBe(2);
+});
 
 for (const partialFailure of [false, true]) {
   test(`arena guest real Dev ${partialFailure ? 'partial guest creation retries without duplication' : 'create, add deck and delete keeps the catalog consistent'}`, async ({ page }) => {
@@ -105,7 +245,7 @@ test('arena guest search replaces a pending query without accepting its old resu
     return route.fulfill({ status: 200, json: { data: [{ ...commander, id: 'fresh', name: 'Fresh commander fixture' }] } });
   });
   try {
-    await page.getByRole('button', { name: 'Add guest', exact: true }).click();
+    await openCreateGuest(page);
     await page.getByPlaceholder('Card name...', { exact: true }).fill('first');
     await expect.poll(() => started).toBe(1);
     await page.getByPlaceholder('Card name...', { exact: true }).fill('second');
