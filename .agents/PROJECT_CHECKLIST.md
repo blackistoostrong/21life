@@ -4,6 +4,8 @@
 
 ### Avanzamento 19 novembre — persistenza verificata
 
+- [x] Manuale f9e29094, estrazione chiusa:9statement AST identici; ricerca parametrizzata con lo stesso scope/abilitazione/primario/partner. Quality771+3skip/71script/142floor PASS; cleanbuild56route/3.21MiB PASS. Confronto DOPO8/8 browser desktop/mobile PASS per ricerca/partner/nome composto e persistenza manuale, scarto metadata/write2aperture; cleanup Dev verificato. Proseguire con artcancelBack/account e risposta artwork durante salvataggio, poi presentazione. Nessun SQL/native/dispositivo/merge/deploy.
+
 - [ ] Manuale, prebuild19 novembre: quality771+3skip/71script/142floor PASS, typecheck/confini PASS. Spostati10statement, sola parametrizzazione equivalente della ricerca; formattati normalmente controlli/return (nessuna compressione per conteggi). Gate merge/prebuild riletti; cleanbuildDev9.3.0 e browser mirati manuale/partner/persistenza prima dei fix. Nessun SQL/native/dispositivo/merge/deploy.
 
 - [ ] Bozza manuale, estrazione19 novembre:118browser precedenti verdi costituiscono baseline anche per manuale/partner/nome/salvataggio. Spostati5state, ricerca,2derivazioni e2comandi (10statement); parametri scope/abilitazione ricerca sostituiti dagli stessi input del chiamante. Typecheck PASS; nessun cambio intenzionale al primo artwork o ai setter del form. Nuovo owner use-profile-manual-deck, quality/build/confronto mirato richiesti; poi abort art suBack/nuova scelta/account e2aperture. Nessun SQL/native/dispositivo/merge/deploy. Spegnimento18nov già completato, non ripetere.
