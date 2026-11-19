@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |3372|Letture catalogo + enrichment156 verificati; subscription/CRUD e ownership restante aperti |
+| Tavolo web |3359|Letture/subscription168 + enrichment156; CRUD e ownership restante aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -458,3 +458,12 @@ Prova arricchimento bda6d650: quality788+3skip/71script/142floor, cleanbuild56ro
 `useArenaCatalog` possiede la subscription web e i listener focus/online/visibility; gli eventi batch con membership richiedono una lettura completa, guest/deck si invalidano una sola volta. Subscribe/reconnect ricaricano lo snapshot; errore/closed viene registrato localmente e il successivo refresh/ritorno online riapre il canale. Native conserva il contratto evento singolo ma riceve tutte le entità del burst e passa scope utente. Le verifiche del lifecycle nativo completo restano nel suo blocco dedicato.
 
 14test portano a verde gli8ROSSI delle copie precedenti e provano condivisione, cambio account, rimozione timeout, Auth pendente/fallita e reconnect. Copertura del core raccolta automaticamente dalle configurazioni packages/data già esistenti; nessuna eccezione o nuova configurazione Metro. Prove consolidate pendenti.
+
+
+### Correzione backend Realtime Dev
+
+La prima prova reale del canale privato ha fallito prima del burst: il membro valido riceveva permission denied. Introspezione SSH in READ ONLY ha confermato policy membership/trigger attivi ma grant SELECT assente. La migrazione20261119181403, creata con CLI e applicata con runner Dev, concede esclusivamente SELECT ad authenticated, dopo guard su RLS/policy esistenti. Policy immutata, anon/INSERT ancora negati; checksum rawLF verificato nel registry. Non applicata in produzione.
+
+Prove dopo correzione:4/4 browser desktop/mobile, guest+deck concorrenti visibili senza reload e fixture ripulite; query dirette sotto ruolo authenticated/claims fixture leggono2messaggi come membro e0come nonmembro. Questo Dev segnala il topic non leggibile come timeout SDK: il collaudo negativo richiede socket sano e nonmembership RPC verificata, oltre alla prova SQL effettiva. Nessun bypass o grant di pubblicazione.
+
+Build applicativa01fe6bc1: web56route/3.23MiB, export Android/iOS/9.33MiB PASS. Le sole aggiunte successive sono migrazione/test/docs, source native e package identici; export conservati su SHA esplicito senza dichiararli build di un altro commit. Manifest web104 e regressione consolidata ancora richiesti.

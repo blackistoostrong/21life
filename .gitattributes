@@ -40,3 +40,4 @@ supabase/migrations/20261111151357_preserve_deck_delete_service_maintenance.sql 
 /supabase/migrations/20261117075535_arena_history_pages_v2.sql text eol=lf
 /supabase/migrations/20261117082649_scope_admin_row_security_setting.sql text eol=lf
 supabase/migrations/20261117134213_arena_analytics_bundle_v2.sql text eol=lf
+supabase/migrations/20261119181403_grant_arena_catalog_realtime_select.sql text eol=lf
