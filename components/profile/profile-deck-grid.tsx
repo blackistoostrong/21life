@@ -20,7 +20,7 @@ import type { ProfileDeck } from '@/lib/types/profile-deck';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
 
 export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, adminMode, userId,
-  metricsLoading, metricsError, refreshingDeckIds, refreshCommandsBusy, onDetails, onFavorite, onArchive, onLink,
+  metricsLoading, metricsError, refreshingDeckIds, commandsBusy, onDetails, onFavorite, onArchive, onLink,
   onRefresh, onEditCommander, onDelete }: {
   filteredDecks: ProfileDeck[];
   deckPerformance: ReadonlyMap<string, DeckPerformanceStats>;
@@ -30,7 +30,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
   metricsLoading: boolean;
   metricsError: boolean;
   refreshingDeckIds: string[];
-  refreshCommandsBusy: boolean;
+  commandsBusy: boolean;
   onDetails: (deck: ProfileDeck) => void;
   onFavorite: (deck: ProfileDeck) => void;
   onArchive: (deck: ProfileDeck) => void;
@@ -147,6 +147,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                       variant="ghost"
                       size="icon"
                       aria-pressed={deck.is_favorite}
+                      disabled={commandsBusy}
                       className={`h-11 w-11 ${deck.is_favorite ? 'text-amber-300 hover:text-amber-200' : 'text-white/60 hover:text-amber-300'}`}
                       onClick={() => void onFavorite(deck)}
                       title={t({
@@ -158,7 +159,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                     </Button>
                   ) : null}
                   {deck.user_id === userId ? (
-                    <Button variant="ghost" size="icon" className="h-11 w-11 text-white/60 hover:text-emerald-300" onClick={() => onArchive(deck)} title={t({ it: 'Archivia mazzo', en: 'Archive deck' })}>
+                    <Button variant="ghost" size="icon" className="h-11 w-11 text-white/60 hover:text-emerald-300" disabled={commandsBusy} onClick={() => onArchive(deck)} title={t({ it: 'Archivia mazzo', en: 'Archive deck' })}>
                       <Archive className="h-4 w-4" />
                     </Button>
                   ) : null}
@@ -169,6 +170,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 text-white/60 hover:text-emerald-300"
+                    disabled={commandsBusy}
                     onClick={() => onLink(deck)}
                     title={t({ it: 'Collega lista Archidekt o Moxfield', en: 'Link an Archidekt or Moxfield list' })}
                   >
@@ -180,7 +182,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                       size="icon"
                       className="h-11 w-11 text-white/60 hover:text-emerald-300"
                       onClick={() => onRefresh(deck)}
-                      disabled={refreshCommandsBusy}
+                      disabled={commandsBusy}
                       title={t({ it: 'Aggiorna da sorgente', en: 'Refresh from source' })}
                     >
                       <RefreshCw className={`h-4 w-4 ${refreshingDeckIds.includes(deck.id) ? 'animate-spin' : ''}`} />
@@ -190,6 +192,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 text-white/60 hover:text-white"
+                    disabled={commandsBusy}
                     onClick={() => onEditCommander(deck)}
                     title={t({ it: 'Modifica comandante', en: 'Edit commander' })}
                   >
@@ -199,6 +202,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 text-white/60 hover:text-destructive"
+                    disabled={commandsBusy}
                     onClick={() => onDelete(deck.id, deck.name)}
                     title={t({ it: 'Elimina mazzo', en: 'Delete deck' })}
                   >

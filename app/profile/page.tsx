@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+
 import { AppLoader } from '@/components/ui/app-loader';
 import { ManaLogo } from '@/components/ui/mana-logo';
 import { AppProfileButton } from '@/components/navigation/app-profile-button';
@@ -52,7 +52,6 @@ import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
 import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
 import { useProfileCatalogActions } from '@/hooks/use-profile-catalog-actions';
-import { useProfileAccountExport } from '@/hooks/use-profile-account-export';
 import { useProfileDeckLink } from '@/hooks/use-profile-deck-link';
 import { ProfileDeckLinkDialog } from '@/components/profile/profile-deck-link-dialog';
 import { useProfileDeckRefresh } from '@/hooks/use-profile-deck-refresh';
@@ -63,7 +62,7 @@ import type { ProfileDeck as Deck } from '@/lib/types/profile-deck';
 import { useProfileMetadataEnrichment } from '@/hooks/use-profile-metadata-enrichment';
 import { useProfileMetrics } from '@/hooks/use-profile-metrics';
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
+
 import { ManaColorPills } from '@/components/ui/mana-color-pills';
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -85,7 +84,6 @@ function getProfileInitials(profile: Pick<Profile, 'username' | 'display_name'> 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
   const { copy: t } = useLanguage();
   const fetchCommanderArts = useProfileCommanderArts();
   const { adminMode, loading:adminLoading } = usePlatformAdmin();
@@ -96,7 +94,6 @@ export default function ProfilePage() {
   const { profiles, setProfiles, fetchProfiles, saveProfileDisplayName } = directory;
   const currentProfile = user ? profiles.find((profile) => profile.id === user.id) || null : null;
   const [selectedTargetProfileId, setSelectedTargetProfileId] = useState<string>('');
-  const { exportingAccount, exportAccountData } = useProfileAccountExport();
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
     useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
       user && !adminLoading ? user.id + ':' + adminMode : null);
@@ -124,8 +121,8 @@ export default function ProfilePage() {
     saveDeckCommanderPresentation, closeCommanderEditor,
   } = useProfileCommanderEditor(user && !adminLoading ? user.id + ':' + adminMode : null,
     fetchCommanderArts, setDecks);
-  const deckLink = useProfileDeckLink(decks, setDecks);
-  const { setLinkingDeck, setLinkDeckUrl } = deckLink;
+  const deckLink = useProfileDeckLink(user && !adminLoading ? user.id + ':' + adminMode : null, decks, setDecks);
+  const { openDeckLink } = deckLink;
 
   const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
   const collection = useProfileDeckCollection(decks, adminMode, user?.id, deckPerformance);
@@ -153,8 +150,8 @@ export default function ProfilePage() {
     scheduleEnrichment(loaded.decks, loaded.signal);
   }, [loadCatalog, scheduleEnrichment]);
 
-  const catalogActions = useProfileCatalogActions(user, setDecks, fetchDecks);
-  const { setDeckArchived, toggleDeckFavorite, handleDeleteDeck } = catalogActions;
+  const catalogActions = useProfileCatalogActions(user && !adminLoading ? user.id + ':' + adminMode : null, user?.id ?? null, setDecks, fetchDecks);
+  const { catalogCommandsBusy, setDeckArchived, toggleDeckFavorite, handleDeleteDeck } = catalogActions;
 
   useEffect(() => {
     if (user) {
@@ -192,6 +189,9 @@ export default function ProfilePage() {
 
   useProfileArchidektAutosync(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, fetchDecks);
+
+  const deckCommandsBusy = catalogCommandsBusy || refreshCommandsBusy || deckLink.savingDeckLink
+    || savingDeckArt || savingDeck || savingUserDecks;
 
   const renderCommanderArtPicker = (
     arts: CommanderArtOption[], selectedImageUrl: string | null | undefined,
@@ -274,7 +274,7 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               onClick={handleRefreshDecks}
-              disabled={refreshCommandsBusy || !visibleDecks.some(deckNeedsRefreshWork)}
+              disabled={deckCommandsBusy || !visibleDecks.some(deckNeedsRefreshWork)}
               className="border-border text-foreground"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshingDecks ? 'animate-spin' : ''}`} />
@@ -345,9 +345,9 @@ export default function ProfilePage() {
         ) : (
           <ProfileDeckGrid filteredDecks={filteredDecks} deckPerformance={deckPerformance} deckWinRates={deckWinRates}
             adminMode={adminMode} userId={user.id} metricsLoading={metricsLoading} metricsError={metricsError}
-            refreshingDeckIds={refreshingDeckIds} refreshCommandsBusy={refreshCommandsBusy} onDetails={setDetailsDeck} onFavorite={toggleDeckFavorite}
-            onArchive={(deck) => void setDeckArchived(deck, true).catch((error) => toast({ title: t({ it: 'Errore', en: 'Error' }), description: getSupabaseErrorMessage(error, t({ it: 'Archiviazione non riuscita', en: 'Failed to archive deck' })), variant: 'destructive' }))}
-            onLink={(deck) => { setLinkingDeck(deck); setLinkDeckUrl(deck.source_url || ''); }}
+            refreshingDeckIds={refreshingDeckIds} commandsBusy={deckCommandsBusy} onDetails={setDetailsDeck} onFavorite={toggleDeckFavorite}
+            onArchive={(deck) => void setDeckArchived(deck, true)}
+            onLink={openDeckLink}
             onRefresh={handleRefreshImportedDeck} onEditCommander={openDeckArtEditor} onDelete={handleDeleteDeck} />
         )}
       </main>

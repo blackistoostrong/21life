@@ -120,6 +120,7 @@ try {
         'tests/e2e/profile-account.spec.ts',
       'tests/e2e/profile-import.spec.ts',
       'tests/e2e/profile-link.spec.ts',
+      'tests/e2e/profile-catalog-actions.spec.ts',
       'tests/e2e/profile-editor.spec.ts',
       'tests/e2e/profile-settings.spec.ts',
       'tests/e2e/profile-autosync.spec.ts',

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { profileCatalogFixture } from '../fixtures/profile-catalog';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAuthStorageKey } from '../../expo/lib/supabase-auth-storage-key';
 
@@ -36,3 +37,23 @@ export async function transitionFixtureSession(page: Page, otherAccount = false)
   }, { storageKey: key, session: data.session, event: otherAccount ? 'SIGNED_IN' : 'TOKEN_REFRESHED' });
 }
 
+
+/** Empty catalog only for the second disposable Auth identity; never logs tokens. */
+export async function mockEmptySecondAccountCatalog(page: Page) {
+  const otherId = process.env.E2E_SECOND_USER_ID;
+  if (!otherId) throw new Error('Second disposable account required');
+  const isOther = (authorization: string | undefined) => {
+    const token = authorization?.split(' ')[1];
+    return token && JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).sub === otherId;
+  };
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2', route => {
+    if (!isOther(route.request().headers().authorization)) return route.fallback();
+    return route.fulfill({ status: 200, json: { schemaVersion: 2, scope: 'personal', userId: otherId,
+      revision: 'e'.repeat(32), total: 0, next: null, decks: [] } });
+  });
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2', route => {
+    if (!isOther(route.request().headers().authorization)) return route.fallback();
+    const report = profileCatalogFixture(); report.userId = otherId; report.total = 0; report.decks = [];
+    return route.fulfill({ status: 200, json: report });
+  });
+}

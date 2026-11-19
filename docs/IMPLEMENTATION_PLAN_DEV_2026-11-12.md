@@ -232,7 +232,7 @@ Correzione esplicita dell'audit preliminare: **la rivincita mobile esiste già**
 
 - Completare prima il blocco comandi privati profilo (link, export, mutazioni), poi gli altri tre target. Evitare ulteriori estrazioni presentazionali del profilo prive di beneficio misurabile.
 - Distinguere commit meccanici e fix, usando AST/typecheck/confini e verifiche mirate durante la tranche. Eseguire quality completa, build pulita e regressioni browser sul candidato funzionale consolidato, non su ogni piccolo spostamento.
-- Criteri del blocco profilo: nessun I/O privato diretto nella route; un owner per comando/risorsa; snapshot e isolamento account/ruolo; deadline/cancellazione; singolo invio e coerenza rollback/ack; object URL del download sempre rilasciato. Preservare permessi e payload. L'annullamento client non promette rollback di scritture già accettate.
+- Criteri del blocco profilo: nessun I/O privato diretto nella route; un owner per comando/risorsa; snapshot e isolamento account/ruolo; deadline/cancellazione; singolo invio e coerenza rollback/ack; codice senza consumer rimosso senza introdurre nuova UI. Preservare permessi e payload. L'annullamento client non promette rollback di scritture già accettate.
 - Il conteggio righe rimane un vincolo; il SAL riporta percorsi e gate chiusi. Tutti i gate merge/prebuild e le soglie dei controlli restano invariati.
 
 ## DEV26-11 — Refactoring dei quattro proprietari principali

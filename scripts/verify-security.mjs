@@ -31,6 +31,7 @@ assert.doesNotMatch(
 
 const protectedRoutes = [
   'app/api/deck-import/route.ts',
+  'app/api/auth/export-account/route.ts',
   'app/api/archidekt-user-decks/route.ts',
   'app/api/scryfall-commanders/route.ts',
   'app/api/scryfall-card-arts/route.ts',
@@ -43,7 +44,15 @@ for (const routePath of protectedRoutes) {
 }
 
 const clientFiles = [
-  'app/profile/page.tsx',
+  'hooks/use-profile-url-import.ts',
+  'hooks/use-profile-archidekt-import.ts',
+  'hooks/use-profile-archidekt-autosync.ts',
+  'hooks/use-profile-commander-arts.ts',
+  'hooks/use-profile-commander-editor.ts',
+  'hooks/use-profile-deck-refresh.ts',
+  'hooks/use-profile-deck-link.ts',
+  'hooks/use-profile-metadata-enrichment.ts',
+  'lib/profile-commander.ts',
   'app/table/[id]/page.tsx',
   'lib/deck-color-sync.ts',
   'components/deck/edhrec-badge.tsx',
@@ -52,8 +61,12 @@ const clientFiles = [
 
 for (const filePath of clientFiles) {
   const source = readFileSync(join(root, filePath), 'utf8');
-  assert.match(source, /authenticatedFetch/, `${filePath} must use authenticatedFetch for protected APIs`);
+  assert.match(source, /authenticatedFetch\s*\(/, `${filePath} must use authenticatedFetch for protected APIs`);
 }
+
+const profileComposition = readFileSync(join(root, 'app/profile/page.tsx'), 'utf8');
+assert.doesNotMatch(profileComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch)/, 'Profile route must delegate private transports to feature owners');
+assert.doesNotMatch(profileComposition, /\b(?:fetch|authenticatedFetch)\s*\(/, 'Profile route must not issue network requests directly');
 
 const liveGameMigrationPath = 'supabase/migrations/20260714135348_add_live_game_win_condition.sql';
 const liveGameMigration = readFileSync(join(root, liveGameMigrationPath), 'utf8');

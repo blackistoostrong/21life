@@ -9,7 +9,7 @@ import type { ProfileDeckLinkControls } from '@/hooks/use-profile-deck-link';
 
 export function ProfileDeckLinkDialog({ controls }: { controls: ProfileDeckLinkControls }) {
   const { copy: t } = useLanguage();
-  const { linkingDeck, setLinkingDeck, linkDeckUrl, setLinkDeckUrl, savingDeckLink, handleLinkDeckToExternalSource } = controls;
+  const { linkingDeck, closeDeckLink, linkDeckUrl, setLinkDeckUrl, savingDeckLink, handleLinkDeckToExternalSource } = controls;
   return <>{linkingDeck && (
         <ModalOverlay>
           <ModalCard size="md">
@@ -25,6 +25,7 @@ export function ProfileDeckLinkDialog({ controls }: { controls: ProfileDeckLinkC
             <CardContent className="space-y-4 py-6">
               <Input
                 value={linkDeckUrl}
+                disabled={savingDeckLink}
                 onChange={(event) => setLinkDeckUrl(event.target.value)}
                 placeholder="https://archidekt.com/decks/... oppure https://moxfield.com/decks/..."
                 autoFocus
@@ -35,13 +36,9 @@ export function ProfileDeckLinkDialog({ controls }: { controls: ProfileDeckLinkC
                   type="button"
                   variant="outline"
                   className="border-border text-foreground"
-                  disabled={savingDeckLink}
-                  onClick={() => {
-                    setLinkingDeck(null);
-                    setLinkDeckUrl('');
-                  }}
+                  onClick={closeDeckLink}
                 >
-                  {t({ it: 'Annulla', en: 'Cancel' })}
+                  {savingDeckLink ? t({ it: 'Chiudi', en: 'Close' }) : t({ it: 'Annulla', en: 'Cancel' })}
                 </Button>
                 <Button
                   type="button"

@@ -53,6 +53,6 @@ export async function openProfileRefreshFixture(page: Page, mode: 'single' | 'bu
   await page.reload();
   await expect(page.getByRole('heading', { name: 'External refresh fixture', exact: true }).first()).toBeVisible();
 
-  return { commander, deckId, counts: () => ({ writes, imports, budgetRequests }),
+  return { commander, deckId, decks, counts: () => ({ writes, imports, budgetRequests }),
   allowBudget: () => { budgetAllowed = true; } };
 }
