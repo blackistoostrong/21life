@@ -132,8 +132,8 @@ export default function ProfilePage() {
   const { deckWinRates, deckPerformance, metricsLoading, metricsError, refreshMetrics } = useProfileMetrics(adminLoading ? undefined : user?.id, adminMode, decks);
   const collection = useProfileDeckCollection(decks, adminMode, user?.id, deckPerformance);
   const { visibleDecks, archivedDecks, filteredDecks, personalSnapshot, deckPlayerFilter } = collection;
-  const { refreshingDecks, refreshingDeckIds, deckNeedsRefreshWork, handleRefreshDecks,
-    handleRefreshImportedDeck } = useProfileDeckRefresh(visibleDecks, setDecks);
+  const { refreshCommandsBusy, refreshingDecks, refreshingDeckIds, deckNeedsRefreshWork, handleRefreshDecks,
+    handleRefreshImportedDeck } = useProfileDeckRefresh(user && !adminLoading ? user.id + ':' + adminMode : null, visibleDecks, setDecks);
   const [detailsDeck, setDetailsDeck] = useState<Deck | null>(null);
   const targetProfiles = profiles.filter((profile) => !RESERVED_USERNAMES.has(profile.username.toLowerCase()));
 
@@ -404,7 +404,7 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               onClick={handleRefreshDecks}
-              disabled={refreshingDecks || !visibleDecks.some(deckNeedsRefreshWork)}
+              disabled={refreshCommandsBusy || !visibleDecks.some(deckNeedsRefreshWork)}
               className="border-border text-foreground"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshingDecks ? 'animate-spin' : ''}`} />
@@ -475,7 +475,7 @@ export default function ProfilePage() {
         ) : (
           <ProfileDeckGrid filteredDecks={filteredDecks} deckPerformance={deckPerformance} deckWinRates={deckWinRates}
             adminMode={adminMode} userId={user.id} metricsLoading={metricsLoading} metricsError={metricsError}
-            refreshingDeckIds={refreshingDeckIds} onDetails={setDetailsDeck} onFavorite={toggleDeckFavorite}
+            refreshingDeckIds={refreshingDeckIds} refreshCommandsBusy={refreshCommandsBusy} onDetails={setDetailsDeck} onFavorite={toggleDeckFavorite}
             onArchive={(deck) => void setDeckArchived(deck, true).catch((error) => toast({ title: t({ it: 'Errore', en: 'Error' }), description: getSupabaseErrorMessage(error, t({ it: 'Archiviazione non riuscita', en: 'Failed to archive deck' })), variant: 'destructive' }))}
             onLink={(deck) => { setLinkingDeck(deck); setLinkDeckUrl(deck.source_url || ''); }}
             onRefresh={handleRefreshImportedDeck} onEditCommander={openDeckArtEditor} onDelete={handleDeleteDeck} />

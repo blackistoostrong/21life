@@ -20,7 +20,7 @@ import type { ProfileDeck } from '@/lib/types/profile-deck';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
 
 export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, adminMode, userId,
-  metricsLoading, metricsError, refreshingDeckIds, onDetails, onFavorite, onArchive, onLink,
+  metricsLoading, metricsError, refreshingDeckIds, refreshCommandsBusy, onDetails, onFavorite, onArchive, onLink,
   onRefresh, onEditCommander, onDelete }: {
   filteredDecks: ProfileDeck[];
   deckPerformance: ReadonlyMap<string, DeckPerformanceStats>;
@@ -30,6 +30,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
   metricsLoading: boolean;
   metricsError: boolean;
   refreshingDeckIds: string[];
+  refreshCommandsBusy: boolean;
   onDetails: (deck: ProfileDeck) => void;
   onFavorite: (deck: ProfileDeck) => void;
   onArchive: (deck: ProfileDeck) => void;
@@ -179,7 +180,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                       size="icon"
                       className="h-11 w-11 text-white/60 hover:text-emerald-300"
                       onClick={() => onRefresh(deck)}
-                      disabled={refreshingDeckIds.includes(deck.id)}
+                      disabled={refreshCommandsBusy}
                       title={t({ it: 'Aggiorna da sorgente', en: 'Refresh from source' })}
                     >
                       <RefreshCw className={`h-4 w-4 ${refreshingDeckIds.includes(deck.id) ? 'animate-spin' : ''}`} />
