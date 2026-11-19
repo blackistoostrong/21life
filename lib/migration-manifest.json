@@ -519,6 +519,11 @@
       "version": "20261119181403",
       "name": "20261119181403_grant_arena_catalog_realtime_select.sql",
       "checksum": "f39f3491bacb7bdb99665dfd8b8f05697015ec57955d934a3ff38413dbe333b4"
+    },
+    {
+      "version": "20261119193048",
+      "name": "20261119193048_enforce_arena_guest_deck_group_scope.sql",
+      "checksum": "e3e64f6819b3259cccb05be235f6977ebea2eb6a14c24e8b3dabdc37ac959a45"
     }
   ]
 }
