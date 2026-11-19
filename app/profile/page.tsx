@@ -6,7 +6,7 @@ import type { CommanderArtOption } from '@/lib/profile-commander';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -29,7 +29,7 @@ import { useLanguage } from '@/components/language-provider';
 import { usePlatformAdmin } from '@/hooks/use-platform-admin';
 
 import { RESERVED_USERNAMES } from '@/lib/reserved-usernames';
-import { authenticatedFetch } from '@/lib/authenticated-fetch';
+
 import { getDeckDisplayColors } from '@/lib/deck-metadata';
 
 import { BracketBadge } from '@/components/deck/bracket-badge';
@@ -51,6 +51,8 @@ import { useProfileManualDeck } from '@/hooks/use-profile-manual-deck';
 import { useProfileDirectory } from '@/hooks/use-profile-directory';
 import { ProfileNicknameDirectory } from '@/components/profile/profile-nickname-directory';
 import type { ProfileDirectoryEntry as Profile } from '@/lib/types/profile-directory';
+import { useProfileCatalogActions } from '@/hooks/use-profile-catalog-actions';
+import { useProfileAccountExport } from '@/hooks/use-profile-account-export';
 import { useProfileDeckLink } from '@/hooks/use-profile-deck-link';
 import { ProfileDeckLinkDialog } from '@/components/profile/profile-deck-link-dialog';
 import { useProfileDeckRefresh } from '@/hooks/use-profile-deck-refresh';
@@ -94,7 +96,7 @@ export default function ProfilePage() {
   const { profiles, setProfiles, fetchProfiles, saveProfileDisplayName } = directory;
   const currentProfile = user ? profiles.find((profile) => profile.id === user.id) || null : null;
   const [selectedTargetProfileId, setSelectedTargetProfileId] = useState<string>('');
-  const [exportingAccount, setExportingAccount] = useState(false);
+  const { exportingAccount, exportAccountData } = useProfileAccountExport();
   const { scheduleEnrichment, commanderCmcSyncInProgress } =
     useProfileMetadataEnrichment(decks, setDecks, showAddModal, resolveCommanderColorOptions,
       user && !adminLoading ? user.id + ':' + adminMode : null);
@@ -151,32 +153,8 @@ export default function ProfilePage() {
     scheduleEnrichment(loaded.decks, loaded.signal);
   }, [loadCatalog, scheduleEnrichment]);
 
-  const setDeckArchived = useCallback(async (deck: Deck, archived: boolean) => {
-    if (!user || deck.user_id !== user.id || deck.group_id !== null) return;
-    const { error } = await supabase.from('decks').update({ is_archived: archived })
-      .eq('id', deck.id).eq('user_id', user.id).is('group_id', null);
-    if (error) throw error;
-    setDecks((current) => current.map((entry) => entry.id === deck.id ? { ...entry, is_archived: archived } : entry));
-    toast({ title: t(archived ? { it: 'Mazzo archiviato', en: 'Deck archived' } : { it: 'Mazzo ripristinato', en: 'Deck restored' }) });
-  }, [setDecks, t, toast, user]);
-
-  const toggleDeckFavorite = useCallback(async (deck: Deck) => {
-    if (!user || deck.user_id !== user.id) return;
-    const next = !deck.is_favorite;
-    setDecks((current) => current.map((entry) => entry.id === deck.id ? { ...entry, is_favorite: next } : entry));
-    const { error } = await supabase
-      .from('decks')
-      .update({ is_favorite: next })
-      .eq('id', deck.id)
-      .eq('user_id', user.id);
-    if (error) {
-      setDecks((current) => current.map((entry) => entry.id === deck.id ? { ...entry, is_favorite: !next } : entry));
-      toast({
-        title: t({ it: 'Preferito non aggiornato', en: 'Favorite not updated' }),
-        variant: 'destructive',
-      });
-    }
-  }, [setDecks, t, toast, user]);
+  const catalogActions = useProfileCatalogActions(user, setDecks, fetchDecks);
+  const { setDeckArchived, toggleDeckFavorite, handleDeleteDeck } = catalogActions;
 
   useEffect(() => {
     if (user) {
@@ -197,26 +175,6 @@ export default function ProfilePage() {
 
   const account = useProfileAccountCredentials(user, currentProfile, saveProfileDisplayName);
 
-  const exportAccountData = async () => {
-    setExportingAccount(true);
-    try {
-      const response = await authenticatedFetch('/api/auth/export-account');
-      if (!response.ok) throw new Error(t({ it: 'Export non riuscito.', en: 'Export failed.' }));
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `mtg-tracker-account-${new Date().toISOString().slice(0, 10)}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast({ title: t({ it: 'Dati account esportati', en: 'Account data exported' }) });
-    } catch (error) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
-    } finally {
-      setExportingAccount(false);
-    }
-  };
-
   const closeAddModal = () => {
     setShowAddModal(false);
     setAddMode('choose');
@@ -234,27 +192,6 @@ export default function ProfilePage() {
 
   useProfileArchidektAutosync(user && !adminLoading ? user.id + ':' + adminMode : null,
     user?.id ?? null, currentProfile, fetchDecks);
-
-  const handleDeleteDeck = async (deckId: string, deckName: string) => {
-    if (!confirm(t({
-      it: `Eliminare "${deckName}"?`,
-      en: `Are you sure you want to delete "${deckName}"?`,
-    }))) return;
-
-    try {
-      const { error } = await supabase.from('decks').delete().eq('id', deckId);
-      if (error) throw error;
-
-      toast({ title: t({ it: 'Mazzo eliminato', en: 'Deck deleted' }) });
-      fetchDecks();
-    } catch (error: unknown) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: error instanceof Error ? error.message : t({ it: 'Eliminazione mazzo non riuscita', en: 'Failed to delete deck' }),
-        variant: 'destructive',
-      });
-    }
-  };
 
   const renderCommanderArtPicker = (
     arts: CommanderArtOption[], selectedImageUrl: string | null | undefined,

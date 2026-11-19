@@ -228,6 +228,13 @@ Correzione esplicita dell'audit preliminare: **la rivincita mobile esiste già**
 
 **Accettazione:** 0 partite, una partita, pareggi, ospiti, deck cancellati, periodi ai confini/DST, ranking deterministico a pari conteggio, anonimizzazione coerente e parità web/mobile. Test dei payload reali con trasporto intercettato; nessun messaggio inviato durante le prove.
 
+### Esecuzione per tranche funzionali — ruling PM 19 novembre
+
+- Completare prima il blocco comandi privati profilo (link, export, mutazioni), poi gli altri tre target. Evitare ulteriori estrazioni presentazionali del profilo prive di beneficio misurabile.
+- Distinguere commit meccanici e fix, usando AST/typecheck/confini e verifiche mirate durante la tranche. Eseguire quality completa, build pulita e regressioni browser sul candidato funzionale consolidato, non su ogni piccolo spostamento.
+- Criteri del blocco profilo: nessun I/O privato diretto nella route; un owner per comando/risorsa; snapshot e isolamento account/ruolo; deadline/cancellazione; singolo invio e coerenza rollback/ack; object URL del download sempre rilasciato. Preservare permessi e payload. L'annullamento client non promette rollback di scritture già accettate.
+- Il conteggio righe rimane un vincolo; il SAL riporta percorsi e gate chiusi. Tutti i gate merge/prebuild e le soglie dei controlli restano invariati.
+
 ## DEV26-11 — Refactoring dei quattro proprietari principali
 
 **Dipende da:** 04–10. Separare commit meccanici da cambi di comportamento.
