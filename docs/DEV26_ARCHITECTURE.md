@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1792|Catalogo/comandi/form/dettagli e partita attiva47 verificati; nessun SDK/rete diretto nella route; analytics/storico/share e limite dimensionale aperti |
+| Tavolo web |1479|Catalogo/comandi/form/dettagli/partita attiva verificati; pannelli premi149/mazzi130/meta103 in verifica; stati/proiezioni analytics, storico/share e limite dimensionale aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -24,6 +24,8 @@ App26028392: clean web/Android/iOS exports and56 real Dev API/browser cases PASS
 Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie alle implementazioni condivise. Il mobile raccoglie esplicitamente coverage dei file esterni tramite percorso assoluto e allowExternal; senza questa configurazione Vitest ometteva i file e il ratchet ha correttamente fallito. Non sono state abbassate soglie.
 
 ## Proprietari attuali e destinazione
+
+Report presentation: `arena-awards-panel.tsx`, `arena-deck-rankings-panel.tsx` and `arena-meta-panel.tsx` render three distinct tabs from typed report data and effective loading/error/retry status. `ArenaDataStatusProps` exposes the unchanged status contract. Loading, permissions and shared period/bracket/sort/provisional/view state keep their current parent lifetime in this mechanical tranche; no local state was moved into a component that could reset on parent loading. Existing DeckImage and EDHREC badge containers retain their I/O and are explicit delegates of the boundary gate. The panels themselves own no SDK, query or subscription. Full JSX was copied againstc9f80e0b, normalizing only the three effective status expressions. A two-viewport functional baseline covers retry, neutral draws, provisional visibility and award view switching; final post-extraction verification is pending.
 
 Active discovery: `hooks/use-arena-active-game.ts` owns the per-account/group/admin result, one pending lookup and the focus/visibility listeners. The epoch masks previous IDs synchronously, guards late updates and aborts all SDK stages within a shared15-second deadline. `fetchActiveLiveGame` accepts the same signal throughout participation, authoritative-game and creator fallback queries, and stops between awaits after cancellation. Existing active/non-eliminated participation authority and eliminated-host fallback semantics remain unchanged. The route no longer imports SDK/private transport services or issues network calls; both profile and arena composition are protected by AST/security gates. A pre-fix real browser case observed two concurrent participation reads at entry; final cancellation/overlap verification is pending at this checkpoint.
 

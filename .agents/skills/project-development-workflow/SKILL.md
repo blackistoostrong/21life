@@ -98,6 +98,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+Arena reports: `arena-awards-panel.tsx`, `arena-deck-rankings-panel.tsx` and `arena-meta-panel.tsx` present typed data with the existing `ArenaDataStatusProps` contract. Shared filters and view state retain parent lifetime; query ownership is unchanged. Image/EDHREC containers remain explicit I/O delegates; the report panels do not access SDK/query services.
+
 Active discovery: `hooks/use-arena-active-game.ts` owns scoped active-game lookup results and focus/visibility listeners. Its single pending lease bounds the full multi-query SDK chain; `fetchActiveLiveGame` carries the cancellation signal through each stage. Profile and arena routes compose feature owners without direct SDK/network imports, enforced by security gates.
 
 Historical details: `hooks/use-arena-match-details.ts` owns private opening snapshots and optional legacy recap reads, scoped by account/group/admin with per-opening identity, SDK cancellation and deadline. `arena-match-details-dialog.tsx` presents the model. `fetchLiveGameByMatchId` supports a captured group and signal; current tracking snapshots skip that legacy request.

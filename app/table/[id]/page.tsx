@@ -1,4 +1,7 @@
 'use client';
+import { ArenaAwardsPanel } from '@/components/arena/arena-awards-panel';
+import { ArenaDeckRankingsPanel } from '@/components/arena/arena-deck-rankings-panel';
+import { ArenaMetaPanel } from '@/components/arena/arena-meta-panel';
 import { useArenaActiveGame } from '@/hooks/use-arena-active-game';
 import { useArenaMatchDetails } from '@/hooks/use-arena-match-details';
 import { ArenaMatchDetailsDialog } from '@/components/arena/arena-match-details-dialog';
@@ -46,7 +49,6 @@ import { ManaLogo } from '@/components/ui/mana-logo';
 import { AppProfileButton } from '@/components/navigation/app-profile-button';
 import { DeckImage } from '@/components/deck-image';
 
-import { ArenaDeckSummary } from '@/components/arena/arena-deck-summary';
 import { ArenaInviteQrDialog } from '@/components/arena/arena-invite-qr-dialog';
 import { PreviousSeasonsPanel } from '@/components/arena/previous-seasons-panel';
 import { useLanguage } from '@/components/language-provider';
@@ -54,7 +56,6 @@ import { usePlatformAdmin } from '@/hooks/use-platform-admin';
 
 import { MANA_COLOR_LABELS } from '@/lib/mana-colors';
 
-import { ManaColorPairs, ManaColorReport } from '@/components/arena/mana-color-charts';
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 
 import { PanelWithActions } from '@/components/ui/panel-with-actions';
@@ -63,9 +64,6 @@ import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
 import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
-
-import { BracketBadge } from '@/components/deck/bracket-badge';
-import { EdhrecBadge } from '@/components/deck/edhrec-badge';
 
 import { buildArenaShareText } from '@/lib/arena-share';
 import {
@@ -85,11 +83,7 @@ import {
 import { formatGameDuration } from '@/lib/live-game-duration';
 
 import { buildArenaAwards, type ArenaAward as DeckArenaAward, type DeckPerformanceStats } from '@/lib/deck-performance-analytics';
-import {
-  countProvisionalDeckRankings,
-  filterDeckRankings,
-  isProvisionalDeckRanking,
-} from '@/lib/deck-ranking-visibility';
+import { countProvisionalDeckRankings, filterDeckRankings } from '@/lib/deck-ranking-visibility';
 
 import { groupMatchesByDay } from '@/lib/arena-session';
 import {
@@ -101,14 +95,14 @@ import {
   formatArenaSeasonDate,
   formatArenaSeasonLabel,
 } from '@/lib/arena-seasons';
-import { PlayerAwards } from '@/components/arena/player-awards';
+
 import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import { toMatchDateValue } from '@/lib/match-datetime';
 import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 
 import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
-import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Eye, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, QrCode, Shield, Flag } from 'lucide-react';
+import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Eye, Share2, Palette, DoorOpen, UserMinus, Award, Flame, Crown, QrCode, Shield, Flag } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
 
 const MATCHES_SELECT = `
@@ -285,6 +279,11 @@ export default function TablePage() {
   const history=useArenaMatchHistory(season.ready?user?.id:undefined,groupId,reportSince);
   const reportAnalytics=useArenaAnalytics(season.ready?user?.id:undefined,groupId,reportSince,
     seasonContext ? new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null,bracketFilter);
+  const reportPanelStatus = {
+    loading: season.loading || reportAnalytics.loading,
+    error: season.error || reportAnalytics.error,
+    onRetry: season.error ? season.reload : reportAnalytics.reload,
+  };
   const analyticsPayload=reportAnalytics.current;
   const allTimeAwardsPayload=reportAnalytics.awards;
   const matches=useMemo(()=>{
@@ -1236,135 +1235,8 @@ export default function TablePage() {
             </ArenaDataStatus>
 </TabsContent>
 
-          <TabsContent value="awards">
-            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
-              onRetry={season.error ? season.reload : reportAnalytics.reload}>
-            <div className="space-y-5">
-              <div>
-                <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
-                  <Award className="h-5 w-5 text-emerald-300" /> Awards
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t({
-                    it: 'Top 3 per ogni premio. I primati usano tutte le partite registrate; solo il premio Più veloce richiede almeno 3 partite tracciate.',
-                    en: 'Top 3 for each award. Records use every saved match; only the Fastest award requires at least 3 tracked games.',
-                  })}
-                </p>
-              </div>
-              <div className="flex w-fit rounded-xl border border-border bg-background/40 p-1">
-                {(['decks', 'players'] as const).map((view) => <Button key={view} size="sm" variant={awardsView === view ? 'default' : 'ghost'} onClick={() => setAwardsView(view)}>{view === 'players' ? t({ it: 'Giocatori', en: 'Players' }) : t({ it: 'Mazzi', en: 'Decks' })}</Button>)}
-              </div>
-              {awardsView === 'decks' ? (arenaAwards.length === 0 ? (
-                <Card className="phyrexian-panel">
-                  <CardContent className="py-12 text-center">
-                    <Award className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                    <h3 className="text-lg font-medium text-foreground">
-                      {t({ it: 'Awards non ancora disponibili', en: 'No awards yet' })}
-                    </h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {t({ it: 'Completa altre partite con il tracking realtime per sbloccare i primati.', en: 'Complete more realtime-tracked games to unlock playgroup records.' })}
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-                  {arenaAwardGroups.map((awards) => {
-                    const leadAward = awards[0];
-                    const presentation = leadAward.kind === 'fastest'
-                      ? { icon: Gauge, title: t({ it: 'Fastest Deck', en: 'Fastest Deck' }), tone: 'text-cyan-300', badge: 'border-cyan-300/40 bg-cyan-400/10 shadow-cyan-400/20' }
-                      : leadAward.kind === 'group_slugger'
-                        ? { icon: Flame, title: 'Group Slugger', tone: 'text-orange-300', badge: 'border-orange-300/40 bg-orange-400/10 shadow-orange-400/20' }
-                        : leadAward.kind === 'executioner'
-                          ? { icon: Crosshair, title: t({ it: 'Executioner', en: 'Executioner' }), tone: 'text-rose-300', badge: 'border-rose-300/40 bg-rose-400/10 shadow-rose-400/20' }
-                          : leadAward.kind === 'runner_up'
-                            ? { icon: Crown, title: t({ it: 'Eterno Secondo', en: 'Runner-up' }), tone: 'text-amber-300', badge: 'border-amber-300/50 bg-amber-400/15 shadow-amber-400/25' }
-                            : leadAward.kind === 'archenemy'
-                              ? { icon: Skull, title: 'Archenemy', tone: 'text-red-300', badge: 'border-red-300/40 bg-red-400/10 shadow-red-400/20' }
-                              : leadAward.kind === 'comebacker'
-                                ? { icon: TrendingUp, title: 'Comebacker', tone: 'text-emerald-300', badge: 'border-emerald-300/40 bg-emerald-400/10 shadow-emerald-400/20' }
-                                : leadAward.kind === 'one_trick'
-                                  ? { icon: Target, title: 'The one-trick', tone: 'text-blue-300', badge: 'border-blue-300/40 bg-blue-400/10 shadow-blue-400/20' }
-                                  : leadAward.kind === 'combo_winner'
-                                    ? { icon: Flame, title: 'I think I won', tone: 'text-teal-300', badge: 'border-teal-300/40 bg-teal-400/10 shadow-teal-400/20' }
-                                    : { icon: Trophy, title: 'Junk Master', tone: 'text-lime-300', badge: 'border-lime-300/40 bg-lime-400/10 shadow-lime-400/20' };
-                    const Icon = presentation.icon;
-                    const awardDescription = leadAward.kind === 'fastest'
-                      ? t({ it: 'Le vittorie più rapide tra i mazzi tracciati.', en: 'Fastest wins among tracked decks.' })
-                      : leadAward.kind === 'group_slugger'
-                        ? t({ it: 'Il mazzo che ha inflitto più danni al tavolo.', en: 'The deck that dealt the most damage to the table.' })
-                        : leadAward.kind === 'executioner'
-                          ? t({ it: 'Il mazzo con più eliminazioni.', en: 'The deck with the most eliminations.' })
-                          : leadAward.kind === 'runner_up'
-                            ? t({ it: 'Il mazzo arrivato più spesso al secondo posto.', en: 'The deck that finished second most often.' })
-                            : leadAward.kind === 'archenemy'
-                              ? t({ it: 'Il mazzo sconfitto per primo più spesso.', en: 'The deck eliminated first most often.' })
-                              : leadAward.kind === 'comebacker'
-                                ? t({ it: 'Le vittorie ottenute dopo essere stato in svantaggio.', en: 'Wins earned after falling behind.' })
-                                : leadAward.kind === 'one_trick'
-                                  ? t({ it: 'Il mazzo portato al tavolo più spesso.', en: 'The deck brought to the table most often.' })
-                                  : leadAward.kind === 'combo_winner'
-                                    ? t({ it: 'Le vittorie concluse con una combo.', en: 'Wins completed with a combo.' })
-                                    : t({ it: 'Le vittorie ottenute con condizioni alternative.', en: 'Wins achieved through alternate conditions.' });
-                    return (
-                      <Card key={leadAward.kind} className="phyrexian-panel overflow-hidden border-white/10 bg-card/70">
-                        <CardContent className="p-4">
-                          <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                            <span className={`relative grid h-10 w-10 place-items-center overflow-hidden rounded-xl border shadow-lg ${presentation.badge}`}>
-                              <Trophy aria-hidden="true" className="absolute -right-1 -top-1 h-5 w-5 text-white/10" />
-                              <Icon className={`relative h-5 w-5 ${presentation.tone}`} />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{presentation.title}</p>
-                              <p className={`text-sm font-bold ${presentation.tone}`}>{t({ it: 'Top 3 mazzi', en: 'Top 3 decks' })}</p>
-                            </div>
-                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                              {awards.length}/3
-                            </span>
-                          </div>
-                          <p className="mb-3 text-xs leading-relaxed text-muted-foreground">{awardDescription}</p>
-                          <div className="space-y-3">
-                            {awards.map((award) => {
-                              const podium = award.rank === 1
-                                ? { label: t({ it: 'Oro', en: 'Gold' }), tone: 'border-yellow-300 bg-yellow-300 text-yellow-950' }
-                                : award.rank === 2
-                                  ? { label: t({ it: 'Argento', en: 'Silver' }), tone: 'border-slate-200 bg-slate-200 text-slate-950' }
-                                  : { label: t({ it: 'Bronzo', en: 'Bronze' }), tone: 'border-orange-500 bg-orange-600 text-white' };
-                              const value = award.kind === 'fastest' ? formatGameDuration(award.value) : String(award.value);
-
-                              return (
-                                <div key={`${award.kind}:${award.rank}:${award.deck.key}`} className="flex items-center gap-3 rounded-xl border border-white/10 bg-background/35 p-2.5">
-                                  <span aria-label={`${podium.label}, ${award.rank}`} className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-black ${podium.tone}`}>
-                                    {award.rank}
-                                  </span>
-                                  <DeckImage src={award.deck.commanderImage} alt={award.deck.commander} className="h-14 w-10 shrink-0 rounded object-cover object-top" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="line-clamp-1 font-semibold text-foreground">{award.deck.name}</p>
-                                    <p className="line-clamp-1 text-xs text-emerald-300">{award.deck.commander}</p>
-                                    <p className="line-clamp-1 text-[11px] text-muted-foreground">{t({ it: 'Proprietario', en: 'Owner' })}: {award.deck.ownerDisplayName}</p>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                      {award.kind === 'one_trick' ? award.deck.gamesPlayed : award.deck.trackedGames}{' '}
-                                      {award.kind === 'one_trick'
-                                        ? t({ it: 'partite', en: 'games' })
-                                        : t({ it: 'partite tracciate', en: 'tracked games' })}
-                                    </p>
-                                  </div>
-                                  <span className={`shrink-0 text-sm font-black tabular-nums ${presentation.tone}`}>
-                                    {value}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )) : <PlayerAwards awards={playerAwards} language={language} />}
-            </div>
-
-            </ArenaDataStatus>
-</TabsContent>
+          <ArenaAwardsPanel status={reportPanelStatus}
+            awardsView={awardsView} setAwardsView={setAwardsView} arenaAwards={arenaAwards} arenaAwardGroups={arenaAwardGroups} playerAwards={playerAwards} />
 
           <TabsContent value="players">
             <div className="space-y-6">
@@ -1575,203 +1447,11 @@ export default function TablePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="commanders">
-            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
-              onRetry={season.error ? season.reload : reportAnalytics.reload}>
-            {deckStats.length === 0 ? (
-              <Card className="bg-card/50 border-border">
-                <CardContent className="py-12 text-center">
-                  <Swords className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">{t({ it: 'Nessuna statistica mazzo', en: 'No deck stats yet' })}</h3>
-                  <p className="text-muted-foreground">{t({ it: 'Aggiungi mazzi e gioca partite per vedere le statistiche', en: 'Add decks and play battles to see deck statistics' })}</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                <ArenaDeckSummary visibleDeckStats={visibleDeckStats} totalDecks={deckStats.length} />
+          <ArenaDeckRankingsPanel status={reportPanelStatus}
+            deckStats={deckStats} visibleDeckStats={visibleDeckStats} deckStatsSort={deckStatsSort} provisionalDeckCount={provisionalDeckCount} showProvisionalDecks={showProvisionalDecks} setShowProvisionalDecks={setShowProvisionalDecks} commanderRanksByIndex={commanderRanksByIndex} />
 
-                <Card className="bg-card/50 border-border">
-                  <CardHeader>
-                    <CardTitle className="text-foreground flex items-center gap-2">
-                      <Swords className="w-5 h-5" />
-                      {t({ it: 'Classifica mazzi', en: 'Deck Rankings' })}
-                    </CardTitle>
-                    <CardDescription>
-                      {deckStatsSort === 'winRate' && t({ it: 'Ordinata per win rate, vittorie e partite giocate', en: 'Sorted by win rate, wins, and games played' })}
-                      {deckStatsSort === 'gamesPlayed' && t({ it: 'Ordinata per partite giocate', en: 'Sorted by games played' })}
-                    </CardDescription>
-                    {provisionalDeckCount > 0 ? (
-                      <button
-                        type="button"
-                        aria-pressed={showProvisionalDecks}
-                        onClick={() => setShowProvisionalDecks((value) => !value)}
-                        className="w-fit rounded-full border border-border bg-background/50 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-emerald-500/50 hover:text-emerald-200"
-                      >
-                        {showProvisionalDecks
-                          ? t({ it: 'Nascondi mazzi con meno di 5 partite', en: 'Hide decks under 5 games' })
-                          : t({ it: `Mostra ${provisionalDeckCount} mazzi con meno di 5 partite`, en: `Show ${provisionalDeckCount} decks under 5 games` })}
-                      </button>
-                    ) : null}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {visibleDeckStats.map((deck, index) => {
-                        const isRanked = !isProvisionalDeckRanking(deck.gamesPlayed);
-                        const rank = commanderRanksByIndex[index] ?? index + 1;
-                        return (
-                          <div
-                            key={deck.key}
-                            className={`flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-start sm:gap-4 ${
-                              isRanked && rank === 1 ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' :
-                              'bg-secondary/50'
-                            }`}
-                          >
-                            <div className="flex items-start gap-3 sm:contents">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                              rank === 1 ? 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white' :
-                              rank === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-slate-800' :
-                              rank === 3 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' :
-                              'bg-secondary text-secondary-foreground'
-                            }`}>
-                              {rank}
-                            </div>
-                            <DeckImage
-                              src={deck.commanderImage}
-                              alt={deck.commander}
-                              className="h-14 w-20 shrink-0 rounded object-cover object-top"
-                            />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                {isRanked && rank === 1 && <Trophy className="w-4 h-4 text-emerald-400" />}
-                              <p className="font-semibold text-foreground break-words">{deck.commander}</p>
-                              {!isRanked ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-200">{t({ it: 'Campione ridotto', en: 'Low sample' })}</span> : null}
-                              <p className="w-full text-xs text-muted-foreground">{t({ it: 'Proprietario', en: 'Owner' })}: {deck.ownerDisplayName}</p>
-                                {deck.bracket && <BracketBadge bracket={deck.bracket} />}
-                                <EdhrecBadge commander={deck.commander} />
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                <span>{deck.gamesPlayed} {t({ it: deck.gamesPlayed === 1 ? 'partita' : 'partite', en: deck.gamesPlayed === 1 ? 'game' : 'games' })}</span>
-                                <span>{formatMatchRecord(deck)}</span>
-                              </div>
-                              <div className="mt-2 h-2 bg-secondary rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full"
-                                  style={{ width: `${deck.winRate}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center justify-between gap-2 sm:block sm:text-right">
-                              <p className="text-xs text-muted-foreground sm:hidden">{t({ it: 'win rate', en: 'win rate' })}</p>
-                              <div>
-                                <p className="text-2xl font-bold text-emerald-400">{deck.winRate}%</p>
-                                <p className="hidden text-xs text-muted-foreground sm:block">{t({ it: 'win rate', en: 'win rate' })}</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {visibleDeckStats.length === 0 ? (
-                        <p className="py-5 text-center text-sm text-muted-foreground">{t({ it: 'Nessun mazzo ha ancora raggiunto 5 partite.', en: 'No deck has reached 5 games yet.' })}</p>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            </ArenaDataStatus>
-</TabsContent>
-
-          <TabsContent value="meta">
-            <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
-              onRetry={season.error ? season.reload : reportAnalytics.reload}>
-            {analyticsPayload.totalMatches === 0 ? (
-              <Card className="phyrexian-panel">
-                <CardContent className="py-12 text-center">
-                  <Palette className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                  <h3 className="mb-2 text-lg font-medium text-foreground">
-                    {t({ it: 'Nessun dato meta ancora', en: 'No meta data yet' })}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {t({ it: 'Gioca partite con mazzi tracciati per vedere il meta colori del playgroup.', en: 'Play tracked-deck battles to see this playgroup\'s color meta.' })}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-5">
-                {(syncingDeckColors || colorAnalytics.missingColorGames > 0) && (
-                  <Card className="border-border/70 bg-card/50">
-                    <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        {syncingDeckColors && <Loader2 className="h-4 w-4 animate-spin text-emerald-300" />}
-                        <span>
-                          {syncingDeckColors
-                            ? t({ it: 'Sto aggiornando i colori dei mazzi mancanti...', en: 'Updating missing deck colors...' })
-                            : t({
-                                it: `${colorAnalytics.missingColorGames} partite hanno ancora mazzi senza colori risolti.`,
-                                en: `${colorAnalytics.missingColorGames} games still have decks without resolved colors.`,
-                              })}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card className="phyrexian-panel">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Palette className="h-5 w-5 text-emerald-300" />
-                      {t({ it: 'Meta colori', en: 'Color meta' })}
-                    </CardTitle>
-                    <CardDescription>
-                      {t({
-                        it: 'Statistiche per W, U, B, R, G e incolore (C). I colori senza partite restano visibili ma attenuati.',
-                        en: 'Stats for W, U, B, R, G, and colorless (C). Colors with no games stay visible but muted.',
-                      })}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ManaColorReport
-                      played={colorAnalytics.played}
-                      won={colorAnalytics.won}
-                      winRates={colorAnalytics.winRates}
-                      missingColorGames={colorAnalytics.missingColorGames}
-                      emptyLabel={t({
-                        it: 'Nessun colore risolto nel periodo selezionato. Attendi la sincronizzazione o verifica che i mazzi abbiano il comandante impostato.',
-                        en: 'No resolved colors in the selected period. Wait for sync or make sure decks have a commander set.',
-                      })}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card className="phyrexian-panel">
-                  <CardHeader>
-                    <CardTitle className="text-foreground">
-                      {t({ it: 'Identità multicolore', en: 'Multicolor identities' })}
-                    </CardTitle>
-                    <CardDescription>
-                      {t({
-                        it: 'Le 5 combinazioni più frequenti: gilde, tricolori (Naya, Grixis, Jeskai, Mardu, ecc.) o Pentacolor.',
-                        en: 'Top 5 combinations: guilds, three-color identities (Naya, Grixis, Jeskai, Mardu, etc.), or Pentacolor.',
-                      })}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ManaColorPairs
-                      pairs={colorAnalytics.pairs}
-                      emptyLabel={t({
-                        it: 'Nessuna identità multicolore nel periodo selezionato.',
-                        en: 'No multicolor identities in the selected period.',
-                      })}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            </ArenaDataStatus>
-</TabsContent>
+          <ArenaMetaPanel status={reportPanelStatus}
+            analyticsPayload={analyticsPayload} colorAnalytics={colorAnalytics} syncingDeckColors={syncingDeckColors} />
         </Tabs>
 
         {(canLeaveCurrentArena || canManageGroup) && (
