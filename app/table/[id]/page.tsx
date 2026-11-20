@@ -1,4 +1,5 @@
 'use client';
+import { useArenaActiveGame } from '@/hooks/use-arena-active-game';
 import { useArenaMatchDetails } from '@/hooks/use-arena-match-details';
 import { ArenaMatchDetailsDialog } from '@/components/arena/arena-match-details-dialog';
 import { ArenaMatchEditDialog } from '@/components/arena/arena-match-edit-dialog';
@@ -27,7 +28,7 @@ import {ArenaDataStatus} from '@/components/arena/arena-data-status';
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { supabase } from '@/lib/supabase';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -76,11 +77,10 @@ import { isDemoUser } from '@/lib/demo';
 import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, type ArenaGuest, type ArenaGuestDeck } from '@/lib/arena-participants';
 
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
+
 import {
   buildArenaAnalyticsBundle,
 } from '@/lib/arena-analytics-bundle';
-import { fetchActiveLiveGame } from '@/lib/live-game-service';
 
 import { formatGameDuration } from '@/lib/live-game-duration';
 
@@ -104,7 +104,7 @@ import {
 import { PlayerAwards } from '@/components/arena/player-awards';
 import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import { toMatchDateValue } from '@/lib/match-datetime';
-import { parseParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 
 import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
@@ -261,7 +261,7 @@ export default function TablePage() {
   const seasonContext=season.data;
   const [activeTab, setActiveTab] = useState('matches');
   const [awardsView, setAwardsView] = useState<'players' | 'decks'>('decks');
-  const [activeLiveGameId, setActiveLiveGameId] = useState<string | null>(null);
+  const activeLiveGameId = useArenaActiveGame(user, groupId);
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [bracketFilter, setBracketFilter] = useState('all');
   const [deckStatsSort, setDeckStatsSort] = useState<'winRate' | 'gamesPlayed'>('winRate');
@@ -374,20 +374,6 @@ export default function TablePage() {
   const { refreshMissingImportedDeckImages, scheduleArenaDeckColors, syncingDeckColors } = useArenaDeckEnrichment(
     user?.id ?? null, groupId, adminMode, isDemoUser(user), decks, deckColorOverrides, matches, setDecks, updateDeckColors);
 
-  const refreshActiveLiveGame = useCallback(async () => {
-    if (!groupId || !user) {
-      setActiveLiveGameId(null);
-      return;
-    }
-    try {
-      const game = await fetchActiveLiveGame(supabase, groupId, toUserParticipantKey(user.id));
-      setActiveLiveGameId(game?.id ?? null);
-    } catch (error) {
-      console.error('Error fetching active live game:', getSupabaseErrorMessage(error as Error, 'Failed to fetch active game'));
-      setActiveLiveGameId(null);
-    }
-  }, [groupId, user]);
-
   const reloadHistory=history.reload;
   const reloadAnalytics=reportAnalytics.reload;
   const refreshMatches=useCallback(async()=>{
@@ -403,21 +389,6 @@ export default function TablePage() {
   useEffect(() => {
     if (user) fetchData();
   }, [user, fetchData]);
-
-  useEffect(() => {
-    if (!user) return;
-    void refreshActiveLiveGame();
-    const refreshWhenVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      void refreshActiveLiveGame();
-    };
-    window.addEventListener('focus', refreshWhenVisible);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      window.removeEventListener('focus', refreshWhenVisible);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
-  }, [groupId, refreshActiveLiveGame, user]);
 
   const getFilteredMatches=useCallback(()=>matches,[matches]);
 

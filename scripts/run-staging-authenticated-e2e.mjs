@@ -137,6 +137,7 @@ try {
       'tests/e2e/arena-guest-scope.spec.ts',
       'tests/e2e/arena-match-commands.spec.ts',
       'tests/e2e/arena-match-details.spec.ts',
+      'tests/e2e/arena-active-game.spec.ts',
       'tests/e2e/arena-match-native-owners.spec.ts',
       'tests/e2e/arena-match-atomic.spec.ts',
       '--grep', grep,
