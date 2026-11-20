@@ -524,6 +524,16 @@
       "version": "20261119193048",
       "name": "20261119193048_enforce_arena_guest_deck_group_scope.sql",
       "checksum": "e3e64f6819b3259cccb05be235f6977ebea2eb6a14c24e8b3dabdc37ac959a45"
+    },
+    {
+      "version": "20261120074242",
+      "name": "20261120074242_atomic_arena_match_writes.sql",
+      "checksum": "d488b8b44468d5772060645efd49e806f4838adf196ac29cf16495f0edc9f009"
+    },
+    {
+      "version": "20261120080129",
+      "name": "20261120080129_arena_match_conflict_http_status.sql",
+      "checksum": "cfdf413b88d951435af6939fa5106e89ebc2be3efcda0945b0eb0186bec04e46"
     }
   ]
 }
