@@ -803,7 +803,7 @@ export default function TablePage() {
     }
   };
 
-  const { handleDeleteMatch } = useArenaMatchDeletion(refreshMatches);
+  const { handleDeleteMatch, deletingMatch } = useArenaMatchDeletion(user?.id ?? null, groupId, adminMode, canManageGroup, matches, refreshMatches);
 
   const getMatchWinnerName = (match: Match) => {
     if (match.winner_guest?.display_name) return match.winner_guest.display_name;
@@ -1620,7 +1620,7 @@ export default function TablePage() {
                                       <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={() => openEditMatch(match)}>
                                         <Pencil className="h-4 w-4" />
                                       </Button>
-                                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMatch(match.id)}>
+                                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" disabled={deletingMatch} onClick={() => handleDeleteMatch(match.id)}>
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
                                     </div>

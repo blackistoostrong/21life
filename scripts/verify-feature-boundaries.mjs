@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'packages/data/arena-match-delete.ts', 'lib/arena-match-write.ts',
     'hooks/use-arena-match-deletion.ts',
     'hooks/use-arena-guest-commands.ts', 'lib/arena-guest-write.ts',
     'hooks/use-arena-membership.ts',
@@ -27,6 +28,7 @@ export const featureOwners = {
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
+    'packages/data/arena-match-delete.ts', 'expo/lib/arena-match-write.ts',
     'packages/data/arena-catalog-realtime.ts',
     'expo/app/table/[id]/play.tsx', 'expo/app/table/[id]/index.tsx',
     'expo/hooks/use-arena.ts', 'expo/hooks/use-arena-history.ts',

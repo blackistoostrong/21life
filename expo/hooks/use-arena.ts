@@ -15,6 +15,7 @@ import type { CommanderSearchResult } from '@/lib/commander-types';
 import { addDeckToGuest, createGuestWithDeck } from '@/lib/guest-arena';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { supabase } from '@/lib/supabase';
+import { deleteArenaMatch } from '@/lib/arena-match-write';
 import { apiPost } from '@/lib/api';
 import type { ArenaDetail, ArenaMatch, ArenaProfile, MemberDeck } from '@/lib/types/arena';
 import { subscribeToArenaCatalog } from '@/lib/arena-catalog-realtime';
@@ -417,19 +418,10 @@ export function useArena(groupId: string | undefined, userId: string | undefined
   }, [groupId, userId]);
 
   const deleteMatch = useCallback(async (matchId: string) => {
-    const { error: participantError } = await supabase.from('match_participants').delete().eq('match_id', matchId);
-    if (participantError) throw participantError;
-    const { error } = await supabase.from('matches').delete().eq('id', matchId);
-    if (error) throw error;
-    const { data: remaining, error: verifyError } = await supabase
-      .from('matches')
-      .select('id')
-      .eq('id', matchId)
-      .maybeSingle();
-    if (verifyError) throw verifyError;
-    if (remaining) throw new Error('Match was not deleted');
-    await refreshMatches();
-  }, [refreshMatches]);
+    if (!groupId || !isCurrent()) throw new Error('ARENA_CONTEXT_CHANGED');
+    await deleteArenaMatch(supabase, groupId, matchId);
+    if (isCurrent()) await refreshMatches();
+  }, [groupId, isCurrent, refreshMatches]);
 
   const addGuest = useCallback(async (input: {
     displayName: string;

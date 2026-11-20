@@ -1,4 +1,16 @@
 {
+  "../packages/data/arena-match-delete.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/arena-match-write.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
   "lib/access-log.ts": {
     "lines": 0,
     "branches": 0,
