@@ -67,11 +67,14 @@ const profileComposition = readFileSync(join(root, 'app/profile/page.tsx'), 'utf
 const arenaComposition = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'utf8');
 const matchWriteOwner = readFileSync(join(root, 'hooks/use-arena-match-write.ts'), 'utf8');
 const matchCreationOwner = readFileSync(join(root, 'hooks/use-arena-match-creation.ts'), 'utf8');
+const matchEditorOwner = readFileSync(join(root, 'hooks/use-arena-match-editor.ts'), 'utf8');
 assert.doesNotMatch(arenaComposition, /authenticatedFetch|\/api\/notifications\/match-completed/, 'Manual match notifications must come from the atomic database transaction');
 assert.match(arenaComposition, /useArenaMatchCreation\(/, 'The route must compose the creation owner');
 assert.match(matchCreationOwner, /createWriter\.save\(job, input\)/, 'Create must use the scoped atomic match owner');
 assert.doesNotMatch(matchCreationOwner, /authenticatedFetch|\/api\/notifications\/match-completed/, 'Creation must not duplicate transactional notification calls');
-assert.match(arenaComposition, /editWriter\.save\(job,/, 'Edit must use the scoped atomic match owner');
+assert.match(arenaComposition, /useArenaMatchEditor\(/, 'The route must compose the editor owner');
+assert.match(matchEditorOwner, /editWriter\.save\(job,/, 'Edit must use the scoped atomic match owner');
+assert.doesNotMatch(matchEditorOwner, /authenticatedFetch|\/api\/notifications\/match-completed/, 'Editing must not duplicate transactional notification calls');
 assert.match(matchWriteOwner, /actorId: userId/, 'Atomic match writes must bind the captured actor');
 assert.match(matchWriteOwner, /job\.signal/, 'Atomic match writes must use context cancellation');
 assert.doesNotMatch(profileComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch)/, 'Profile route must delegate private transports to feature owners');

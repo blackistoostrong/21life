@@ -5,10 +5,13 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 it('offers registered players occasional decks in manual and historical editing', () => {
   const page = read('app/table/[id]/page.tsx');
   const creation = read('components/arena/arena-match-create-dialog.tsx');
+  const editor = read('components/arena/arena-match-edit-dialog.tsx');
   expect(page).toContain('<ArenaMatchCreateDialog');
-  expect(page.match(/<OccasionalDeckForm/g)?.length).toBe(1);
+  expect(page).toContain('<ArenaMatchEditDialog');
+  expect(page).not.toContain('<OccasionalDeckForm');
   expect(creation.match(/<OccasionalDeckForm/g)?.length).toBe(1);
-  expect(page).toContain('p.decks?.source_type');
+  expect(editor.match(/<OccasionalDeckForm/g)?.length).toBe(1);
+  expect(read('hooks/use-arena-match-editor.ts')).toContain('p.decks?.source_type');
   expect(page).toContain("deck.source_type !== 'occasional'");
 });
 it('offers inline live creation while excluding occasional decks from automatic selection', () => {

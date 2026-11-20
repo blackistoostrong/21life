@@ -98,6 +98,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+Historical match editing: `hooks/use-arena-match-editor.ts` owns its snapshot, assignments, derived player/deck options, validation and atomic-save coordination. `components/arena/arena-match-edit-dialog.tsx` presents the typed model; `lib/types/arena-match.ts` is the unchanged web view contract. Shared occasional choices remain in route composition because creation and editing both consume the existing container.
+
 Arena manual creation: `hooks/use-arena-match-creation.ts` owns its draft, participant selection, validation and atomic-write coordination. `components/arena/arena-match-create-dialog.tsx` presents the typed model and delegates only to the existing occasional-deck/image containers. The route provides catalog/enrichment/invalidation callbacks and connects guest results; edit draft extraction remains pending.
 
 Manual arena match writes: `packages/domain/arena-match-write.ts` owns payload mapping and failure copy; `packages/data/arena-match-write.ts` owns the actor-bound atomic RPC and deadline/ACK contract. Web/native `lib/arena-match-write.ts` supply local SDK adapters. Web `hooks/use-arena-match-write.ts` owns leases/request identity; native counterpart owns persistence and `use-arena-match-form-command.ts` owns form cancellation/feedback. Notifications come from existing transactional triggers, with the legacy HTTP endpoint retained for older clients. Draft/presentation extraction remains pending.

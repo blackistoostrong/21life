@@ -1,4 +1,7 @@
 'use client';
+import { ArenaMatchEditDialog } from '@/components/arena/arena-match-edit-dialog';
+import { useArenaMatchEditor } from '@/hooks/use-arena-match-editor';
+import type { Match } from '@/lib/types/arena-match';
 import { ArenaMatchCreateDialog } from '@/components/arena/arena-match-create-dialog';
 import { useArenaMatchCreation } from '@/hooks/use-arena-match-creation';
 import { useArenaMatchDeletion } from '@/hooks/use-arena-match-deletion';
@@ -25,7 +28,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -56,16 +59,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
-import { Checkbox } from '@/components/ui/checkbox';
-import { OccasionalDeckForm } from '@/components/arena/occasional-deck-form';
-
 import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
-import { toDeckOption } from '@/components/arena/match-participant-row';
+
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecBadge } from '@/components/deck/edhrec-badge';
 
-import { useArenaMatchWrite } from '@/hooks/use-arena-match-write';
-import { getArenaMatchWriteFailureMessage } from '@/packages/domain/arena-match-write';
 import { buildArenaShareText } from '@/lib/arena-share';
 import {
   canKickArenaMember,
@@ -73,7 +71,7 @@ import {
   isArenaMember,
 } from '@/lib/arena-membership';
 import { isDemoUser } from '@/lib/demo';
-import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, getParticipantKey, resolveWinnerParticipantKey, type ArenaGuest, type ArenaGuestDeck, type MatchParticipantRecord } from '@/lib/arena-participants';
+import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, type ArenaGuest, type ArenaGuestDeck } from '@/lib/arena-participants';
 
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
@@ -104,16 +102,12 @@ import {
 } from '@/lib/arena-seasons';
 import { PlayerAwards } from '@/components/arena/player-awards';
 import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
-import {
-  isoToMatchDateValue,
-  matchDateToIso,
-  toMatchDateValue,
-} from '@/lib/match-datetime';
-import { parseParticipantKey, toGuestParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+import { toMatchDateValue } from '@/lib/match-datetime';
+import { parseParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 
 import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
-import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Search, Eye, EyeOff, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, Clock3, QrCode, Shield, Flag } from 'lucide-react';
+import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Eye, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, Clock3, QrCode, Shield, Flag } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
 
 const MATCHES_SELECT = `
@@ -164,27 +158,6 @@ function extractMatchDeckIds(matches: Match[]) {
   return Array.from(new Set(
     matches.flatMap((match) => match.match_participants.map((participant) => getParticipantDeckId(participant)).filter(Boolean))
   )) as string[];
-}
-
-type MatchParticipant = MatchParticipantRecord;
-
-interface Match {
-  id: string;
-  group_id: string;
-  winner_id: string | null;
-  winner_guest_id?: string | null;
-  is_draw?: boolean;
-  played_at: string | null;
-  created_by: string | null;
-  notes: string | null;
-  starting_life?: number | null;
-  duration_seconds?: number | null;
-  live_game_log?: unknown[];
-  win_condition?: 'last_standing' | 'combo' | 'concession' | 'alternate_card' | 'other' | null;
-  tracking_version?: number | null;
-  winner: Profile | null;
-  winner_guest?: { id: string; display_name: string } | null;
-  match_participants: MatchParticipant[];
 }
 
 interface PlayerStats extends MatchRecord {
@@ -364,19 +337,14 @@ export default function TablePage() {
   const arenaSettingsContext = user ? JSON.stringify([user.id, groupId]) : null;
   const [arenaSettingsOwner, setArenaSettingsOwner] = useState<string | null>(null);
   useEffect(() => { setArenaSettingsOwner(null); }, [arenaSettingsContext]);
-
-  // Edit match modal state
-  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
-  const [editMatchWinnerKey, setEditMatchWinnerKey] = useState<ParticipantKey | ''>('');
-  const [editMatchIsDraw, setEditMatchIsDraw] = useState(false);
-  const [editMatchWinCondition, setEditMatchWinCondition] = useState<NonNullable<Match['win_condition']>>('other');
-  const [editMatchNotes, setEditMatchNotes] = useState('');
-  const [editMatchPlayedAt, setEditMatchPlayedAt] = useState(() => toMatchDateValue());
-  const [editMatchPlayerKeys, setEditMatchPlayerKeys] = useState<Record<string, ParticipantKey>>({});
-  const [editMatchPlayerDecks, setEditMatchPlayerDecks] = useState<Record<string, string>>({});
-  const [editMatchDeckSearches, setEditMatchDeckSearches] = useState<Record<string, string>>({});
-  const [hiddenEditMatchDeckLists, setHiddenEditMatchDeckLists] = useState<Record<string, boolean>>({});
-  const [savingEditMatch, setSavingEditMatch] = useState(false);
+  const matchEditor = useArenaMatchEditor({
+    userId: user?.id ?? null, groupId, matchAccessKey, canManageGroup, anyOccasionalCreationBusy,
+    members, guests, decks, occasionalChoices, setOccasionalChoices,
+    getParticipantDeckOptions: key => getParticipantDeckOptions(key),
+    refreshMissingImportedDeckImages: ids => refreshMissingImportedDeckImages(ids),
+    refreshMatches: () => refreshMatches(),
+  });
+  const { editingMatch, editMatchPlayerDecks, openEditMatch } = matchEditor;
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [exportDayKey, setExportDayKey] = useState<string | null>(null);
   const [exportIntro, setExportIntro] = useState('');
@@ -384,16 +352,7 @@ export default function TablePage() {
   const reportOwnerKey=user?user.id+':'+groupId:null;
   const activeExportDayKey=exportDayOwner===reportOwnerKey?exportDayKey:null;
   const dayExport=useArenaDayExport(user?.id,history.scope,activeExportDayKey);
-  const editWriter = useArenaMatchWrite(user?.id ?? null, groupId, matchAccessKey, editingMatch?.id ?? null);
   useLayoutEffect(() => {
-    if (!editingMatch) setSavingEditMatch(false);
-  }, [editingMatch]);
-  useLayoutEffect(() => {
-    setEditingMatch(null);
-    setSavingEditMatch(false);
-    setEditMatchPlayerKeys({}); setEditMatchPlayerDecks({}); setEditMatchDeckSearches({});
-    setHiddenEditMatchDeckLists({}); setEditMatchWinnerKey(''); setEditMatchIsDraw(false);
-    setEditMatchWinCondition('other'); setEditMatchNotes(''); setEditMatchPlayedAt(toMatchDateValue());
     setOccasionalChoices([]); setOccasionalCreationBusy({});
   }, [user?.id, groupId, matchAccessKey]);
 
@@ -401,22 +360,6 @@ export default function TablePage() {
   const canLeaveCurrentArena = canLeaveArena(members.length, currentUserIsMember);
   const membership = useArenaMembership(user, group, adminMode, canLeaveCurrentArena, setMembers);
   const { kickingMemberIds, membershipBusy, handleKickMember, openDeleteArenaModal, openLeaveArenaModal } = membership;
-
-  const editMatchPlayerOptions = useMemo(() => {
-    const options = new Map<ParticipantKey, string>();
-    members.forEach((member) => {
-      options.set(toUserParticipantKey(member.id), member.display_name?.trim() || member.username);
-    });
-    guests.forEach((guest) => {
-      options.set(toGuestParticipantKey(guest.id), guest.display_name);
-    });
-    editingMatch?.match_participants.forEach((participant) => {
-      const key = getParticipantKey(participant);
-      if (!key || options.has(key)) return;
-      options.set(key, getParticipantDisplayName(participant));
-    });
-    return Array.from(options, ([key, label]) => ({ key, label }));
-  }, [editingMatch, guests, members]);
 
   const playerRanksByIndex = useMemo(
     () => playerStats.map((_, index) => getPlayerRank(playerStats, index)),
@@ -622,28 +565,6 @@ export default function TablePage() {
       return [...decks, ...occasionalChoices].find((deck) => deck.id === deckId && deck.user_id === parsed.id) || null;
     }
 
-    const guest = guests.find((entry) => entry.id === parsed.id);
-    return guest?.arena_guest_decks?.find((deck) => deck.id === deckId) || null;
-  };
-
-  const getFilteredEditMatchDeckOptions = (participantId: string, participantKey: ParticipantKey) => {
-    const query = (editMatchDeckSearches[participantId] || '').trim().toLowerCase();
-    const deckList = getParticipantDeckOptions(participantKey);
-    if (!query) return deckList;
-    return deckList.filter((deck) => [
-      deck.name,
-      deck.commander,
-      'source_type' in deck ? deck.source_type : 'guest',
-      deck.bracket ? `bracket ${deck.bracket}` : null,
-    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
-  };
-
-  const getSelectedEditMatchDeck = (participantId: string, participantKey: ParticipantKey) => {
-    const deckId = editMatchPlayerDecks[participantId];
-    if (!deckId) return null;
-    const parsed = parseParticipantKey(participantKey);
-    if (!parsed) return null;
-    if (parsed.type === 'user') return [...decks, ...occasionalChoices].find((deck) => deck.id === deckId && deck.user_id === parsed.id) || null;
     const guest = guests.find((entry) => entry.id === parsed.id);
     return guest?.arena_guest_decks?.find((deck) => deck.id === deckId) || null;
   };
@@ -934,103 +855,6 @@ export default function TablePage() {
           variant: 'destructive',
         });
       }
-    }
-  };
-
-  const openEditMatch = (match: Match) => {
-    setOccasionalChoices(match.match_participants.flatMap((p) =>
-      p.deck_id && p.user_id && p.decks?.source_type === 'occasional'
-        ? [{ ...p.decks, id: p.deck_id, user_id: p.user_id, group_id: groupId, is_favorite: false, source_url: null, created_at: '' } as Deck] : []));
-    setEditingMatch(match);
-    setEditMatchWinnerKey(resolveWinnerParticipantKey(match) || '');
-    setEditMatchIsDraw(Boolean(match.is_draw));
-    setEditMatchWinCondition(match.win_condition || 'other');
-    setEditMatchNotes(match.notes || '');
-    setEditMatchPlayedAt(isoToMatchDateValue(match.played_at));
-    setEditMatchDeckSearches({});
-    setEditMatchPlayerKeys(Object.fromEntries(
-      match.match_participants.flatMap((participant) => {
-        const key = getParticipantKey(participant);
-        return key ? [[participant.id, key]] : [];
-      }),
-    ));
-    setHiddenEditMatchDeckLists(Object.fromEntries(
-      match.match_participants.map((participant) => [participant.id, true]),
-    ));
-    const deckMap: Record<string, string> = {};
-    match.match_participants.forEach((p) => {
-      const deckId = getParticipantDeckId(p);
-      if (deckId) deckMap[p.id] = deckId;
-    });
-    setEditMatchPlayerDecks(deckMap);
-    void refreshMissingImportedDeckImages(
-      match.match_participants.flatMap((participant) => {
-        const deckId = deckMap[participant.id];
-        return deckId && getParticipantKey(participant)?.startsWith('user:') ? [deckId] : [];
-      }),
-    ).catch(() => {});
-  };
-
-  const handleSaveEditMatch = async () => {
-    if (anyOccasionalCreationBusy) return;
-    if (!editingMatch) return;
-    if (!editMatchIsDraw && !editMatchWinnerKey) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: t({ it: 'Seleziona un vincitore o segna come patta', en: 'Select a winner or mark as draw' }), variant: 'destructive' });
-      return;
-    }
-    const assignments = editingMatch.match_participants.map((participant) => ({
-      participant,
-      originalKey: getParticipantKey(participant),
-      selectedKey: editMatchPlayerKeys[participant.id] || getParticipantKey(participant),
-    }));
-    const selectedKeys = assignments.map((assignment) => assignment.selectedKey).filter((key): key is ParticipantKey => Boolean(key));
-    const hasReplacement = assignments.some(({ originalKey, selectedKey }) => originalKey !== selectedKey);
-    if (hasReplacement && !canManageGroup) {
-      toast({ title: t({ it: 'Permesso negato', en: 'Permission denied' }), description: t({ it: 'Solo il proprietario dell’arena può sostituire un giocatore.', en: 'Only the arena owner can replace a player.' }), variant: 'destructive' });
-      return;
-    }
-    if (selectedKeys.length !== assignments.length || new Set(selectedKeys).size !== selectedKeys.length) {
-      toast({ title: t({ it: 'Giocatori non validi', en: 'Invalid players' }), description: t({ it: 'Ogni posto deve essere assegnato a un giocatore diverso.', en: 'Each seat must be assigned to a different player.' }), variant: 'destructive' });
-      return;
-    }
-    if (!editMatchIsDraw && !selectedKeys.includes(editMatchWinnerKey as ParticipantKey)) {
-      toast({ title: t({ it: 'Vincitore non valido', en: 'Invalid winner' }), description: t({ it: 'Seleziona come vincitore uno dei giocatori attuali.', en: 'Select one of the current players as the winner.' }), variant: 'destructive' });
-      return;
-    }
-    const playedAtIso = matchDateToIso(editMatchPlayedAt, editingMatch?.played_at);
-    const preserveUnknownDate = editingMatch?.played_at === null && editMatchPlayedAt.trim() === '';
-    if (!playedAtIso && !preserveUnknownDate) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Data della partita non valida.', en: 'Invalid battle date.' }),
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!user) return;
-    const job = editWriter.begin('save'); if (!job) return;
-    setSavingEditMatch(true);
-    try {
-      const players = assignments.map(({ participant, selectedKey }) => {
-        const selectedPlayer = editMatchPlayerOptions.find(option => option.key === selectedKey);
-        if (!selectedKey || !selectedPlayer) throw new Error('MATCH_PARTICIPANT_INVALID');
-        return { id: participant.id, key: selectedKey, deckId: editMatchPlayerDecks[participant.id] || null,
-          snapshotName: selectedPlayer.label };
-      });
-      await editWriter.save(job, { mode: 'edit', isDraw: editMatchIsDraw, winnerKey: editMatchWinnerKey || null,
-        notes: editMatchNotes, playedAt: playedAtIso, winCondition: editMatchWinCondition, players }, editingMatch.id);
-      if (!job.active()) return;
-      toast({ title: t({ it: 'Partita aggiornata!', en: 'Battle updated!' }) });
-      setEditingMatch(null);
-      setEditMatchDeckSearches({});
-      setHiddenEditMatchDeckLists({});
-      await Promise.allSettled([refreshMatches()]);
-    } catch (error: unknown) {
-      if (job.active()) toast({ title: t({ it: 'Errore', en: 'Error' }), description: getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en'), variant: 'destructive' });
-    } finally {
-      if (job.active()) setSavingEditMatch(previous => job.active() ? false : previous);
-      job.finish();
     }
   };
 
@@ -2224,300 +2048,9 @@ export default function TablePage() {
         }}
       /> : null}
 
-      {editingMatch && (
-        <ModalOverlay>
-          <ModalCard size="xl">
-            <CardHeader className="shrink-0 border-b border-border/70">
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Pencil className="w-5 h-5" /> {t({ it: 'Modifica partita', en: 'Edit Battle' })}
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {t({ it: 'Aggiorna data, mazzi, vincitore e note.', en: 'Update date, decks, winner, and notes.' })}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-y-auto py-6">
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="edit-match-played-at" className="text-sm font-medium text-foreground mb-2 block">
-                    {t({ it: 'Data', en: 'Date' })}
-                  </label>
-                  <Input
-                    id="edit-match-played-at"
-                    type="date"
-                    value={editMatchPlayedAt}
-                    onChange={(e) => setEditMatchPlayedAt(e.target.value)}
-                    className="bg-background/50 border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block">{t({ it: 'Assegnazione mazzi', en: 'Deck Assignments' })}</label>
-                  <div className="space-y-3">
-                    {editingMatch.match_participants.map((p) => {
-                      const participantKey = editMatchPlayerKeys[p.id] || getParticipantKey(p);
-                      if (!participantKey) return null;
-
-                      const parsedPlayer = parseParticipantKey(participantKey);
-                      const playerLabel = editMatchPlayerOptions.find((option) => option.key === participantKey)?.label
-                        || getParticipantDisplayName(p);
-                      const deckOptions = getParticipantDeckOptions(participantKey).map(toDeckOption);
-                      const filteredDeckOptions = getFilteredEditMatchDeckOptions(p.id, participantKey).map(toDeckOption);
-                      const selectedDeck = getSelectedEditMatchDeck(p.id, participantKey);
-                      const deckListHidden = hiddenEditMatchDeckLists[p.id];
-
-                      return (
-                        <div key={p.id} className="rounded-lg border border-border bg-secondary/30 p-3">
-                          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-medium text-foreground">{playerLabel}</p>
-                                {parsedPlayer?.type === 'guest' && (
-                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
-                                    Guest
-                                  </span>
-                                )}
-                                {deckOptions.length > 0 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    ({deckOptions.length} {t({ it: deckOptions.length === 1 ? 'mazzo' : 'mazzi', en: deckOptions.length === 1 ? 'deck' : 'decks' })})
-                                  </span>
-                                )}
-                              </div>
-                              {selectedDeck && (
-                                <p className="mt-1 truncate text-xs text-emerald-300">
-                                  {selectedDeck.name} - {selectedDeck.commander}
-                                </p>
-                              )}
-                            </div>
-
-                            {deckOptions.length > 0 && (
-                              <div className="flex flex-col gap-2 sm:min-w-80 sm:flex-row sm:items-center">
-                                <div className="relative flex-1">
-                                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                  <Input
-                                    value={editMatchDeckSearches[p.id] || ''}
-                                    onChange={(event) => setEditMatchDeckSearches((prev) => ({ ...prev, [p.id]: event.target.value }))}
-                                    placeholder={t({ it: 'Cerca mazzo...', en: 'Search deck...' })}
-                                    className="h-9 bg-background/50 border-border pl-9 text-foreground placeholder:text-muted-foreground"
-                                  />
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="shrink-0 border-border text-foreground"
-                                  onClick={() => setHiddenEditMatchDeckLists((prev) => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                >
-                                  {deckListHidden ? <Eye className="mr-2 h-4 w-4" /> : <EyeOff className="mr-2 h-4 w-4" />}
-                                  {deckListHidden ? t({ it: 'Mostra', en: 'Show' }) : t({ it: 'Nascondi', en: 'Hide' })}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          {canManageGroup ? (
-                            <div className="mb-3 space-y-1.5">
-                              <label className="text-xs font-medium text-muted-foreground">{t({ it: 'Giocatore', en: 'Player' })}</label>
-                              <Select
-                                value={participantKey}
-                                disabled={anyOccasionalCreationBusy}
-                                onValueChange={(value) => {
-                                  const nextKey = value as ParticipantKey;
-                                  const previousKey = editMatchPlayerKeys[p.id] || getParticipantKey(p);
-                                  setEditMatchPlayerKeys((current) => ({ ...current, [p.id]: nextKey }));
-                                  setEditMatchPlayerDecks((current) => ({ ...current, [p.id]: '' }));
-                                  setEditMatchDeckSearches((current) => ({ ...current, [p.id]: '' }));
-                                  setHiddenEditMatchDeckLists((current) => ({ ...current, [p.id]: false }));
-                                  if (previousKey && editMatchWinnerKey === previousKey) setEditMatchWinnerKey(nextKey);
-                                }}
-                              >
-                                <SelectTrigger className="h-9 w-full bg-background/50 border-border text-foreground">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-card border-border">
-                                  {editMatchPlayerOptions.map((option) => (
-                                    <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          ) : null}
-
-                          {parsedPlayer?.type === 'user' && <OccasionalDeckForm key={`${participantKey}:${editMatchPlayerDecks[p.id] || ''}`} groupId={groupId} userId={parsedPlayer.id} disabled={anyOccasionalCreationBusy} onBusyChange={busy => setOccasionalCreationBusy(current => ({ ...current, [p.id]: busy }))} onCreated={(deck) => {
-                            setOccasionalChoices(current => [...current.filter(item => item.id !== deck.id), deck as Deck]);
-                            setEditMatchPlayerDecks(current => ({ ...current, [p.id]: deck.id }));
-                          }} />}
-
-                          {deckOptions.length > 0 ? (
-                            deckListHidden ? (
-                              <div className="rounded-lg border border-border/70 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-                                {selectedDeck
-                                  ? t({ it: 'Lista mazzi nascosta. Il mazzo selezionato resta assegnato.', en: 'Deck list hidden. The selected deck stays assigned.' })
-                                  : t({ it: 'Lista mazzi nascosta. Nessun mazzo selezionato.', en: 'Deck list hidden. No deck selected.' })}
-                              </div>
-                            ) : (
-                              <>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-flow-col sm:auto-cols-[minmax(290px,320px)] sm:overflow-x-auto sm:pb-3">
-                                  <button
-                                    type="button"
-                                    disabled={anyOccasionalCreationBusy}
-                                    onClick={() => { if (!anyOccasionalCreationBusy) setEditMatchPlayerDecks((prev) => ({ ...prev, [p.id]: '' })); }}
-                                    className={`h-28 rounded-lg border p-3 text-left text-xs transition-colors ${
-                                      !editMatchPlayerDecks[p.id] ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-background/25 hover:border-emerald-500/50'
-                                    }`}
-                                  >
-                                    <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border/70 bg-background/25 px-3 text-center">
-                                      <span className="text-muted-foreground">{t({ it: 'Nessun mazzo', en: 'No deck' })}</span>
-                                    </div>
-                                  </button>
-                                  {filteredDeckOptions.map((deck) => (
-                                    <button
-                                      key={deck.id}
-                                      type="button"
-                                      disabled={anyOccasionalCreationBusy}
-                                      onClick={() => { if (!anyOccasionalCreationBusy) setEditMatchPlayerDecks((prev) => ({ ...prev, [p.id]: deck.id })); }}
-                                      className={`min-h-[7.5rem] rounded-lg border p-3 text-left transition-colors ${
-                                        editMatchPlayerDecks[p.id] === deck.id
-                                          ? 'border-emerald-500 bg-emerald-500/10'
-                                          : 'border-border bg-background/25 hover:border-emerald-500/50'
-                                      }`}
-                                    >
-                                      <div className="flex h-full items-start gap-3">
-                                        <DeckImage
-                                          src={deck.commander_image}
-                                          alt={deck.commander}
-                                          className="h-20 w-24 shrink-0 rounded object-cover object-top"
-                                        />
-                                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                                          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{deck.name}</p>
-                                          <p className="line-clamp-2 text-xs leading-snug text-emerald-400">{deck.commander}</p>
-                                          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1.5">
-                                            {deck.source_type && (
-                                              <span className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs ${
-                                                deck.source_type === 'archidekt'
-                                                  ? 'bg-blue-500/20 text-blue-400'
-                                                  : deck.source_type === 'moxfield'
-                                                    ? 'bg-teal-500/20 text-teal-300'
-                                                    : 'bg-muted text-muted-foreground'
-                                              }`}>
-                                                {deck.source_type}
-                                              </span>
-                                            )}
-                                            <BracketBadge bracket={deck.bracket} />
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
-                                {filteredDeckOptions.length === 0 && (
-                                  <p className="mt-2 rounded-lg border border-border/70 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-                                    {t({ it: 'Nessun mazzo trovato con questa ricerca', en: 'No decks match this search' })}
-                                  </p>
-                                )}
-                              </>
-                            )
-                          ) : (
-                            <p className="text-xs text-muted-foreground">{t({ it: 'Nessun mazzo disponibile per questo giocatore', en: 'No decks available for this player' })}</p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Checkbox
-                      checked={editMatchIsDraw}
-                      onCheckedChange={(checked) => {
-                        const isDraw = checked === true;
-                        setEditMatchIsDraw(isDraw);
-                        if (isDraw) setEditMatchWinnerKey('');
-                      }}
-                    />
-                    {t({ it: 'Patta', en: 'Draw' })}
-                  </label>
-                  {!editMatchIsDraw ? (
-                    <div className="space-y-4">
-                      <label className="text-sm font-medium text-foreground mb-3 block">{t({ it: 'Vincitore', en: 'Winner' })}</label>
-                      <Select value={editMatchWinnerKey} onValueChange={(value) => setEditMatchWinnerKey(value as ParticipantKey)}>
-                        <SelectTrigger className="w-full bg-background border-border text-foreground">
-                          <SelectValue placeholder={t({ it: 'Seleziona il vincitore', en: 'Select the victor' })} />
-                        </SelectTrigger>
-                        <SelectContent className="bg-card border-border">
-                          {editingMatch.match_participants.map((p) => {
-                            const participantKey = editMatchPlayerKeys[p.id] || getParticipantKey(p);
-                            if (!participantKey) return null;
-                            const selectedDeck = getSelectedEditMatchDeck(p.id, participantKey);
-                            const playerLabel = editMatchPlayerOptions.find((option) => option.key === participantKey)?.label || getParticipantDisplayName(p);
-                            return (
-                              <SelectItem key={p.id} value={participantKey}>
-                                {playerLabel}{selectedDeck ? ` (${selectedDeck.commander})` : ''}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <div>
-                        <label className="mb-3 block text-sm font-medium text-foreground">{t({ it: 'Tipo di vittoria', en: 'Win condition' })}</label>
-                        <Select value={editMatchWinCondition} onValueChange={(value) => setEditMatchWinCondition(value as NonNullable<Match['win_condition']>)}>
-                          <SelectTrigger className="w-full bg-background border-border text-foreground">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card border-border">
-                            <SelectItem value="last_standing">{t({ it: 'Ultimo in piedi', en: 'Last standing' })}</SelectItem>
-                            <SelectItem value="combo">Combo</SelectItem>
-                            <SelectItem value="concession">{t({ it: 'Resa', en: 'Concession' })}</SelectItem>
-                            <SelectItem value="alternate_card">{t({ it: 'Vittoria alternativa', en: 'Alternate card' })}</SelectItem>
-                            <SelectItem value="other">{t({ it: 'Altro', en: 'Other' })}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <RichTextEditor
-                  label={t({ it: 'Note (opzionali)', en: 'Notes (optional)' })}
-                  value={editMatchNotes}
-                  onChange={setEditMatchNotes}
-                  placeholder={t({ it: 'Cronaca della partita...', en: 'Epic saga of the battle...' })}
-                  hint={t({
-                    it: 'Usa la barra formato per grassetto, corsivo, barrato, a capo ed elenchi.',
-                    en: 'Use the format toolbar for bold, italic, strike, line breaks, and bullet lists.',
-                  })}
-                  minRows={3}
-                />
-
-              </div>
-            </CardContent>
-            <div className="shrink-0 border-t border-border/70 bg-card px-6 py-4">
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={anyOccasionalCreationBusy}
-                  onClick={() => {
-                    if (anyOccasionalCreationBusy) return;
-                    setEditingMatch(null);
-                    setEditMatchDeckSearches({});
-                    setHiddenEditMatchDeckLists({});
-                  }}
-                  className="flex-1 border-border text-foreground"
-                >
-                  {t({ it: 'Annulla', en: 'Cancel' })}
-                </Button>
-                <Button
-                  onClick={handleSaveEditMatch}
-                  disabled={savingEditMatch || anyOccasionalCreationBusy || (!editMatchIsDraw && !editMatchWinnerKey)}
-                  className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700"
-                >
-                  {savingEditMatch ? t({ it: 'Salvataggio...', en: 'Saving...' }) : t({ it: 'Salva modifiche', en: 'Save Changes' })}
-                </Button>
-              </div>
-            </div>
-          </ModalCard>
-        </ModalOverlay>
-      )}
+      <ArenaMatchEditDialog groupId={groupId} form={matchEditor} canManageGroup={canManageGroup}
+        anyOccasionalCreationBusy={anyOccasionalCreationBusy} setOccasionalChoices={setOccasionalChoices}
+        setOccasionalCreationBusy={setOccasionalCreationBusy} getParticipantDeckOptions={getParticipantDeckOptions} />
 
       <ArenaGuestDialog key={guestCommands.dialogKey} guests={guests} controls={guestCommands} />
     </div>

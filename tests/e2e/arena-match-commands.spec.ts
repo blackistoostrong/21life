@@ -228,6 +228,41 @@ test('arena match create reuses its request UUID after a committed response is l
   }
 });
 
+test('arena match edit saves real changes while preserving unknown dates and participant identities', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const fixture = await seedMatch();
+  let originalSeasonEnabled: boolean | undefined;
+  try {
+    const settings = await fixture.client.from('groups').select('seasons_enabled').eq('id', fixture.groupId).single();
+    expect(settings.error).toBeNull(); originalSeasonEnabled = settings.data!.seasons_enabled;
+    // Undated historical matches are outside a current-season report. Use the
+    // existing all-time mode in this disposable group, then restore its setting.
+    const allTime = await fixture.client.from('groups').update({ seasons_enabled: false }).eq('id', fixture.groupId);
+    expect(allTime.error).toBeNull();
+    const unknownDate = await fixture.client.from('matches').update({ played_at: null }).eq('id', fixture.id);
+    expect(unknownDate.error).toBeNull();
+    const before = await fixture.client.from('match_participants').select('id,user_id,guest_id,deck_id,guest_deck_id,is_winner').eq('match_id', fixture.id).order('id');
+    expect(before.error).toBeNull();
+    await (await openSeeded(page, fixture.notes, 'edit')).click();
+    await expect(page.getByRole('dialog').locator('input[type="date"]')).toHaveValue('');
+    const notes = `edited-${fixture.id}`;
+    await page.getByRole('dialog').locator('textarea').fill(notes);
+    await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+    await expect(page.getByText('Battle updated!', { exact: true })).toBeVisible();
+    const header = await fixture.client.from('matches').select('notes,played_at,is_draw').eq('id', fixture.id).single();
+    expect(header.error).toBeNull(); expect(header.data).toEqual({ notes, played_at: null, is_draw: true });
+    const after = await fixture.client.from('match_participants').select('id,user_id,guest_id,deck_id,guest_deck_id,is_winner').eq('match_id', fixture.id).order('id');
+    expect(after.error).toBeNull(); expect(after.data).toEqual(before.data);
+  } finally {
+    try {
+      if (originalSeasonEnabled !== undefined) {
+        const restored = await fixture.client.from('groups').update({ seasons_enabled: originalSeasonEnabled }).eq('id', fixture.groupId);
+        expect(restored.error).toBeNull();
+      }
+    } finally { await fixture.cleanup(); }
+  }
+});
+
 for (const operation of ['create', 'edit'] as const) test(`arena match ${operation} cancels on form close and reopens without stale busy state`, async ({ page }) => {
   test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
   const fixture = operation === 'edit' ? await seedMatch() : null;
