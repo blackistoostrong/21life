@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1792|Catalogo/comandi/form/dettagli verificati; partita attiva47 in verifica; nessun SDK/rete diretto nella route, presentazione restante aperta |
+| Tavolo web |1792|Catalogo/comandi/form/dettagli e partita attiva47 verificati; nessun SDK/rete diretto nella route; analytics/storico/share e limite dimensionale aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -26,6 +26,8 @@ Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie all
 ## Proprietari attuali e destinazione
 
 Active discovery: `hooks/use-arena-active-game.ts` owns the per-account/group/admin result, one pending lookup and the focus/visibility listeners. The epoch masks previous IDs synchronously, guards late updates and aborts all SDK stages within a shared15-second deadline. `fetchActiveLiveGame` accepts the same signal throughout participation, authoritative-game and creator fallback queries, and stops between awaits after cancellation. Existing active/non-eliminated participation authority and eliminated-host fallback semantics remain unchanged. The route no longer imports SDK/private transport services or issues network calls; both profile and arena composition are protected by AST/security gates. A pre-fix real browser case observed two concurrent participation reads at entry; final cancellation/overlap verification is pending at this checkpoint.
+
+Active discovery0cc3a577 verified: quality857+3skip/71scripts/148coverage floors, clean56route build/3.24MiB and38/38 desktop/mobile discovery/catalog/details/save cases PASS, with verified Dev cleanup. Six discovery cases prove one live pending read, Back/account cancellation, no extra network fetch across overlapping focus/visibility events and no read after unmount. The fetch counter observes only the network boundary, and a visible document plus two animation frames establish the event-processing boundary. No native executable change or visual/device certification.
 
 Historical details: `hooks/use-arena-match-details.ts` owns the private opening snapshot, optional legacy request, cancellation/deadline and guarded response/loading state. Its epoch binds actor/group/admin; each opening has a serial, so closure/reopening and A→B→A cannot revive previous state. `fetchLiveGameByMatchId` accepts a captured group and SDK AbortSignal while preserving existing unscoped-call compatibility. The owner adds a15-second deadline. Current tracking>=3 uses the match snapshot without another lookup; legacy failures retain the existing historical fallback. `arena-match-details-dialog.tsx` presents the model and delegates only the image container. A real pre-fix browser case proved Close left one request active; final browser verification remains pending at this checkpoint.
 
