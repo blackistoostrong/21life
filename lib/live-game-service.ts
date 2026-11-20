@@ -195,12 +195,15 @@ export async function applyQueuedLiveGameMutations(
 export async function fetchLiveGameByMatchId(
   client: SupabaseClient,
   matchId: string,
+  options?: { groupId: string; signal?: AbortSignal },
 ): Promise<LiveGameRecord | null> {
-  const { data, error } = await client
+  let query = client
     .from('live_games')
     .select('*')
-    .eq('match_id', matchId)
-    .maybeSingle();
+    .eq('match_id', matchId);
+  if (options) query = query.eq('group_id', options.groupId);
+  if (options?.signal) query = query.abortSignal(options.signal);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data ? { ...data, state: parseLiveGameState(data.state) } as LiveGameRecord : null;
 }

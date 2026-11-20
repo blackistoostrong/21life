@@ -329,7 +329,7 @@ export default function TablePage() {
     setMatchPlayedAt,
     toggleParticipantSelection,
   } = matchCreation;
-  const matchDetails = useArenaMatchDetails();
+  const matchDetails = useArenaMatchDetails(user?.id ?? null, groupId, adminMode);
   const { setDetailsMatch } = matchDetails;
   const [showInviteQr, setShowInviteQr] = useState(false);
 
