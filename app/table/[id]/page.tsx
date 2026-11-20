@@ -261,7 +261,7 @@ export default function TablePage() {
   const seasonContext=season.data;
   const [activeTab, setActiveTab] = useState('matches');
   const [awardsView, setAwardsView] = useState<'players' | 'decks'>('decks');
-  const activeLiveGameId = useArenaActiveGame(user, groupId);
+  const activeLiveGameId = useArenaActiveGame(user?.id ?? null, groupId, adminMode);
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [bracketFilter, setBracketFilter] = useState('all');
   const [deckStatsSort, setDeckStatsSort] = useState<'winRate' | 'gamesPlayed'>('winRate');

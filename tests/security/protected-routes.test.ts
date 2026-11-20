@@ -71,10 +71,10 @@ describe('protected routes', () => {
     }
   });
 
-  it('keeps private profile IO in feature owners rather than the compositional route', () => {
-    const source = readFileSync(join(root, 'app/profile/page.tsx'), 'utf8');
-    expect(source).not.toMatch(/@supabase\/|@\/lib\/(?:supabase|authenticated-fetch)/);
-    const parsed = ts.createSourceFile('profile.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  it.each(['app/profile/page.tsx', 'app/table/[id]/page.tsx'])('keeps private IO in feature owners rather than %s', filePath => {
+    const source = readFileSync(join(root, filePath), 'utf8');
+    expect(source).not.toMatch(/@supabase\/|@\/lib\/(?:supabase|authenticated-fetch|live-game-service)/);
+    const parsed = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const directTransports: string[] = [];
     const visit = (node: ts.Node) => {
       if (ts.isCallExpression(node)) {

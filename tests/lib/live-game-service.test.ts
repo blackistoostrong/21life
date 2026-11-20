@@ -42,6 +42,30 @@ function selectQuery(result: unknown) {
 }
 
 describe('web active live game lookup', () => {
+  it('does not start SDK I/O with an already cancelled scope', async () => {
+    const controller = new AbortController(); controller.abort(); const client = { from: vi.fn() };
+    await expect(fetchActiveLiveGame(client as never, 'group-1', 'user:a', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(client.from).not.toHaveBeenCalled();
+  });
+  it.each([null, { live_game_id: 'live-1' }])('does not continue the query chain after cancellation, participation %j', async participant => {
+    const controller = new AbortController(), query = selectQuery(null);
+    let resolve!: (value: unknown) => void;
+    query.maybeSingle.mockReturnValue(new Promise(done => { resolve = done; }));
+    const client = { from: vi.fn().mockReturnValue(query) };
+    const result = fetchActiveLiveGame(client as never, 'group-1', 'user:a', controller.signal);
+    controller.abort(); resolve({ data: participant, error: null });
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(client.from).toHaveBeenCalledOnce(); expect(query.abortSignal).toHaveBeenCalledWith(controller.signal);
+  });
+  it.each([false, true])('carries the same SDK signal through the full lookup, participation %j', async participating => {
+    const signal = new AbortController().signal;
+    const participantQuery = selectQuery({ data: participating ? { live_game_id: 'live-1' } : null, error: null });
+    const gameQuery = selectQuery({ data: record(), error: null });
+    const client = { from: vi.fn().mockReturnValueOnce(participantQuery).mockReturnValueOnce(gameQuery) };
+    expect((await fetchActiveLiveGame(client as never, 'group-1', 'user:a', signal))?.id).toBe('live-1');
+    expect(participantQuery.abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(gameQuery.abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+  });
   it('filters participant rows to the active, non-eliminated game', async () => {
     const participantQuery = selectQuery({ data: null, error: null });
     const creatorQuery = selectQuery({ data: null, error: null });

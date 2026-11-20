@@ -98,6 +98,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+Active discovery: `hooks/use-arena-active-game.ts` owns scoped active-game lookup results and focus/visibility listeners. Its single pending lease bounds the full multi-query SDK chain; `fetchActiveLiveGame` carries the cancellation signal through each stage. Profile and arena routes compose feature owners without direct SDK/network imports, enforced by security gates.
+
 Historical details: `hooks/use-arena-match-details.ts` owns private opening snapshots and optional legacy recap reads, scoped by account/group/admin with per-opening identity, SDK cancellation and deadline. `arena-match-details-dialog.tsx` presents the model. `fetchLiveGameByMatchId` supports a captured group and signal; current tracking snapshots skip that legacy request.
 
 Historical match editing: `hooks/use-arena-match-editor.ts` owns its snapshot, assignments, derived player/deck options, validation and atomic-save coordination. `components/arena/arena-match-edit-dialog.tsx` presents the typed model; `lib/types/arena-match.ts` is the unchanged web view contract. Shared occasional choices remain in route composition because creation and editing both consume the existing container.

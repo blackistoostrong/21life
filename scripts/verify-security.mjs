@@ -68,6 +68,8 @@ const arenaComposition = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'ut
 const matchWriteOwner = readFileSync(join(root, 'hooks/use-arena-match-write.ts'), 'utf8');
 const matchCreationOwner = readFileSync(join(root, 'hooks/use-arena-match-creation.ts'), 'utf8');
 const matchEditorOwner = readFileSync(join(root, 'hooks/use-arena-match-editor.ts'), 'utf8');
+assert.doesNotMatch(arenaComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch|live-game-service)/, 'Arena route must delegate private transports to feature owners');
+assert.doesNotMatch(arenaComposition, /\b(?:fetch|authenticatedFetch)\s*\(/, 'Arena route must not issue network requests directly');
 assert.doesNotMatch(arenaComposition, /authenticatedFetch|\/api\/notifications\/match-completed/, 'Manual match notifications must come from the atomic database transaction');
 assert.match(arenaComposition, /useArenaMatchCreation\(/, 'The route must compose the creation owner');
 assert.match(matchCreationOwner, /createWriter\.save\(job, input\)/, 'Create must use the scoped atomic match owner');
