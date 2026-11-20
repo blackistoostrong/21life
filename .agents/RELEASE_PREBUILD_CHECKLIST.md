@@ -1,5 +1,7 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] JobExpo CI con test condivisi root: `npm ci` sia root sia Expo; il PASS locale con entrambi i node_modules non certifica un runner con il solo Expo. Verificare check remoti prima del merge e APK dal commit finale di Dev.
+
 - [ ] Se cambiano backup/restore: le query sul sorgente devono essere server-side READ ONLY; SQL di ripristino soltanto emesso nel pacchetto ed eseguito sul clone. Eseguire la regressione backup-source-readonly e verificare che la prova reale rifiuti una mutazione. Incidente Dev documentato in docs/DEV26_BACKUP_INCIDENT.md.
 
 Leggere il [registro dei merge falliti](MERGE_FAILURES.md) prima di iniziare.

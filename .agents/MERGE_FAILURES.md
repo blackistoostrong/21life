@@ -36,6 +36,13 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 
 ## Modello per i prossimi fallimenti
 
+## 2026-11-20 — PR241 integrazione Dev bloccata dal toolchain dei test condivisi
+
+- PM richiede merge Dev e APK9.3.0 Dev. PR241 OPEN/MERGEABLE ma BLOCKED sud83e81a3; nessun tentativo di merge/buildAPK effettuato.
+- JobExpo136363506640 delrun44758180823 fallisce al typecheck: test condivisi importati da `../tests/lib` non risolvono `vitest`; il job installa solo `expo/node_modules`, mentre il modulo chiamante risolve il pacchetto dal repository root. Le installazioni locali complete spiegano il PASS locale, senza invalidare il ROSSO CI.
+- Recupero: installare con `npm ci` anche il toolchain root nel jobExpo, usando i lock esistenti; nessuna esclusione di test, modifica di soglie o dipendenza nuova. Richiedere check verdi prima del merge, verificare SHA remoto finale prima di compilare APK.
+- Prevenzione: ogni job che consuma test condivisi esterni alla propria directory installa entrambe le dipendenze dichiarate. Nessun bypass delle protezioni per compilare in anticipo.
+
 - Data/ora Europe/Rome, PR, destinazione e SHA sorgente atteso:
 - Comando, codice di uscita, errore/API o link al log:
 - Stato remoto osservato dopo l'errore:
