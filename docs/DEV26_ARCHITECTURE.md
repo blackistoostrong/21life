@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |2386|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; create/edit atomici verificati; owner creazione164/dialogo224 in verifica, editor/presentazione restante aperti |
+| Tavolo web |2386|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; create/edit atomici verificati; creazione164/dialogo224 verificati66/66 browser, editor/presentazione restante aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -26,6 +26,8 @@ Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie all
 ## Proprietari attuali e destinazione
 
 `hooks/use-arena-match-creation.ts` owns the creation draft, participant selection/default deck, validation, opening/reset and coordination with the scoped atomic writer. It receives catalog lookup/enrichment/invalidation callbacks and does not own catalog reads or subscriptions. `components/arena/arena-match-create-dialog.tsx` renders that typed model; only the existing occasional-deck and image containers own their own I/O. The route supplies shared catalog data, composes the dialog and connects guest/occasional-deck results. The edit draft remains a separate pending extraction. Fifteen statements and the creation JSX were compared against439ef34f; only actor/type names were normalized, with no new UI behavior.
+
+Creation9f873e8f: quality848+3skip/71scripts/148coverage floors, clean56route build/3.24MiB and66/66 desktop/mobile guest/match cases PASS with verified Dev cleanup. Includes close/reopen, account/navigation cancellation, duplicate suppression, rollback, committed-response-loss retry with one match/two participants, guest CRUD and partial-creation recovery. Native executable sources remain identical to26028392; its Android/iOS exports stand without another web-only export cycle. No visual or physical-device certification is claimed.
 
 | Proprietario attuale | Responsabilità da separare | Confine desiderato |
 |---|---|---|
