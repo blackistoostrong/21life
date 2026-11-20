@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-arena-match-deletion.ts',
     'hooks/use-arena-guest-commands.ts', 'lib/arena-guest-write.ts',
     'hooks/use-arena-membership.ts',
     'packages/data/arena-catalog-realtime.ts',
