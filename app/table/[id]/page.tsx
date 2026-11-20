@@ -1,4 +1,7 @@
 'use client';
+import { useArenaSessionExport } from '@/hooks/use-arena-session-export';
+import { useArenaSharing } from '@/hooks/use-arena-sharing';
+import { ArenaHistoryPanel } from '@/components/arena/arena-history-panel';
 import { ArenaPlayerReport } from '@/components/arena/arena-player-report';
 import { ArenaMemberRoster } from '@/components/arena/arena-member-roster';
 import { useArenaReportScope, useArenaReports } from '@/hooks/use-arena-reports';
@@ -25,11 +28,8 @@ import { ArenaCatalogError } from '@/components/arena/arena-catalog-error';
 import { ArenaSettingsEditor } from '@/components/arena/arena-settings-editor';
 import {GuestDirectory} from '@/components/arena/guest-directory';
 import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
-import {useArenaDayExport} from '@/hooks/use-arena-day-export';
 
 import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
-import {ArenaHistoryPagination} from '@/components/arena/arena-history-pagination';
-import {ArenaDataStatus} from '@/components/arena/arena-data-status';
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -50,36 +50,21 @@ import { useToast } from '@/hooks/use-toast';
 import { AppLoader } from '@/components/ui/app-loader';
 import { ManaLogo } from '@/components/ui/mana-logo';
 import { AppProfileButton } from '@/components/navigation/app-profile-button';
-import { DeckImage } from '@/components/deck-image';
 
 import { ArenaInviteQrDialog } from '@/components/arena/arena-invite-qr-dialog';
-import { PreviousSeasonsPanel } from '@/components/arena/previous-seasons-panel';
+
 import { useLanguage } from '@/components/language-provider';
 import { usePlatformAdmin } from '@/hooks/use-platform-admin';
-
-import { MANA_COLOR_LABELS } from '@/lib/mana-colors';
 
 import { ModalCard, ModalOverlay } from '@/components/ui/modal-shell';
 
 import { PanelWithActions } from '@/components/ui/panel-with-actions';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
+
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
-import { buildArenaShareText } from '@/lib/arena-share';
 import { canLeaveArena, isArenaMember } from '@/lib/arena-membership';
 import { isDemoUser } from '@/lib/demo';
-import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, type ArenaGuestDeck } from '@/lib/arena-participants';
-
-import { getProfileDisplayName } from '@/lib/profile-display';
-
-import { formatGameDuration } from '@/lib/live-game-duration';
-
-import { groupMatchesByDay } from '@/lib/arena-session';
-import {
-  buildArenaSessionExportText,
-  type ArenaSessionExportMatch,
-} from '@/lib/arena-session-export';
+import { getParticipantDeckId, type ArenaGuestDeck } from '@/lib/arena-participants';
 
 import {
   formatArenaSeasonDate,
@@ -89,9 +74,7 @@ import {
 import { toMatchDateValue } from '@/lib/match-datetime';
 import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 
-import { format, parse } from 'date-fns';
-import { enUS, it as itLocale } from 'date-fns/locale';
-import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, Target, Skull, Pencil, Eye, Share2, Palette, DoorOpen, Award, Flame, Crown, QrCode, Shield, Flag } from 'lucide-react';
+import { Swords, ArrowLeft, Users, Trash2, Copy, Calendar, Download, Target, Pencil, Share2, Palette, DoorOpen, Award, QrCode } from 'lucide-react';
 
 const MATCHES_SELECT = `
   *,
@@ -232,13 +215,12 @@ export default function TablePage() {
     refreshMatches: () => refreshMatches(),
   });
   const { editingMatch, editMatchPlayerDecks, openEditMatch } = matchEditor;
-  const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
-  const [exportDayKey, setExportDayKey] = useState<string | null>(null);
-  const [exportIntro, setExportIntro] = useState('');
-  const [exportDayOwner,setExportDayOwner]=useState<string|null>(null);
-  const reportOwnerKey=user?user.id+':'+groupId:null;
-  const activeExportDayKey=exportDayOwner===reportOwnerKey?exportDayKey:null;
-  const dayExport=useArenaDayExport(user?.id,history.scope,activeExportDayKey);
+  const sessionExport = useArenaSessionExport(user?.id ?? null, groupId, history.scope, matches);
+  const { expandedDayKeys, exportDayKey, exportIntro, setExportIntro, activeExportDayKey, dayExport, matchDayGroups, toggleDayGroup, openDayExportModal, closeDayExportModal, handleExportDayMatches } = sessionExport;
+
+
+
+
   useLayoutEffect(() => {
     setOccasionalChoices([]); setOccasionalCreationBusy({});
   }, [user?.id, groupId, matchAccessKey]);
@@ -269,30 +251,7 @@ export default function TablePage() {
 
   const getFilteredMatches=useCallback(()=>matches,[matches]);
 
-  const matchDayGroups=useMemo(()=>groupMatchesByDay(matches,{
-    formatLabel:dayKey=>format(parse(dayKey,'yyyy-MM-dd',new Date()),'d MMM yyyy',{locale:language==='it'?itLocale:enUS}),
-    unknownDateLabel:t({it:'Data non disponibile',en:'Date unavailable'}),
-  }),[matches,language,t]);
 
-  const latestDayKey = matchDayGroups[0]?.dayKey ?? null;
-
-  useEffect(() => {
-    if (!latestDayKey) {
-      setExpandedDayKeys(new Set());
-      return;
-    }
-
-    setExpandedDayKeys((current) => {
-      if (current.size === 0) {
-        return new Set([latestDayKey]);
-      }
-
-      const next = new Set(current);
-      next.add(latestDayKey);
-      return next;
-    });
-
-  }, [latestDayKey]);
 
   useEffect(() => {
     if (!editingMatch) return;
@@ -323,14 +282,9 @@ export default function TablePage() {
     return scheduleArenaDeckColors(deckIdsInMatches, 2000);
   }, [activeTab, deckIdsInMatches, scheduleArenaDeckColors, loading]);
 
-  const copyInviteLink = () => {
-    if (!group) return;
-    navigator.clipboard.writeText(`${window.location.origin}/join/${group.invite_code}`);
-    toast({
-      title: t({ it: 'Copiato!', en: 'Copied!' }),
-      description: t({ it: 'Link invito copiato negli appunti', en: 'Invite link copied to clipboard' }),
-    });
-  };
+  const { copyInviteLink, getWinConditionLabel, handleShareArenaStats, handleShareMatch } = useArenaSharing({
+    group, season, reportAnalytics, history, dateFilter, seasonContext, analyticsPayload, playerStats, deckStats, colorAnalytics
+  });
 
   const getParticipantDeckOptions = (participantKey: ParticipantKey) => {
     const parsed = parseParticipantKey(participantKey);
@@ -382,288 +336,11 @@ export default function TablePage() {
 
   const { handleDeleteMatch, deletingMatch } = useArenaMatchDeletion(user?.id ?? null, groupId, adminMode, canManageGroup, matches, refreshMatches);
 
-  const getMatchWinnerName = (match: Match) => {
-    if (match.winner_guest?.display_name) return match.winner_guest.display_name;
-    return getProfileDisplayName(match.winner);
-  };
 
-  const getWinConditionLabel = (condition: Match['win_condition']) => {
-    if (condition === 'last_standing') return t({ it: 'Ultimo in piedi', en: 'Last standing' });
-    if (condition === 'combo') return 'Combo';
-    if (condition === 'concession') return t({ it: 'Resa', en: 'Concession' });
-    if (condition === 'alternate_card') return t({ it: 'Vittoria alternativa', en: 'Alternate card' });
-    if (condition === 'other') return t({ it: 'Altro', en: 'Other' });
-    return t({ it: 'Non indicata', en: 'Not specified' });
-  };
 
-  const buildMatchShareText = (match: Match) => {
-    const participants = match.match_participants
-      .map((participant) => {
-        const playerName = getParticipantDisplayName(participant);
-        const deck = getParticipantDeckSnapshot(participant);
-        const deckName = deck?.name || t({ it: 'Mazzo non indicato', en: 'No deck selected' });
-        const commanderName = deck?.commander ? ` (${deck.commander})` : '';
-        return `- ${playerName}: ${deckName}${commanderName}`;
-      })
-      .join('\n');
-    const winnerName = match.is_draw
-      ? t({ it: 'Patta', en: 'Draw' })
-      : getMatchWinnerName(match);
-    const comment = match.notes?.trim() || t({ it: 'Nessun commento', en: 'No comment' });
 
-    return [
-      `${t({ it: 'Partita 21Life', en: '21Life match' })} - ${group?.name || ''}`,
-      match.played_at ? format(new Date(match.played_at), 'PPP') : t({it:'Data non disponibile',en:'Date unavailable'}),
-      match.duration_seconds != null
-        ? `${t({ it: 'Durata', en: 'Duration' })}: ${formatGameDuration(match.duration_seconds)}`
-        : null,
-      match.win_condition
-        ? `${t({ it: 'Condizione di vittoria', en: 'Win condition' })}: ${getWinConditionLabel(match.win_condition)}`
-        : null,
-      '',
-      t({ it: 'Partecipanti e mazzi:', en: 'Players and decks:' }),
-      participants,
-      '',
-      `${t({ it: 'Vincitore', en: 'Winner' })}: ${winnerName}`,
-      '',
-      `${t({ it: 'Commento', en: 'Comment' })}:`,
-      comment,
-      ...(match.tracking_version || match.duration_seconds != null ? [
-        '',
-        t({ it: 'Statistiche realtime:', en: 'Realtime stats:' }),
-        ...match.match_participants.map((participant) => (
-          `- ${getParticipantDisplayName(participant)}: ${participant.life_damage_dealt || 0} dmg · ${participant.eliminations_caused || 0} KO`
-        )),
-      ] : []),
-    ].filter((line): line is string => line !== null).join('\n');
-  };
 
-  const getPeriodLabel = () => {
-    if (dateFilter === '7d') return t({ it: 'Ultimi 7 giorni', en: 'Last 7 days' });
-    if (dateFilter === '30d') return t({ it: 'Ultimi 30 giorni', en: 'Last 30 days' });
-    if (dateFilter === '90d') return t({ it: 'Ultimi 90 giorni', en: 'Last 90 days' });
-    return seasonContext
-      ? formatArenaSeasonLabel(
-          seasonContext.currentSeasonStart,
-          seasonContext.currentSeasonEnd,
-          language === 'it' ? 'it-IT' : 'en-US',
-        )
-      : t({ it: 'Tutto il periodo', en: 'All time' });
-  };
 
-  const handleShareArenaStats = async () => {
-    if (!group || !season.ready || !reportAnalytics.ready || history.loading || history.error) return;
-
-    const filteredMatches = history.recentMatches as unknown as Match[];
-    const text = buildArenaShareText({
-      arenaName: group.name,
-      periodLabel: getPeriodLabel(),
-      totalMatches: analyticsPayload.totalMatches ?? 0,
-      topPlayers: playerStats.slice(0, 5).map((player) => ({
-        displayName: player.displayName,
-        gamesPlayed: player.gamesPlayed,
-        wins: player.wins,
-        losses: player.losses,
-        draws: player.draws,
-        decisiveGames: player.decisiveGames,
-        winRate: player.winRate,
-      })),
-      topDecks: deckStats.slice(0, 5).map((deck) => ({
-        name: deck.name,
-        commander: deck.commander,
-        ownerDisplayName: deck.ownerDisplayName,
-        gamesPlayed: deck.gamesPlayed,
-        wins: deck.wins,
-        losses: deck.losses,
-        draws: deck.draws,
-        decisiveGames: deck.decisiveGames,
-        winRate: deck.winRate,
-        bracket: deck.bracket,
-      })),
-      topColors: colorAnalytics.played.slice(0, 5).map((entry) => ({
-        label: t(MANA_COLOR_LABELS[entry.color] || MANA_COLOR_LABELS.C),
-        gamesPlayed: entry.appearances,
-        percentage: entry.percentage,
-      })),
-      recentMatches: filteredMatches.slice(0, 3).map((match) => ({
-        playedAt: match.played_at,
-        notes: match.notes,
-        winnerName: getMatchWinnerName(match),
-        participants: match.match_participants.map((participant) => {
-          const deck = getParticipantDeckSnapshot(participant);
-          return {
-            displayName: getParticipantDisplayName(participant),
-            commander: deck?.commander || null,
-            deckName: deck?.name || null,
-            isWinner: participant.is_winner,
-            bracket: deck?.bracket || null,
-          };
-        }),
-      })),
-      publicUrl: group.is_public ? `${window.location.origin}/arena/${group.invite_code}` : null,
-    }, {
-      arenaStatsTitle: t({ it: 'Statistiche playgroup', en: 'Playgroup stats' }),
-      period: t({ it: 'Periodo', en: 'Period' }),
-      totalMatches: t({ it: 'Partite', en: 'Matches' }),
-      topPlayers: t({ it: 'Top giocatori', en: 'Top players' }),
-      topDecks: t({ it: 'Top mazzi', en: 'Top decks' }),
-      topColors: t({ it: 'Colori più giocati', en: 'Most played colors' }),
-      recentMatches: t({ it: 'Ultime partite', en: 'Recent matches' }),
-      winner: t({ it: 'Vincitore', en: 'Winner' }),
-      winRate: t({ it: 'win rate', en: 'win rate' }),
-      publicPage: t({ it: 'Pagina pubblica', en: 'Public page' }),
-      noComment: t({ it: 'Nessun commento', en: 'No comment' }),
-    });
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `${group.name} - 21Life`,
-          text,
-        });
-        return;
-      }
-
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: t({ it: 'Statistiche copiate', en: 'Stats copied' }),
-        description: t({ it: 'Il riepilogo del playgroup è negli appunti', en: 'Playgroup summary copied to clipboard' }),
-      });
-    } catch (error) {
-      if ((error as DOMException)?.name === 'AbortError') return;
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Impossibile condividere le statistiche', en: 'Unable to share stats' }),
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const toggleDayGroup = (dayKey: string, open: boolean) => {
-    setExpandedDayKeys((current) => {
-      const next = new Set(current);
-      if (open) {
-        next.add(dayKey);
-      } else {
-        next.delete(dayKey);
-      }
-      return next;
-    });
-  };
-
-  const buildSessionExportMatch = (match: Match): ArenaSessionExportMatch => ({
-    participants: match.match_participants.map((participant) => {
-      const deck = getParticipantDeckSnapshot(participant);
-      const commanderLabel = deck?.commander?.trim() || deck?.name?.trim() || '—';
-      return {
-        displayName: getParticipantDisplayName(participant),
-        commanderLabel,
-      };
-    }),
-    notes: match.notes,
-  });
-
-  const openDayExportModal = (dayKey: string) => {
-    setExportDayOwner(reportOwnerKey);
-    setExportDayKey(dayKey);
-    setExportIntro('');
-  };
-
-  const closeDayExportModal = () => {
-    setExportDayOwner(null);
-    setExportDayKey(null);
-    setExportIntro('');
-  };
-
-  const handleExportDayMatches = async () => {
-    if(!activeExportDayKey || !dayExport.ready)return;
-    const dayMatches=dayExport.matches as unknown as Match[];
-    if(!dayMatches.length)return;
-
-    const dayGroup = matchDayGroups.find((entry) => entry.dayKey === activeExportDayKey);
-    const exportMatches = [...dayMatches]
-      .reverse()
-      .map((match) => buildSessionExportMatch(match));
-    const text = buildArenaSessionExportText(exportIntro, exportMatches);
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: dayGroup?.label || activeExportDayKey,
-          text,
-        });
-        closeDayExportModal();
-        return;
-      }
-
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: t({ it: 'Export copiato', en: 'Export copied' }),
-        description: t({
-          it: 'Il testo del giorno è negli appunti.',
-          en: 'The day export is in your clipboard.',
-        }),
-      });
-      closeDayExportModal();
-    } catch (error) {
-      if ((error as DOMException)?.name === 'AbortError') return;
-      try {
-        await navigator.clipboard.writeText(text);
-        toast({
-          title: t({ it: 'Export copiato', en: 'Export copied' }),
-          description: t({
-            it: 'Il testo del giorno è negli appunti.',
-            en: 'The day export is in your clipboard.',
-          }),
-        });
-        closeDayExportModal();
-      } catch {
-        toast({
-          title: t({ it: 'Errore', en: 'Error' }),
-          description: t({ it: 'Impossibile esportare le partite', en: 'Unable to export matches' }),
-          variant: 'destructive',
-        });
-      }
-    }
-  };
-
-  const handleShareMatch = async (match: Match) => {
-    const text = buildMatchShareText(match);
-    const shareData = {
-      title: t({ it: 'Log partita 21Life', en: '21Life match log' }),
-      text,
-    };
-
-    try {
-      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
-        await navigator.share(shareData);
-        return;
-      }
-
-      await navigator.clipboard.writeText(text);
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      toast({
-        title: t({ it: 'Log copiato', en: 'Log copied' }),
-        description: t({ it: 'Ho aperto WhatsApp con il testo pronto da inviare.', en: 'WhatsApp opened with the match text ready.' }),
-      });
-    } catch (error) {
-      if ((error as DOMException)?.name === 'AbortError') return;
-      try {
-        await navigator.clipboard.writeText(text);
-        toast({
-          title: t({ it: 'Log copiato', en: 'Log copied' }),
-          description: t({ it: 'Il testo della partita è negli appunti.', en: 'The match text is in your clipboard.' }),
-        });
-      } catch {
-        toast({
-          title: t({ it: 'Errore', en: 'Error' }),
-          description: t({ it: 'Impossibile condividere il log partita', en: 'Unable to share match log' }),
-          variant: 'destructive',
-        });
-      }
-    }
-  };
 
   if (authLoading || loading) {
     return <AppLoader label={t({ it: 'Caricamento playgroup...', en: 'Loading playgroup...' })} />;
@@ -933,164 +610,14 @@ export default function TablePage() {
             </div>
           </div>
 
-          <TabsContent value="matches">
-            <ArenaDataStatus loading={season.loading} error={season.error} onRetry={season.reload}>
-            <ArenaHistoryPagination loading={history.loading} error={history.error} total={history.total} from={history.from} to={history.to}
-              canGoNext={history.canGoNext} canGoPrevious={history.canGoPrevious} onNext={history.next} onPrevious={history.previous} onRetry={history.retry} />
-            {!history.loading && !history.error && history.total === 0 ? (
-              <Card className="phyrexian-panel">
-                <CardContent className="py-12 text-center">
-                  <Skull className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">{t({ it: 'Nessuna partita', en: 'No battles yet' })}</h3>
-                  <p className="text-muted-foreground mb-4">{t({ it: 'Registra la prima partita per iniziare a tracciare i risultati', en: 'Record your first battle to begin tracking' })}</p>
-                  <Button
-                    onClick={() => {
-                      setMatchPlayedAt(toMatchDateValue());
-                      ensureArenaMemberDecksLoaded();
-                      setShowMatchModal(true);
-                    }}
-                    className="bg-gradient-to-r from-emerald-600 to-teal-700"
-                  >
-                    <Target className="w-4 h-4 mr-2" /> {t({ it: 'Registra la prima partita', en: 'Record First Battle' })}
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {matchDayGroups.map((dayGroup) => {
-                  const isExpanded = expandedDayKeys.has(dayGroup.dayKey);
-                  return (
-                    <Collapsible
-                      key={dayGroup.dayKey}
-                      open={isExpanded}
-                      onOpenChange={(open) => toggleDayGroup(dayGroup.dayKey, open)}
-                    >
-                      <Card className="phyrexian-panel overflow-hidden">
-                        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-                          <CollapsibleTrigger asChild>
-                            <button
-                              type="button"
-                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                            >
-                              <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                              <span className="font-medium text-foreground">{dayGroup.label}</span>
-                              <span className="text-sm text-muted-foreground">
-                                · {dayGroup.matchCount}{' '}
-                                {t({
-                                  it: dayGroup.matchCount === 1 ? 'partita' : 'partite',
-                                  en: dayGroup.matchCount === 1 ? 'match' : 'matches',
-                                })}
-                              </span>
-                            </button>
-                          </CollapsibleTrigger>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 border-border/80 bg-background/40"
-                            onClick={() => openDayExportModal(dayGroup.dayKey)}
-                          >
-                            <Download className="mr-2 h-4 w-4" />
-                            {t({ it: 'Export', en: 'Export' })}
-                          </Button>
-                        </div>
-                        <CollapsibleContent>
-                          <div className="space-y-3 p-3">
-                            {dayGroup.matches.length === 0 && isExpanded ? (
-                              <p className="py-4 text-center text-sm text-muted-foreground">
-                                {t({ it: 'Nessuna partita in questa giornata', en: 'No matches on this day' })}
-                              </p>
-                            ) : null}
-                            {dayGroup.matches.map((match) => (
-                              <Card key={match.id} className="border-border/70 bg-background/20 transition-colors hover:border-emerald-500/40">
-                                <CardContent className="py-4">
-                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="mb-3 flex flex-col gap-2">
-                                        {match.match_participants.map((p) => {
-                                          const deck = getParticipantDeckSnapshot(p);
-                                          const displayName = getParticipantDisplayName(p);
-                                          return (
-                                            <div
-                                              key={p.id}
-                                              className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-sm ${
-                                                p.is_winner
-                                                  ? 'border border-emerald-500/30 bg-emerald-500/20 text-emerald-300'
-                                                  : 'bg-secondary/80 text-secondary-foreground'
-                                              }`}
-                                            >
-                                              <DeckImage
-                                                src={deck?.commander_image}
-                                                alt={deck?.commander || displayName}
-                                                className="h-[4.5rem] w-[3.25rem] shrink-0 rounded object-cover object-top"
-                                                fallbackClassName="h-[4.5rem] w-[3.25rem] shrink-0 rounded"
-                                              />
-                                              <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                  {p.is_winner && <Trophy className="h-3.5 w-3.5 shrink-0" />}
-                                                  {p.is_winner && match.win_condition === 'last_standing' ? <Shield className="h-3.5 w-3.5 shrink-0" /> : null}
-                                                  {p.is_winner && match.win_condition === 'combo' ? <Flame className="h-3.5 w-3.5 shrink-0" /> : null}
-                                                  {p.is_winner && match.win_condition === 'concession' ? <Flag className="h-3.5 w-3.5 shrink-0" /> : null}
-                                                  {p.is_winner && match.win_condition === 'alternate_card' ? <Crown className="h-3.5 w-3.5 shrink-0" /> : null}
-                                                  {p.is_winner && match.win_condition === 'other' ? <Target className="h-3.5 w-3.5 shrink-0" /> : null}
-                                                  <span className="font-semibold">{displayName}</span>
-                                                  {deck?.bracket && (
-                                                    <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-300">
-                                                      B{deck.bracket}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                {deck?.name ? (
-                                                  <p className="mt-0.5 line-clamp-1 text-sm font-medium text-foreground">{deck.name}</p>
-                                                ) : null}
-                                                {deck?.commander ? (
-                                                  <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{deck.commander}</p>
-                                                ) : null}
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                      {match.is_draw ? (
-                                        <span className="mb-2 inline-flex rounded-full border border-slate-400/40 bg-slate-500/15 px-2.5 py-0.5 text-xs font-medium text-slate-200">
-                                          {t({ it: 'Patta', en: 'Draw' })}
-                                        </span>
-                                      ) : null}
-                                      {match.notes ? <FormattedMarkdown value={match.notes} className="italic" /> : null}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      {(match.tracking_version || match.duration_seconds != null) ? (
-                                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-cyan-300" onClick={() => setDetailsMatch(match)} title={t({ it: 'Dettagli tracking', en: 'Tracking details' })}>
-                                          <Eye className="h-4 w-4" />
-                                          <span className="hidden lg:inline">{t({ it: 'Dettagli', en: 'Details' })}</span>
-                                        </Button>
-                                      ) : null}
-                                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-emerald-300" onClick={() => handleShareMatch(match)} title={t({ it: 'Condividi log', en: 'Share log' })}>
-                                        <Share2 className="h-4 w-4" />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={() => openEditMatch(match)}>
-                                        <Pencil className="h-4 w-4" />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" disabled={deletingMatch} onClick={() => handleDeleteMatch(match.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        </CollapsibleContent>
-                      </Card>
-                    </Collapsible>
-                  );
-                })}
-              </div>
-            )}
-            {seasonContext ? <PreviousSeasonsPanel archives={seasonContext.archives} /> : null}
-
-            </ArenaDataStatus>
-</TabsContent>
+          <ArenaHistoryPanel season={season} history={history} seasonContext={seasonContext}
+            matchDayGroups={matchDayGroups} expandedDayKeys={expandedDayKeys} toggleDayGroup={toggleDayGroup}
+            onCreateMatch={() => {
+              setMatchPlayedAt(toMatchDateValue());
+              ensureArenaMemberDecksLoaded();
+              setShowMatchModal(true);
+            }}
+            actions={{ openDayExportModal, setDetailsMatch, handleShareMatch, openEditMatch, deletingMatch, handleDeleteMatch }} />
 
           <ArenaAwardsPanel status={reportPanelStatus}
             awardsView={awardsView} setAwardsView={setAwardsView} arenaAwards={arenaAwards} arenaAwardGroups={arenaAwardGroups} playerAwards={playerAwards} />

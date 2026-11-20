@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-arena-sharing.ts',
+    'hooks/use-arena-session-export.ts',
     'hooks/use-arena-reports.ts',
     'hooks/use-arena-active-game.ts',
     'hooks/use-arena-match-details.ts',
@@ -46,6 +48,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/arena/arena-history-panel.tsx',
     'components/arena/arena-player-report.tsx',
     'components/arena/arena-member-roster.tsx',
     'components/arena/arena-awards-panel.tsx',
@@ -75,6 +78,7 @@ export const featureOwners = {
   // Existing image container owns its own cache/network lifecycle. Composition
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
+    'components/arena/arena-history-panel.tsx': ['components/deck-image.tsx'],
     'components/arena/arena-member-roster.tsx': ['components/arena/direct-arena-invite.tsx'],
     'components/arena/arena-awards-panel.tsx': ['components/deck-image.tsx'],
     'components/arena/arena-deck-rankings-panel.tsx': ['components/deck-image.tsx', 'components/deck/edhrec-badge.tsx'],

@@ -2,7 +2,15 @@
 
 ## DEV26 esecuzione 9.3.0 — PM 2026-11-12
 
+### Priorità PM 20 novembre — candidato9.3.0 testabile
+
+- [ ] Chiudere solo il blocco corrente storico/export/share, poi congelare ulteriori estrazioni. Preparare candidato Dev verificato senza dichiarare conclusi punti1–6 o11d. Live web/mobile e refactor residuo restano backlog esplicito, purché i flussi esistenti siano collaudabili.
+- [ ] Eseguire una matrice consolidata sul candidato: quality web/Expo, build web e export Android/iOS dello stesso SHA, login/catalogo/guest/partite/live-sync/storico/admin. Correggere prioritariamente blocker, integrità dati e permessi; rinviare ritocchi e manutenzione non bloccante. Collaudi dispositivo/immagini al finale; nessuna pubblicazione produzione/APK/IPA o promozione implicita.
+- [ ] Consegnare SAL del candidato con SHA, prove, istruzioni collaudo e limiti distinti da completamento del piano originale. Obiettivo stimato1–2giornate effettive, non garanzia né certificazione prima dei gate.
+
 ### Avanzamento 20 novembre — comandi match in corso
+
+- [ ] Storico/share/export corrente: estratti7funzioni share,14statement export e1effect con confronto AST daac0e9e4c; storico JSX preservato salvo callback creazione composta nel parent (il gate vieta correttamente il clock runtime nel renderer). Route709, owner share220/export125, storico196 prima della callback projection. Nessuna nuova feature/SQL/native. Baseline sul buildac0e9e4c: ritorno accountA ripresenta modal export e intro privato nel DOM, impedendo visibilità Back; cleanup Dev verificato. Prima esecuzione si fermava su selettore textbox non associato al label, corretto nel test usando placeholder esistente, nessun claim di ROSSO prodotto da quel primo timeout. Fix mirato epoch/apertura e risposta share tardiva, poi unica quality/build/matrice consolidata. Il secondo caso late-share non eseguito dal fail-fast: non attestato come ROSSO.
 
 - [x] Report/roster CHIUSI meccanicamente suac0e9e4c: quality857+3skip/71script/148floor, cleanbuild56route/3.24MiB e52/52browser desktop/mobile PASS in2.8min; cleanup Dev verificato. Matrice report/membership/catalog/guestCRUD/directory preserva draw50%, provvisori tra tab, premi, retry e permessi/azioni reali. Controller143/classifica177/roster82/route1169;23statement,3helper e JSX preservati da8841f44c con proiezioni tipizzate limitate. origin/Dev aggiornato: zero commit mancanti, PR241 OPENdraft versoDev. Nessun SQL/native/dipendenza/feature/analisi immagini/dispositivo. Prossimo: presentazione storico e condivisione browser; export draft ancora nella route, live web/native e11d aperti. Nessuna chiusura globale del punto6.
 
