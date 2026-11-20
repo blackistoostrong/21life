@@ -4,7 +4,10 @@ import { expect, it } from 'vitest';
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 it('offers registered players occasional decks in manual and historical editing', () => {
   const page = read('app/table/[id]/page.tsx');
-  expect(page.match(/<OccasionalDeckForm/g)?.length).toBe(2);
+  const creation = read('components/arena/arena-match-create-dialog.tsx');
+  expect(page).toContain('<ArenaMatchCreateDialog');
+  expect(page.match(/<OccasionalDeckForm/g)?.length).toBe(1);
+  expect(creation.match(/<OccasionalDeckForm/g)?.length).toBe(1);
   expect(page).toContain('p.decks?.source_type');
   expect(page).toContain("deck.source_type !== 'occasional'");
 });

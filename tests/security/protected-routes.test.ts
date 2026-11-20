@@ -38,8 +38,11 @@ describe('protected routes', () => {
   it('saves manual arena matches through the actor-bound atomic command, without duplicate notification calls', () => {
     const page = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'utf8');
     const owner = readFileSync(join(root, 'hooks/use-arena-match-write.ts'), 'utf8');
+    const creation = readFileSync(join(root, 'hooks/use-arena-match-creation.ts'), 'utf8');
     expect(page).not.toMatch(/authenticatedFetch|\/api\/notifications\/match-completed/);
-    expect(page).toContain('createWriter.save(job, input)');
+    expect(page).toContain('useArenaMatchCreation(');
+    expect(creation).toContain('createWriter.save(job, input)');
+    expect(creation).not.toMatch(/authenticatedFetch|\/api\/notifications\/match-completed/);
     expect(page).toContain('editWriter.save(job,');
     expect(owner).toContain('actorId: userId');
     expect(owner).toContain('job.signal');

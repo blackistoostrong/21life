@@ -1,4 +1,6 @@
 'use client';
+import { ArenaMatchCreateDialog } from '@/components/arena/arena-match-create-dialog';
+import { useArenaMatchCreation } from '@/hooks/use-arena-match-creation';
 import { useArenaMatchDeletion } from '@/hooks/use-arena-match-deletion';
 import { useArenaGuestCommands } from '@/hooks/use-arena-guest-commands';
 import { ArenaGuestDialog } from '@/components/arena/arena-guest-dialog';
@@ -58,7 +60,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { OccasionalDeckForm } from '@/components/arena/occasional-deck-form';
 
 import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
-import { MatchParticipantRow, toDeckOption } from '@/components/arena/match-participant-row';
+import { toDeckOption } from '@/components/arena/match-participant-row';
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecBadge } from '@/components/deck/edhrec-badge';
 
@@ -71,17 +73,7 @@ import {
   isArenaMember,
 } from '@/lib/arena-membership';
 import { isDemoUser } from '@/lib/demo';
-import {
-  getLastDeckSelectionForParticipant,
-  getParticipantDeckId,
-  getParticipantDeckSnapshot,
-  getParticipantDisplayName,
-  getParticipantKey,
-  resolveWinnerParticipantKey,
-  type ArenaGuest,
-  type ArenaGuestDeck,
-  type MatchParticipantRecord,
-} from '@/lib/arena-participants';
+import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, getParticipantKey, resolveWinnerParticipantKey, type ArenaGuest, type ArenaGuestDeck, type MatchParticipantRecord } from '@/lib/arena-participants';
 
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
@@ -121,7 +113,7 @@ import { parseParticipantKey, toGuestParticipantKey, toUserParticipantKey, type 
 
 import { format, parse, subDays, isAfter } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
-import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, UserPlus, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Search, Eye, EyeOff, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, Clock3, QrCode, Shield, Flag } from 'lucide-react';
+import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Search, Eye, EyeOff, Share2, Palette, Loader2, DoorOpen, UserMinus, Award, Gauge, Flame, Crosshair, Crown, Clock3, QrCode, Shield, Flag } from 'lucide-react';
 import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
 
 const MATCHES_SELECT = `
@@ -342,25 +334,31 @@ export default function TablePage() {
     [deckStats, showProvisionalDecks],
   );
   const provisionalDeckCount = countProvisionalDeckRankings(deckStats);
-
-  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [occasionalCreationBusy, setOccasionalCreationBusy] = useState<Record<string, boolean>>({});
+  const anyOccasionalCreationBusy = Object.values(occasionalCreationBusy).some(Boolean);
+  const [occasionalChoices, setOccasionalChoices] = useState<Deck[]>([]);
+  const canManageGroup = Boolean(group && user && (group.created_by === user.id || adminMode));
+  const matchAccessKey = JSON.stringify([adminMode, canManageGroup]);
+  const matchCreation = useArenaMatchCreation({
+    userId: user?.id ?? null, groupId, matchAccessKey, anyOccasionalCreationBusy, matches,
+    getParticipantDeckOptions: key => getParticipantDeckOptions(key),
+    refreshMissingImportedDeckImages: ids => refreshMissingImportedDeckImages(ids),
+    refreshMatches: () => refreshMatches(), reloadGuests,
+  });
+  const {
+    setShowMatchModal,
+    setSelectedParticipantKeys,
+    participantDecks,
+    setParticipantDecks,
+    winnerKey,
+    setWinnerKey,
+    setMatchPlayedAt,
+    toggleParticipantSelection,
+  } = matchCreation;
   const [detailsMatch, setDetailsMatch] = useState<Match | null>(null);
   const [detailsLiveGame, setDetailsLiveGame] = useState<LiveGameRecord | null>(null);
   const [detailsRecapLoading, setDetailsRecapLoading] = useState(false);
   const [showInviteQr, setShowInviteQr] = useState(false);
-  const [selectedParticipantKeys, setSelectedParticipantKeys] = useState<ParticipantKey[]>([]);
-  const [occasionalCreationBusy, setOccasionalCreationBusy] = useState<Record<string, boolean>>({});
-  const anyOccasionalCreationBusy = Object.values(occasionalCreationBusy).some(Boolean);
-  const [occasionalChoices, setOccasionalChoices] = useState<Deck[]>([]);
-  const [participantDecks, setParticipantDecks] = useState<Record<string, string>>({});
-  const [participantDeckSearches, setParticipantDeckSearches] = useState<Record<string, string>>({});
-  const [hiddenParticipantDeckLists, setHiddenParticipantDeckLists] = useState<Record<string, boolean>>({});
-  const [winnerKey, setWinnerKey] = useState<ParticipantKey | ''>('');
-  const [matchIsDraw, setMatchIsDraw] = useState(false);
-  const [matchWinCondition, setMatchWinCondition] = useState<NonNullable<Match['win_condition']>>('other');
-  const [matchNotes, setMatchNotes] = useState('');
-  const [matchPlayedAt, setMatchPlayedAt] = useState(() => toMatchDateValue());
-  const [savingMatch, setSavingMatch] = useState(false);
 
   // Edit arena modal state
   const arenaSettingsContext = user ? JSON.stringify([user.id, groupId]) : null;
@@ -386,21 +384,13 @@ export default function TablePage() {
   const reportOwnerKey=user?user.id+':'+groupId:null;
   const activeExportDayKey=exportDayOwner===reportOwnerKey?exportDayKey:null;
   const dayExport=useArenaDayExport(user?.id,history.scope,activeExportDayKey);
-
-  const canManageGroup = Boolean(group && user && (group.created_by === user.id || adminMode));
-  const matchAccessKey = JSON.stringify([adminMode, canManageGroup]);
-  const createWriter = useArenaMatchWrite(user?.id ?? null, groupId, matchAccessKey, showMatchModal);
   const editWriter = useArenaMatchWrite(user?.id ?? null, groupId, matchAccessKey, editingMatch?.id ?? null);
   useLayoutEffect(() => {
-    if (!showMatchModal) setSavingMatch(false);
     if (!editingMatch) setSavingEditMatch(false);
-  }, [showMatchModal, editingMatch]);
+  }, [editingMatch]);
   useLayoutEffect(() => {
-    setShowMatchModal(false); setEditingMatch(null);
-    setSelectedParticipantKeys([]); setParticipantDecks({}); setParticipantDeckSearches({});
-    setHiddenParticipantDeckLists({}); setWinnerKey(''); setMatchIsDraw(false);
-    setMatchWinCondition('other'); setMatchNotes(''); setMatchPlayedAt(toMatchDateValue());
-    setSavingMatch(false); setSavingEditMatch(false);
+    setEditingMatch(null);
+    setSavingEditMatch(false);
     setEditMatchPlayerKeys({}); setEditMatchPlayerDecks({}); setEditMatchDeckSearches({});
     setHiddenEditMatchDeckLists({}); setEditMatchWinnerKey(''); setEditMatchIsDraw(false);
     setEditMatchWinCondition('other'); setEditMatchNotes(''); setEditMatchPlayedAt(toMatchDateValue());
@@ -658,129 +648,9 @@ export default function TablePage() {
     return guest?.arena_guest_decks?.find((deck) => deck.id === deckId) || null;
   };
 
-  const toggleParticipantSelection = (participantKey: ParticipantKey) => {
-    if (anyOccasionalCreationBusy) return;
-    setSelectedParticipantKeys((prev) => {
-      const selected = prev.includes(participantKey);
-      if (selected) {
-        setParticipantDecks((current) => {
-          const next = { ...current };
-          delete next[participantKey];
-          return next;
-        });
-        setParticipantDeckSearches((current) => {
-          const next = { ...current };
-          delete next[participantKey];
-          return next;
-        });
-        setHiddenParticipantDeckLists((current) => {
-          const next = { ...current };
-          delete next[participantKey];
-          return next;
-        });
-        if (winnerKey === participantKey) setWinnerKey('');
-        return prev.filter((key) => key !== participantKey);
-      }
-
-      const deckOptions = getParticipantDeckOptions(participantKey);
-      const lastDeckId = getLastDeckSelectionForParticipant(participantKey, matches);
-      const preferredDeckId = deckOptions.length === 1
-        ? deckOptions[0].id
-        : lastDeckId && deckOptions.some((deck) => deck.id === lastDeckId) ? lastDeckId : null;
-      if (preferredDeckId) {
-        setParticipantDecks((current) => ({ ...current, [participantKey]: preferredDeckId }));
-      }
-
-      return [...prev, participantKey];
-    });
-  };
-
   const guestCommands = useArenaGuestCommands({ userId: user?.id ?? null, adminMode, groupId, guests, canManageGroup, reloadGuests, refreshMatches,
     setSelectedParticipantKeys, setParticipantDecks, updateDeckColors, setWinnerKey, toggleParticipantSelection });
   const { deletingGuestIds, handleDeleteGuest, openGuestModal, openAddGuestDeckModal } = guestCommands;
-
-  const resetMatchForm = () => {
-    createWriter.cancel('save');
-    setShowMatchModal(false);
-    setSelectedParticipantKeys([]);
-    setParticipantDecks({});
-    setParticipantDeckSearches({});
-    setHiddenParticipantDeckLists({});
-    setWinnerKey('');
-    setMatchIsDraw(false);
-    setMatchWinCondition('other');
-    setMatchNotes('');
-    setMatchPlayedAt(toMatchDateValue());
-  };
-
-  const handleCreateMatch = async () => {
-    if (anyOccasionalCreationBusy) return;
-    if (selectedParticipantKeys.length < 2) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: t({ it: 'Seleziona almeno 2 giocatori', en: 'Select at least 2 players' }), variant: 'destructive' });
-      return;
-    }
-    if (!matchIsDraw && !winnerKey) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: t({ it: 'Seleziona un vincitore o segna come patta', en: 'Select a winner or mark as draw' }), variant: 'destructive' });
-      return;
-    }
-
-    const participantMissingDeck = selectedParticipantKeys.find((participantKey) => {
-      const deckOptions = getParticipantDeckOptions(participantKey);
-      if (deckOptions.length === 0) return false;
-      return !participantDecks[participantKey];
-    });
-
-    if (participantMissingDeck) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Seleziona un mazzo per ogni giocatore', en: 'Select a deck for each player' }),
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const playedAtIso = matchDateToIso(matchPlayedAt);
-    if (!playedAtIso) {
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Data della partita non valida.', en: 'Invalid battle date.' }),
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!showMatchModal || !user) return;
-    const job = createWriter.begin('save'); if (!job) return;
-    setSavingMatch(true);
-    try {
-      const input = { mode: 'create' as const, isDraw: matchIsDraw, winnerKey: winnerKey || null,
-        notes: matchNotes, playedAt: playedAtIso, winCondition: matchWinCondition,
-        players: selectedParticipantKeys.map(key => ({ key, deckId: participantDecks[key] || null })) };
-      const userDeckIds = selectedParticipantKeys.filter(key => key.startsWith('user:'))
-        .map(key => participantDecks[key]).filter(Boolean);
-      await refreshMissingImportedDeckImages(userDeckIds);
-      if (!job.active()) return;
-      await createWriter.save(job, input);
-      if (!job.active()) return;
-
-      toast({
-        title: t({ it: 'Partita registrata!', en: 'Battle recorded!' }),
-        description: matchIsDraw
-          ? t({ it: 'Esito registrato: patta', en: 'Result logged: draw' })
-          : t({ it: 'La vittoria è stata salvata', en: 'Victory has been logged' }),
-      });
-      setShowMatchModal(false);
-      setSelectedParticipantKeys([]); setParticipantDecks({}); setParticipantDeckSearches({});
-      setHiddenParticipantDeckLists({}); setWinnerKey(''); setMatchIsDraw(false);
-      setMatchWinCondition('other'); setMatchNotes(''); setMatchPlayedAt(toMatchDateValue());
-      await Promise.allSettled([refreshMatches(), reloadGuests()]);
-    } catch (error: unknown) {
-      if (job.active()) toast({ title: t({ it: 'Errore', en: 'Error' }), description: getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en'), variant: 'destructive' });
-    } finally {
-      if (job.active()) setSavingMatch(previous => job.active() ? false : previous);
-      job.finish();
-    }
-  };
 
   const { handleDeleteMatch, deletingMatch } = useArenaMatchDeletion(user?.id ?? null, groupId, adminMode, canManageGroup, matches, refreshMatches);
 
@@ -2166,199 +2036,11 @@ export default function TablePage() {
         )}
       </main>
 
-      {showMatchModal && (
-        <ModalOverlay>
-          <ModalCard size="xl">
-            <CardHeader className="shrink-0 border-b border-border/70">
-              <CardTitle className="text-foreground">{t({ it: 'Registra partita', en: 'Record Battle' })}</CardTitle>
-              <CardDescription className="text-muted-foreground">{t({ it: 'Seleziona partecipanti e vincitore', en: 'Select combatants and the victor' })}</CardDescription>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-y-auto py-6">
-              <div className="space-y-6">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block">{t({ it: 'Partecipanti', en: 'Combatants' })}</label>
-                  <div className="space-y-2">
-                    {members.map((member) => {
-                      const participantKey = toUserParticipantKey(member.id);
-                      const deckOptions = getParticipantDeckOptions(participantKey).map(toDeckOption);
-                      const filteredDeckOptions = getFilteredParticipantDeckOptions(participantKey, participantDeckSearches).map(toDeckOption);
-                      const selectedDeck = getSelectedParticipantDeck(participantKey);
-
-                      return (
-                        <div key={participantKey}>
-                        <MatchParticipantRow
-                          participantKey={participantKey}
-                          displayName={getProfileDisplayName(member)}
-                          deckCount={deckOptions.length}
-                          selected={selectedParticipantKeys.includes(participantKey)}
-                          selectedDeck={selectedDeck ? toDeckOption(selectedDeck) : null}
-                          deckListHidden={Boolean(hiddenParticipantDeckLists[participantKey])}
-                          searchValue={participantDeckSearches[participantKey] || ''}
-                          selectedDeckId={participantDecks[participantKey] || ''}
-                          filteredDecks={filteredDeckOptions}
-                          onToggle={() => toggleParticipantSelection(participantKey)}
-                          onSearchChange={(value) => setParticipantDeckSearches((prev) => ({ ...prev, [participantKey]: value }))}
-                          onToggleDeckList={() => setHiddenParticipantDeckLists((prev) => ({ ...prev, [participantKey]: !prev[participantKey] }))}
-                          onSelectDeck={(deckId) => { if (!anyOccasionalCreationBusy) setParticipantDecks((prev) => ({ ...prev, [participantKey]: deckId })); }}
-
-                        />
-                        {selectedParticipantKeys.includes(participantKey) && <OccasionalDeckForm key={`${participantKey}:${participantDecks[participantKey] || ''}`} groupId={groupId} userId={member.id} disabled={anyOccasionalCreationBusy} onBusyChange={busy => setOccasionalCreationBusy(current => ({ ...current, [participantKey]: busy }))} onCreated={(deck) => {
-                          setOccasionalChoices(current => [...current.filter(item => item.id !== deck.id), deck as Deck]);
-                          setParticipantDecks(current => ({ ...current, [participantKey]: deck.id }));
-                        }} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <label className="text-sm font-medium text-foreground">{t({ it: 'Guest', en: 'Guests' })}</label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-border text-foreground"
-                      onClick={() => {
-                        openGuestModal(guests.length > 0 ? 'pick-existing' : 'create');
-                      }}
-                    >
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      {t({ it: 'Aggiungi guest', en: 'Add guest' })}
-                    </Button>
-                  </div>
-                  {selectedParticipantKeys.filter((key) => key.startsWith('guest:')).length === 0 ? (
-                    <p className="rounded-lg border border-border/70 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-                      {t({ it: 'Nessun guest selezionato. Aggiungi un guest per includerlo nella partita.', en: 'No guests selected. Add a guest to include them in this battle.' })}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedParticipantKeys
-                        .filter((key) => key.startsWith('guest:'))
-                        .map((participantKey) => {
-                          const parsed = parseParticipantKey(participantKey);
-                          const guest = guests.find((entry) => entry.id === parsed?.id);
-                          const deckOptions = getParticipantDeckOptions(participantKey).map(toDeckOption);
-                          const filteredDeckOptions = getFilteredParticipantDeckOptions(participantKey, participantDeckSearches).map(toDeckOption);
-                          const selectedDeck = getSelectedParticipantDeck(participantKey);
-
-                          return (
-                            <MatchParticipantRow
-                              key={participantKey}
-                              participantKey={participantKey}
-                              displayName={guest?.display_name || t({ it: 'Guest', en: 'Guest' })}
-                              isGuest
-                              deckCount={deckOptions.length}
-                              selected
-                              selectedDeck={selectedDeck ? toDeckOption(selectedDeck) : null}
-                              deckListHidden={Boolean(hiddenParticipantDeckLists[participantKey])}
-                              searchValue={participantDeckSearches[participantKey] || ''}
-                              selectedDeckId={participantDecks[participantKey] || ''}
-                              filteredDecks={filteredDeckOptions}
-                              onToggle={() => toggleParticipantSelection(participantKey)}
-                              onSearchChange={(value) => setParticipantDeckSearches((prev) => ({ ...prev, [participantKey]: value }))}
-                              onToggleDeckList={() => setHiddenParticipantDeckLists((prev) => ({ ...prev, [participantKey]: !prev[participantKey] }))}
-                              onSelectDeck={(deckId) => { if (!anyOccasionalCreationBusy) setParticipantDecks((prev) => ({ ...prev, [participantKey]: deckId })); }}
-
-                            />
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-
-                {selectedParticipantKeys.length >= 2 && (
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Checkbox
-                        checked={matchIsDraw}
-                        onCheckedChange={(checked) => {
-                          const isDraw = checked === true;
-                          setMatchIsDraw(isDraw);
-                          if (isDraw) setWinnerKey('');
-                        }}
-                      />
-                      {t({ it: 'Patta', en: 'Draw' })}
-                    </label>
-                    {!matchIsDraw ? (
-                    <div>
-                    <label className="text-sm font-medium text-foreground mb-3 block">{t({ it: 'Vincitore', en: 'Victor' })}</label>
-                    <Select value={winnerKey} onValueChange={(value) => setWinnerKey(value as ParticipantKey)}>
-                      <SelectTrigger className="w-full bg-background border-border text-foreground"><SelectValue placeholder={t({ it: 'Seleziona il vincitore', en: 'Select the victor' })} /></SelectTrigger>
-                      <SelectContent className="bg-card border-border">
-                        {selectedParticipantKeys.map((participantKey) => {
-                          const parsed = parseParticipantKey(participantKey);
-                          const displayName = parsed?.type === 'guest'
-                            ? guests.find((entry) => entry.id === parsed.id)?.display_name || t({ it: 'Guest', en: 'Guest' })
-                            : getProfileDisplayName(members.find((member) => member.id === parsed?.id));
-                          const selectedDeck = getSelectedParticipantDeck(participantKey);
-                          return (
-                            <SelectItem key={participantKey} value={participantKey}>
-                              {displayName}{selectedDeck ? ` (${selectedDeck.commander})` : ''}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                    <label className="mb-2 mt-4 block text-sm font-medium text-foreground">
-                      {t({ it: 'Come ha vinto?', en: 'How did they win?' })}
-                    </label>
-                    <Select
-                      value={matchWinCondition}
-                      onValueChange={(value) => setMatchWinCondition(value as NonNullable<Match['win_condition']>)}
-                    >
-                      <SelectTrigger className="w-full border-border bg-background text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="border-border bg-card">
-                        <SelectItem value="last_standing">{t({ it: 'Ultimo in gioco', en: 'Last standing' })}</SelectItem>
-                        <SelectItem value="combo">Combo</SelectItem>
-                        <SelectItem value="concession">{t({ it: 'Concessione', en: 'Concession' })}</SelectItem>
-                        <SelectItem value="alternate_card">{t({ it: 'Vittoria alternativa', en: 'Alternate win' })}</SelectItem>
-                        <SelectItem value="other">{t({ it: 'Altro', en: 'Other' })}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    </div>
-                    ) : null}
-                  </div>
-                )}
-                <div>
-                  <label htmlFor="match-played-at" className="text-sm font-medium text-foreground mb-2 block">
-                    {t({ it: 'Data', en: 'Date' })}
-                  </label>
-                  <Input
-                    id="match-played-at"
-                    type="date"
-                    value={matchPlayedAt}
-                    onChange={(e) => setMatchPlayedAt(e.target.value)}
-                    className="bg-background/50 border-border text-foreground"
-                  />
-                </div>
-                <RichTextEditor
-                  label={t({ it: 'Note (opzionali)', en: 'Notes (optional)' })}
-                  value={matchNotes}
-                  onChange={setMatchNotes}
-                  placeholder={t({ it: 'Cronaca della partita...', en: 'Epic saga of the battle...' })}
-                  hint={t({
-                    it: 'Usa la barra formato per grassetto, corsivo, barrato, a capo ed elenchi.',
-                    en: 'Use the format toolbar for bold, italic, strike, line breaks, and bullet lists.',
-                  })}
-                  minRows={3}
-                />
-              </div>
-            </CardContent>
-            <div className="shrink-0 border-t border-border/70 bg-card px-6 py-4">
-              <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={resetMatchForm} disabled={anyOccasionalCreationBusy} className="flex-1 border-border text-foreground">{t({ it: 'Annulla', en: 'Cancel' })}</Button>
-                <Button onClick={handleCreateMatch} disabled={savingMatch || anyOccasionalCreationBusy} className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700">
-                  {savingMatch ? t({ it: 'Registrazione...', en: 'Recording...' }) : t({ it: 'Registra partita', en: 'Record Battle' })}
-                </Button>
-              </div>
-            </div>
-          </ModalCard>
-        </ModalOverlay>
-      )}
+      <ArenaMatchCreateDialog groupId={groupId} members={members} guests={guests} form={matchCreation}
+        anyOccasionalCreationBusy={anyOccasionalCreationBusy} setOccasionalCreationBusy={setOccasionalCreationBusy}
+        setOccasionalChoices={setOccasionalChoices} openGuestModal={openGuestModal}
+        getParticipantDeckOptions={getParticipantDeckOptions} getFilteredParticipantDeckOptions={getFilteredParticipantDeckOptions}
+        getSelectedParticipantDeck={getSelectedParticipantDeck} />
 
       {activeExportDayKey && (
         <ModalOverlay>
