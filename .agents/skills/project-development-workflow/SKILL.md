@@ -98,6 +98,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+History/share ownership: `arena-history-panel.tsx` presents pagination and rows through typed callbacks; `use-arena-sharing.ts` owns existing browser share/invitation actions, and `use-arena-session-export.ts` owns day groups, complete-export draft and scoped opening/acknowledgement lifecycle. PM priority20Nov is a testable9.3.0 candidate: finish the current block, freeze further refactor, run consolidated critical checks; original plan remains open in the single checklist.
+
 Arena report ownership: `hooks/use-arena-reports.ts` owns period/bracket and analytics state/projections at the existing parent lifetime, preserving history-before-report query order. `arena-player-report.tsx` and `arena-member-roster.tsx` render typed models; registered membership and the guest directory remain available independently of analytics failures. The roster delegates existing direct invitation I/O explicitly. Player view contract lives in `lib/types/arena-player-report.ts`.
 
 Arena reports: `arena-awards-panel.tsx`, `arena-deck-rankings-panel.tsx` and `arena-meta-panel.tsx` present typed data with the existing `ArenaDataStatusProps` contract. Shared filters and view state retain parent lifetime; query ownership is unchanged. Image/EDHREC containers remain explicit I/O delegates; the report panels do not access SDK/query services.

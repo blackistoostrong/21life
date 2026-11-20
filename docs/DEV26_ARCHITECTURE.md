@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1169|Report controller143/classifica177/roster82 estratti, verifiche finali della tranche in corso; storico/share e limite dimensionale aperti |
+| Tavolo web |713|Report/roster verificati; storico189/share220/export148, scope/apertura in verifica; refactor restante congelato per candidato testabile |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -24,6 +24,8 @@ App26028392: clean web/Android/iOS exports and56 real Dev API/browser cases PASS
 Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie alle implementazioni condivise. Il mobile raccoglie esplicitamente coverage dei file esterni tramite percorso assoluto e allowExternal; senza questa configurazione Vitest ometteva i file e il ratchet ha correttamente fallito. Non sono state abbassate soglie.
 
 ## Proprietari attuali e destinazione
+
+History and browser sharing: `arena-history-panel.tsx` renders existing rows/pagination/actions without private I/O; creation is an explicit parent callback, preserving click-time timestamp and action order without pulling a clock runtime into presentation. `use-arena-sharing.ts` owns existing invitation/statistics/match browser sharing functions, consuming report/history models without private reads. `use-arena-session-export.ts` owns day grouping/expansion, complete-export query composition and the intro draft. Its command epoch is account/group/history-scope bound; openings cancel old share leases, context transitions mask and clear private drafts, and pending browser share replies cannot close or report on a newer opening. Browser share/clipboard APIs cannot cancel an already launched OS operation; cancellation discards stale completion and prevents subsequent fallback/copy/feedback. The existing complete-day query still owns SDK cancellation. An actual pre-fix A→B→A case onac0e9e4c showed the old intro/modal restored; initial textbox selector timeout was a fixture issue, not product failure evidence. Final quality/build/browser verification is pending. No further extraction is required before the PM's newly prioritized testable candidate; full point6 remains open.
 
 Report/rosterac0e9e4c verified: quality857+3skip/71scripts/148coverage floors, clean56route web build/3.24MiB and52/52 desktop/mobile report/membership/catalog/guest cases PASS in2.8min with verified Dev cleanup. Root1169/controller143/player presentation177/roster82 nonempty lines. No native executable/schema/dependency change; no visual or physical-device certification. Fetched Dev has zero commits missing from the candidate; PR241 remains a draft, not merged into Dev.
 

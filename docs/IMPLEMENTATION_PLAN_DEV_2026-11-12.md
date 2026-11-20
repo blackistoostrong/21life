@@ -2,6 +2,10 @@
 
 Data: 12 novembre 2026, Europe/Rome. Specifica PM: «facciamo fino al punto 6 incluso. su dev ovviamente», con piano autosufficiente per il successivo agente esecutore.
 
+## Priorità aggiornata dal PM — 20 novembre: 9.3.0 testabile
+
+La richiesta più recente anticipa un candidato Dev per collaudo rispetto al completamento integrale del piano. Chiudere il blocco storico/export/share già in corso, poi congelare nuove estrazioni e interventi non bloccanti. Verificare insieme qualità web/Expo, build web ed export Android/iOS dello stesso candidato, login, catalogo/guest, registrazione e modifica partite, live/sync, storico/analytics e amministrazione. Correggere prima difetti che impediscono il collaudo, compromettono dati o autorizzazioni. Preparare istruzioni e limiti del candidato; collaudi dispositivo/immagini rimangono al termine. Questa priorità non dichiara completati i punti1–6, non autorizza pubblicazione produzione/APK/IPA e non trasforma il refactor residuo in lavoro concluso. Il dettaglio degli stati rimane soltanto in PROJECT_CHECKLIST. Non iniziare ulteriori tranche di refactor per raggiungere una metrica prima di rendere il candidato collaudabile.
+
 ## Mandato e avvio automatico al passaggio di agente
 
 Questa sessione prepara il piano, senza implementarlo. Al successivo passaggio a un agente incaricato dell'esecuzione, il mandato già espresso dal PM è eseguire **tutto questo documento**, in sequenza, senza richiedere una nuova assegnazione per ogni ticket. Non aspettare che il PM ripeta lo scope. Non interpretare il vecchio piano del 1 ottobre, che richiedeva un ticket alla volta, come un limite a questo mandato più recente.

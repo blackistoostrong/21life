@@ -4,7 +4,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { ArenaHistoryScope } from '@/packages/domain/arena-history';
 import type { Match } from '@/lib/types/arena-match';
 import { useArenaDayExport } from '@/hooks/use-arena-day-export';
-import { useEffect, useState, useMemo } from 'react';
+import { useCommandScope } from '@/hooks/use-command-scope';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { getParticipantDeckSnapshot, getParticipantDisplayName } from '@/lib/arena-participants';
 import { groupMatchesByDay } from '@/lib/arena-session';
 import { buildArenaSessionExportText, type ArenaSessionExportMatch } from '@/lib/arena-session-export';
@@ -17,15 +18,26 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
   const { toast } = useToast();
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
 
-  const [exportDayKey, setExportDayKey] = useState<string | null>(null);
-
-  const [exportIntro, setExportIntro] = useState('');
-
-  const [exportDayOwner,setExportDayOwner]=useState<string|null>(null);
-
-  const reportOwnerKey=userId?userId+':'+groupId:null;
-
-  const activeExportDayKey=exportDayOwner===reportOwnerKey?exportDayKey:null;
+  const contextKey = userId ? JSON.stringify([userId, groupId]) : null;
+  const commands = useCommandScope<'share'>(contextKey, true, scope);
+  const { epoch } = commands;
+  const opening = useRef(0);
+  const [draft, setDraft] = useState<{
+    epoch: typeof epoch; opening: number; dayKey: string; intro: string;
+  } | null>(null);
+  const current = draft?.epoch === epoch ? draft : null;
+  const exportDayKey = current?.dayKey ?? null;
+  const activeExportDayKey = exportDayKey;
+  const exportIntro = current?.intro ?? '';
+  const setExportIntro = (intro: string) => {
+    if (!commands.committed() || !current) return;
+    setDraft(previous => previous?.epoch === epoch && previous.opening === current.opening
+      ? { ...previous, intro } : previous);
+  };
+  useLayoutEffect(() => {
+    setDraft(null);
+    setExpandedDayKeys(new Set());
+  }, [epoch]);
 
   const dayExport=useArenaDayExport(userId ?? undefined,scope,activeExportDayKey);
 
@@ -52,7 +64,7 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
       return next;
     });
 
-  }, [latestDayKey]);
+  }, [latestDayKey, epoch]);
 
   const toggleDayGroup = (dayKey: string, open: boolean) => {
     setExpandedDayKeys((current) => {
@@ -79,21 +91,22 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
   });
 
   const openDayExportModal = (dayKey: string) => {
-    setExportDayOwner(reportOwnerKey);
-    setExportDayKey(dayKey);
-    setExportIntro('');
+    if (!commands.committed()) return;
+    commands.cancel();
+    setDraft({ epoch, opening: ++opening.current, dayKey, intro: '' });
   };
 
   const closeDayExportModal = () => {
-    setExportDayOwner(null);
-    setExportDayKey(null);
-    setExportIntro('');
+    commands.cancel();
+    setDraft(null);
   };
 
   const handleExportDayMatches = async () => {
     if(!activeExportDayKey || !dayExport.ready)return;
     const dayMatches=dayExport.matches as unknown as Match[];
     if(!dayMatches.length)return;
+    const job = commands.begin('share');
+    if (!job) return;
 
     const dayGroup = matchDayGroups.find((entry) => entry.dayKey === activeExportDayKey);
     const exportMatches = [...dayMatches]
@@ -107,11 +120,13 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
           title: dayGroup?.label || activeExportDayKey,
           text,
         });
+        if (!job.active()) return;
         closeDayExportModal();
         return;
       }
 
       await navigator.clipboard.writeText(text);
+      if (!job.active()) return;
       toast({
         title: t({ it: 'Export copiato', en: 'Export copied' }),
         description: t({
@@ -121,9 +136,11 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
       });
       closeDayExportModal();
     } catch (error) {
+      if (!job.active()) return;
       if ((error as DOMException)?.name === 'AbortError') return;
       try {
         await navigator.clipboard.writeText(text);
+        if (!job.active()) return;
         toast({
           title: t({ it: 'Export copiato', en: 'Export copied' }),
           description: t({
@@ -133,12 +150,15 @@ export function useArenaSessionExport(userId: string | null, groupId: string, sc
         });
         closeDayExportModal();
       } catch {
+        if (!job.active()) return;
         toast({
           title: t({ it: 'Errore', en: 'Error' }),
           description: t({ it: 'Impossibile esportare le partite', en: 'Unable to export matches' }),
           variant: 'destructive',
         });
       }
+    } finally {
+      job.finish();
     }
   };
   return { expandedDayKeys, exportDayKey, exportIntro, setExportIntro, activeExportDayKey, dayExport, matchDayGroups, toggleDayGroup, openDayExportModal, closeDayExportModal, handleExportDayMatches };

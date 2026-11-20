@@ -4,6 +4,8 @@
 
 ### Priorità PM 20 novembre — candidato9.3.0 testabile
 
+- [ ] Prebuild candidato: quality web857+3skip/71script/148floor e Expo579/137floor PASS, vecchie soglie immutate. Audit produzione20Nov14:48UTC: web0high/0critical/5moderate, Expo0high/0critical/8moderate, gate non bloccante senza nuove eccezioni. Draft export con epoch account/gruppo/scope e seriale apertura, single-flight share e guard ACK/fallback/feedback dopo Close/account/unmount; API OS già avviata non cancellabile. Table713/history189/share220/export148. Build pulita web+Android+iOS dello stesso SHA e matrice consolidata richieste prima di dichiarare candidato collaudabile; nessuna nuova estrazione dopo questo blocco. Nessun nuovo SQL/native/dependency/feature/dispositivo/analisi immagini.
+
 - [ ] Chiudere solo il blocco corrente storico/export/share, poi congelare ulteriori estrazioni. Preparare candidato Dev verificato senza dichiarare conclusi punti1–6 o11d. Live web/mobile e refactor residuo restano backlog esplicito, purché i flussi esistenti siano collaudabili.
 - [ ] Eseguire una matrice consolidata sul candidato: quality web/Expo, build web e export Android/iOS dello stesso SHA, login/catalogo/guest/partite/live-sync/storico/admin. Correggere prioritariamente blocker, integrità dati e permessi; rinviare ritocchi e manutenzione non bloccante. Collaudi dispositivo/immagini al finale; nessuna pubblicazione produzione/APK/IPA o promozione implicita.
 - [ ] Consegnare SAL del candidato con SHA, prove, istruzioni collaudo e limiti distinti da completamento del piano originale. Obiettivo stimato1–2giornate effettive, non garanzia né certificazione prima dei gate.
