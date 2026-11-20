@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1479|Owner privati e pannelli premi149/mazzi130/meta103 verificati; leaderboard/roster, stati/proiezioni analytics, storico/share e limite dimensionale aperti |
+| Tavolo web |1169|Report controller143/classifica177/roster82 estratti, verifiche finali della tranche in corso; storico/share e limite dimensionale aperti |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -24,6 +24,8 @@ App26028392: clean web/Android/iOS exports and56 real Dev API/browser cases PASS
 Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie alle implementazioni condivise. Il mobile raccoglie esplicitamente coverage dei file esterni tramite percorso assoluto e allowExternal; senza questa configurazione Vitest ometteva i file e il ratchet ha correttamente fallito. Non sono state abbassate soglie.
 
 ## Proprietari attuali e destinazione
+
+Report scope and roster: `hooks/use-arena-reports.ts` owns period/bracket state and report query/projections through two hooks composed at the existing positions, retaining history-before-analytics initialization and parent lifetime for sort/provisional/award selections. It reuses the existing analytics request owner. `lib/types/arena-player-report.ts` is the unchanged view contract. `arena-player-report.tsx` renders the leaderboard and its existing private guest-delete button; `arena-member-roster.tsx` renders registered membership and delegates direct invitation to the existing container. The roster and guest directory remain siblings outside report error/loading gates. Twenty-three statements, three ranking helpers and both JSX trees were mechanically preserved against8841f44c; only status/totalMatches/userId projection changed. Final quality/build/browser verification is pending.
 
 Report presentation: `arena-awards-panel.tsx`, `arena-deck-rankings-panel.tsx` and `arena-meta-panel.tsx` render three distinct tabs from typed report data and effective loading/error/retry status. `ArenaDataStatusProps` exposes the unchanged status contract. Loading, permissions and shared period/bracket/sort/provisional/view state keep their current parent lifetime in this mechanical tranche; no local state was moved into a component that could reset on parent loading. Existing DeckImage and EDHREC badge containers retain their I/O and are explicit delegates of the boundary gate. The panels themselves own no SDK, query or subscription. Full JSX was copied againstc9f80e0b, normalizing only the three effective status expressions. A two-viewport functional baseline covers retry, neutral draws, provisional visibility and award view switching; final post-extraction verification is pending.
 

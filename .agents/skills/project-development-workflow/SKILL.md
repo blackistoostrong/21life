@@ -98,6 +98,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+Arena report ownership: `hooks/use-arena-reports.ts` owns period/bracket and analytics state/projections at the existing parent lifetime, preserving history-before-report query order. `arena-player-report.tsx` and `arena-member-roster.tsx` render typed models; registered membership and the guest directory remain available independently of analytics failures. The roster delegates existing direct invitation I/O explicitly. Player view contract lives in `lib/types/arena-player-report.ts`.
+
 Arena reports: `arena-awards-panel.tsx`, `arena-deck-rankings-panel.tsx` and `arena-meta-panel.tsx` present typed data with the existing `ArenaDataStatusProps` contract. Shared filters and view state retain parent lifetime; query ownership is unchanged. Image/EDHREC containers remain explicit I/O delegates; the report panels do not access SDK/query services.
 
 Active discovery: `hooks/use-arena-active-game.ts` owns scoped active-game lookup results and focus/visibility listeners. Its single pending lease bounds the full multi-query SDK chain; `fetchActiveLiveGame` carries the cancellation signal through each stage. Profile and arena routes compose feature owners without direct SDK/network imports, enforced by security gates.

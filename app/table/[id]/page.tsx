@@ -1,4 +1,7 @@
 'use client';
+import { ArenaPlayerReport } from '@/components/arena/arena-player-report';
+import { ArenaMemberRoster } from '@/components/arena/arena-member-roster';
+import { useArenaReportScope, useArenaReports } from '@/hooks/use-arena-reports';
 import { ArenaAwardsPanel } from '@/components/arena/arena-awards-panel';
 import { ArenaDeckRankingsPanel } from '@/components/arena/arena-deck-rankings-panel';
 import { ArenaMetaPanel } from '@/components/arena/arena-meta-panel';
@@ -17,13 +20,13 @@ import { useArenaMembership } from '@/hooks/use-arena-membership';
 import { ArenaMembershipDialogs } from '@/components/arena/arena-membership-dialogs';
 import { useArenaDeckEnrichment } from '@/hooks/use-arena-deck-enrichment';
 import { useArenaCatalog } from '@/hooks/use-arena-catalog';
-import type { Profile, Deck } from '@/lib/types/arena-catalog';
+import type { Deck } from '@/lib/types/arena-catalog';
 import { ArenaCatalogError } from '@/components/arena/arena-catalog-error';
 import { ArenaSettingsEditor } from '@/components/arena/arena-settings-editor';
 import {GuestDirectory} from '@/components/arena/guest-directory';
 import {useArenaMatchHistory} from '@/hooks/use-arena-match-history';
 import {useArenaDayExport} from '@/hooks/use-arena-day-export';
-import {useArenaAnalytics} from '@/hooks/use-arena-analytics';
+
 import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
 import {ArenaHistoryPagination} from '@/components/arena/arena-history-pagination';
 import {ArenaDataStatus} from '@/components/arena/arena-data-status';
@@ -63,27 +66,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
-import { DirectArenaInvite } from '@/components/arena/direct-arena-invite';
-
 import { buildArenaShareText } from '@/lib/arena-share';
-import {
-  canKickArenaMember,
-  canLeaveArena,
-  isArenaMember,
-} from '@/lib/arena-membership';
+import { canLeaveArena, isArenaMember } from '@/lib/arena-membership';
 import { isDemoUser } from '@/lib/demo';
-import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, type ArenaGuest, type ArenaGuestDeck } from '@/lib/arena-participants';
+import { getParticipantDeckId, getParticipantDeckSnapshot, getParticipantDisplayName, type ArenaGuestDeck } from '@/lib/arena-participants';
 
 import { getProfileDisplayName } from '@/lib/profile-display';
 
-import {
-  buildArenaAnalyticsBundle,
-} from '@/lib/arena-analytics-bundle';
-
 import { formatGameDuration } from '@/lib/live-game-duration';
-
-import { buildArenaAwards, type ArenaAward as DeckArenaAward, type DeckPerformanceStats } from '@/lib/deck-performance-analytics';
-import { countProvisionalDeckRankings, filterDeckRankings } from '@/lib/deck-ranking-visibility';
 
 import { groupMatchesByDay } from '@/lib/arena-session';
 import {
@@ -96,14 +86,12 @@ import {
   formatArenaSeasonLabel,
 } from '@/lib/arena-seasons';
 
-import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import { toMatchDateValue } from '@/lib/match-datetime';
 import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 
-import { format, parse, subDays, isAfter } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { enUS, it as itLocale } from 'date-fns/locale';
-import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, User, Target, Skull, TrendingUp, Medal, BarChart3, Pencil, Eye, Share2, Palette, DoorOpen, UserMinus, Award, Flame, Crown, QrCode, Shield, Flag } from 'lucide-react';
-import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
+import { Swords, ArrowLeft, Users, Trophy, Trash2, Copy, Calendar, ChevronDown, Download, Target, Skull, Pencil, Eye, Share2, Palette, DoorOpen, Award, Flame, Crown, QrCode, Shield, Flag } from 'lucide-react';
 
 const MATCHES_SELECT = `
   *,
@@ -155,91 +143,6 @@ function extractMatchDeckIds(matches: Match[]) {
   )) as string[];
 }
 
-interface PlayerStats extends MatchRecord {
-  key: ParticipantKey;
-  displayName: string;
-  isGuest: boolean;
-  profile: Profile | null;
-}
-
-function getPlayerRank(stats: PlayerStats[], index: number) {
-  const entry = stats[index];
-  if (!entry) return index + 1;
-
-  for (let i = 0; i < index; i++) {
-    const previous = stats[i];
-    if (
-      previous.winRate === entry.winRate &&
-      previous.wins === entry.wins &&
-      previous.gamesPlayed === entry.gamesPlayed
-    ) {
-      return getPlayerRank(stats, i);
-    }
-  }
-
-  return index + 1;
-}
-
-function hasSameCommanderRank(
-  a: DeckPerformanceStats,
-  b: DeckPerformanceStats,
-  deckStatsSort: 'winRate' | 'gamesPlayed'
-) {
-  if (deckStatsSort === 'gamesPlayed') {
-    return a.gamesPlayed === b.gamesPlayed && a.wins === b.wins && a.winRate === b.winRate;
-  }
-  return a.winRate === b.winRate && a.wins === b.wins && a.gamesPlayed === b.gamesPlayed;
-}
-
-function getCommanderRank(
-  stats: DeckPerformanceStats[],
-  index: number,
-  deckStatsSort: 'winRate' | 'gamesPlayed'
-) {
-  const entry = stats[index];
-  if (!entry) return index + 1;
-
-  for (let i = 0; i < index; i++) {
-    if (hasSameCommanderRank(stats[i], entry, deckStatsSort)) {
-      return getCommanderRank(stats, i, deckStatsSort);
-    }
-  }
-
-  return index + 1;
-}
-
-function PlayerGuestDeleteButton({
-  playerKey,
-  guests,
-  deletingGuestIds,
-  onDeleteGuest,
-  deleteLabel,
-}: {
-  playerKey: ParticipantKey;
-  guests: ArenaGuest[];
-  deletingGuestIds: string[];
-  onDeleteGuest: (guest: ArenaGuest) => void;
-  deleteLabel: string;
-}) {
-  const guestId = parseParticipantKey(playerKey)?.id;
-  const guest = guests.find((entry) => entry.id === guestId);
-  if (!guest) return null;
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
-      onClick={() => onDeleteGuest(guest)}
-      disabled={deletingGuestIds.includes(guest.id)}
-      title={deleteLabel}
-    >
-      <Trash2 className={`h-4 w-4 ${deletingGuestIds.includes(guest.id) ? 'animate-pulse' : ''}`} />
-    </Button>
-  );
-}
-
 export default function TablePage() {
   const params = useParams();
   const groupId = typeof params.id==='string'?params.id:'';
@@ -254,38 +157,35 @@ export default function TablePage() {
   const season=useArenaSeasonContext(user?.id,groupId);
   const seasonContext=season.data;
   const [activeTab, setActiveTab] = useState('matches');
-  const [awardsView, setAwardsView] = useState<'players' | 'decks'>('decks');
   const activeLiveGameId = useArenaActiveGame(user?.id ?? null, groupId, adminMode);
-  const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
-  const [bracketFilter, setBracketFilter] = useState('all');
-  const [deckStatsSort, setDeckStatsSort] = useState<'winRate' | 'gamesPlayed'>('winRate');
-  const [showProvisionalDecks, setShowProvisionalDecks] = useState(false);
-  const getStatsSinceDate = useCallback(() => {
-    if(!season.ready)return null;
-    const seasonStart = seasonContext
-      ? new Date(`${seasonContext.currentSeasonStart}T00:00:00Z`)
-      : null;
-    if (dateFilter === 'all') return seasonStart;
-    const now = new Date();
-    const relativeStart = dateFilter === '7d'
-      ? subDays(now, 7)
-      : dateFilter === '30d'
-        ? subDays(now, 30)
-        : subDays(now, 90);
-    return seasonStart && isAfter(seasonStart, relativeStart) ? seasonStart : relativeStart;
-  }, [dateFilter, seasonContext, season.ready]);
-
-  const reportSince=useMemo(()=>getStatsSinceDate()?.toISOString()??null,[getStatsSinceDate]);
+  const { dateFilter, setDateFilter, bracketFilter, setBracketFilter, reportSince } = useArenaReportScope(season);
   const history=useArenaMatchHistory(season.ready?user?.id:undefined,groupId,reportSince);
-  const reportAnalytics=useArenaAnalytics(season.ready?user?.id:undefined,groupId,reportSince,
-    seasonContext ? new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null,bracketFilter);
+  const arenaReports = useArenaReports(user?.id ?? null, groupId, reportSince, seasonContext, season.ready, bracketFilter);
+  const {
+    awardsView,
+    setAwardsView,
+    deckStatsSort,
+    setDeckStatsSort,
+    showProvisionalDecks,
+    setShowProvisionalDecks,
+    reportAnalytics,
+    analyticsPayload,
+    playerStats,
+    deckStats,
+    visibleDeckStats,
+    provisionalDeckCount,
+    playerRanksByIndex,
+    commanderRanksByIndex,
+    colorAnalytics,
+    arenaAwards,
+    playerAwards,
+    arenaAwardGroups,
+  } = arenaReports;
   const reportPanelStatus = {
     loading: season.loading || reportAnalytics.loading,
     error: season.error || reportAnalytics.error,
     onRetry: season.error ? season.reload : reportAnalytics.reload,
   };
-  const analyticsPayload=reportAnalytics.current;
-  const allTimeAwardsPayload=reportAnalytics.awards;
   const matches=useMemo(()=>{
     const byId=new Map(decks.map(deck=>[deck.id,deck]));
     return (history.matches as unknown as Match[]).map(match=>({...match,match_participants:match.match_participants.map(participant=>{
@@ -295,18 +195,6 @@ export default function TablePage() {
         color_identity:deck.color_identity??participant.decks.color_identity}}:participant;
     })}));
   },[history.matches,decks]);
-
-  const analyticsBundle = useMemo(
-    () => buildArenaAnalyticsBundle(analyticsPayload, bracketFilter, deckStatsSort),
-    [analyticsPayload, bracketFilter, deckStatsSort],
-  );
-  const playerStats = analyticsBundle.players as PlayerStats[];
-  const deckStats = analyticsBundle.decks;
-  const visibleDeckStats = useMemo(
-    () => filterDeckRankings(deckStats, showProvisionalDecks),
-    [deckStats, showProvisionalDecks],
-  );
-  const provisionalDeckCount = countProvisionalDeckRankings(deckStats);
   const [occasionalCreationBusy, setOccasionalCreationBusy] = useState<Record<string, boolean>>({});
   const anyOccasionalCreationBusy = Object.values(occasionalCreationBusy).some(Boolean);
   const [occasionalChoices, setOccasionalChoices] = useState<Deck[]>([]);
@@ -359,16 +247,6 @@ export default function TablePage() {
   const canLeaveCurrentArena = canLeaveArena(members.length, currentUserIsMember);
   const membership = useArenaMembership(user, group, adminMode, canLeaveCurrentArena, setMembers);
   const { kickingMemberIds, membershipBusy, handleKickMember, openDeleteArenaModal, openLeaveArenaModal } = membership;
-
-  const playerRanksByIndex = useMemo(
-    () => playerStats.map((_, index) => getPlayerRank(playerStats, index)),
-    [playerStats]
-  );
-
-  const commanderRanksByIndex = useMemo(
-    () => visibleDeckStats.map((_, index) => getCommanderRank(visibleDeckStats, index, deckStatsSort)),
-    [visibleDeckStats, deckStatsSort]
-  );
 
   const { refreshMissingImportedDeckImages, scheduleArenaDeckColors, syncingDeckColors } = useArenaDeckEnrichment(
     user?.id ?? null, groupId, adminMode, isDemoUser(user), decks, deckColorOverrides, matches, setDecks, updateDeckColors);
@@ -444,27 +322,6 @@ export default function TablePage() {
     if (activeTab !== 'meta' || loading) return;
     return scheduleArenaDeckColors(deckIdsInMatches, 2000);
   }, [activeTab, deckIdsInMatches, scheduleArenaDeckColors, loading]);
-
-  const colorAnalytics = analyticsBundle.colors;
-  const deckPerformance = analyticsBundle.decks;
-  const allTimeAwardsDeckPerformance = useMemo(
-    () => buildArenaAnalyticsBundle(allTimeAwardsPayload, 'all', 'winRate').decks,
-    [allTimeAwardsPayload],
-  );
-  const arenaAwards = useMemo(
-    () => buildArenaAwards(allTimeAwardsDeckPerformance),
-    [allTimeAwardsDeckPerformance],
-  );
-  const playerAwards = useMemo(() => buildPlayerAwardsFromAggregates(allTimeAwardsPayload.players??[]), [allTimeAwardsPayload.players]);
-  const arenaAwardGroups = useMemo(() => {
-    const groups = new Map<DeckArenaAward['kind'], DeckArenaAward[]>();
-    arenaAwards.forEach((award) => {
-      const entries = groups.get(award.kind) ?? [];
-      entries.push(award);
-      groups.set(award.kind, entries);
-    });
-    return Array.from(groups.values());
-  }, [arenaAwards]);
 
   const copyInviteLink = () => {
     if (!group) return;
@@ -1240,199 +1097,13 @@ export default function TablePage() {
 
           <TabsContent value="players">
             <div className="space-y-6">
-              <ArenaDataStatus loading={season.loading || reportAnalytics.loading} error={season.error || reportAnalytics.error}
-                onRetry={season.error ? season.reload : reportAnalytics.reload}>
-                {playerStats.length === 0 && (
-                  <Card className="bg-card/50 border-border">
-                    <CardContent className="py-8 text-center">
-                      <User className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        {t({ it: 'Nessuna partita nel periodo selezionato.', en: 'No battles in the selected period.' })}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-                {playerStats.length > 0 && (
-                <>
-                <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <Card className="bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border-emerald-500/30">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2 text-emerald-400 mb-2">
-                        <Trophy className="w-5 h-5" />
-                        <span className="text-sm font-medium">{t({ it: 'Miglior giocatore', en: 'Top Player' })}</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{playerStats[0]?.displayName || '-'}</p>
-                      <p className="text-sm text-muted-foreground">{playerStats[0]?.winRate}% {t({ it: 'win rate', en: 'win rate' })}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50 border-border">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                        <Users className="w-5 h-5" />
-                        <span className="text-sm font-medium">{t({ it: 'Giocatori attivi', en: 'Active Players' })}</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{playerStats.length}</p>
-                      <p className="text-sm text-muted-foreground">{t({ it: 'partecipanti totali', en: 'total participants' })}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50 border-border">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                        <BarChart3 className="w-5 h-5" />
-                        <span className="text-sm font-medium">{t({ it: 'Partite totali', en: 'Total Games' })}</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">{analyticsPayload.totalMatches ?? '—'}</p>
-                      <p className="text-sm text-muted-foreground">{t({ it: 'partite registrate', en: 'battles recorded' })}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50 border-border">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                        <TrendingUp className="w-5 h-5" />
-                        <span className="text-sm font-medium">{t({ it: 'Win rate medio', en: 'Avg Win Rate' })}</span>
-                      </div>
-                      <p className="text-2xl font-bold text-foreground">
-                        {Math.round(playerStats.reduce((a, b) => a + b.winRate, 0) / playerStats.length)}%
-                      </p>
-                      <p className="text-sm text-muted-foreground">{t({ it: 'su tutti i giocatori', en: 'across all players' })}</p>
-                    </CardContent>
-                  </Card>
-                </div>
+              <ArenaPlayerReport status={reportPanelStatus} playerStats={playerStats}
+                playerRanksByIndex={playerRanksByIndex} totalMatches={analyticsPayload.totalMatches}
+                guests={guests} canManageGroup={canManageGroup} guestDeletion={{ deletingGuestIds, handleDeleteGuest }} />
 
-                <Card className="bg-card/50 border-border">
-                  <CardHeader>
-                    <CardTitle className="text-foreground flex items-center gap-2">
-                      <Medal className="w-5 h-5" />
-                      {t({ it: 'Classifica giocatori', en: 'Player Leaderboard' })}
-                    </CardTitle>
-                    <CardDescription>{t({ it: 'Ordinata per win rate', en: 'Rankings by win rate' })}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {playerStats.map((player, index) => {
-                        const rank = playerRanksByIndex[index] ?? index + 1;
-                        return (
-                        <div
-                          key={player.key}
-                          className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg ${
-                            rank === 1 ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' :
-                            rank === 2 ? 'bg-gradient-to-r from-slate-400/10 to-slate-500/10 border border-slate-400/20' :
-                            rank === 3 ? 'bg-gradient-to-r from-amber-600/10 to-amber-700/10 border border-amber-600/20' :
-                            'bg-secondary/50'
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
-                            rank === 1 ? 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white' :
-                            rank === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-slate-800' :
-                            rank === 3 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' :
-                            'bg-secondary text-secondary-foreground'
-                          }`}>
-                            {rank}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-foreground">{player.displayName}</p>
-                              {player.isGuest && (
-                                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
-                                  Guest
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span>{player.gamesPlayed} {t({ it: player.gamesPlayed === 1 ? 'partita' : 'partite', en: player.gamesPlayed === 1 ? 'game' : 'games' })}</span>
-                              <span>{formatMatchRecord(player)}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 sm:justify-end">
-                            <div className="text-left sm:text-right">
-                              <p className="text-2xl font-bold text-emerald-400">{player.winRate}%</p>
-                              <p className="text-xs text-muted-foreground">{t({ it: 'win rate', en: 'win rate' })}</p>
-                            </div>
-                            {canManageGroup && player.isGuest && (
-                              <PlayerGuestDeleteButton
-                                playerKey={player.key}
-                                guests={guests}
-                                deletingGuestIds={deletingGuestIds}
-                                onDeleteGuest={handleDeleteGuest}
-                                deleteLabel={t({ it: 'Elimina guest', en: 'Delete guest' })}
-                              />
-                            )}
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-                </>
-                )}
-              </ArenaDataStatus>
-
-                <Card className="bg-card/50 border-border">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Users className="h-5 w-5" />
-                      {t({ it: 'Membri del playgroup', en: 'Playgroup members' })}
-                    </CardTitle>
-                    <CardDescription>
-                      {t({
-                        it: 'Giocatori registrati con accesso al playgroup. Uscire o essere rimossi non cancella le partite già registrate.',
-                        en: 'Registered players with access to this playgroup. Leaving or being removed does not delete past battles.',
-                      })}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {members.map((member) => {
-                        const isCreator = group?.created_by === member.id;
-                        const canKick = canKickArenaMember({
-                          actorId: user?.id || '',
-                          targetId: member.id,
-                          group,
-                          isPlatformAdmin: adminMode,
-                        });
-
-                        return (
-                          <div
-                            key={member.id}
-                            className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2.5"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-medium text-foreground">{getProfileDisplayName(member)}</p>
-                                <span className="text-xs text-muted-foreground">@{member.username}</span>
-                                {isCreator && (
-                                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-200">
-                                    {t({ it: 'Creatore', en: 'Creator' })}
-                                  </span>
-                                )}
-                                {member.id === user?.id && (
-                                  <span className="rounded-full border border-border/70 bg-background/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                    {t({ it: 'Tu', en: 'You' })}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {canKick && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleKickMember(member)}
-                                disabled={membershipBusy}
-                                title={t({ it: 'Rimuovi membro', en: 'Remove member' })}
-                              >
-                                <UserMinus className={`h-4 w-4 ${kickingMemberIds.includes(member.id) ? 'animate-pulse' : ''}`} />
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {canManageGroup && group ? <DirectArenaInvite groupId={group.id} /> : null}
-                  </CardContent>
-                </Card>
+                <ArenaMemberRoster members={members} group={group} userId={user?.id ?? null}
+                  adminMode={adminMode} canManageGroup={canManageGroup}
+                  controls={{ membershipBusy, kickingMemberIds, handleKickMember }} />
 
                 {canManageGroup && (
                   <Card className="bg-card/50 border-border">
