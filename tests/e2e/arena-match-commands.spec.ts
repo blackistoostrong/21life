@@ -194,3 +194,67 @@ test('arena match edit failure rolls back its header and participants on real De
     expect(participants.data?.every(row => row.deck_id === null)).toBe(true);
   } finally { await fixture.cleanup(); }
 });
+
+test('arena match create reuses its request UUID after a committed response is lost on real Dev', async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const fixture = await seedMatch();
+  const requestIds: string[] = [];
+  await page.route('**/rest/v1/rpc/save_arena_match_v1', async route => {
+    requestIds.push(route.request().postDataJSON().p_match_id);
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    if (requestIds.length === 1) await route.fulfill({ status: 503, json: { message: 'Synthetic lost acknowledgement after commit' } });
+    else await route.fulfill({ response });
+  });
+  try {
+    await (await openCreate(page)).click();
+    await expect(page.getByText('Error', { exact: true })).toBeVisible();
+    const save = page.getByRole('dialog').getByRole('button', { name: 'Record Battle', exact: true });
+    await expect(save).toBeEnabled(); await save.click();
+    await expect(page.getByText('Battle recorded!', { exact: true })).toBeVisible();
+    expect(requestIds).toHaveLength(2); expect(requestIds[1]).toBe(requestIds[0]);
+    const participants = await fixture.client.from('match_participants').select('id').eq('match_id', requestIds[0]);
+    expect(participants.error).toBeNull(); expect(participants.data).toHaveLength(2);
+    const parent = await fixture.client.from('matches').select('id').eq('id', requestIds[0]).eq('group_id', fixture.groupId);
+    expect(parent.error).toBeNull(); expect(parent.data).toHaveLength(1);
+  } finally {
+    if (requestIds.length) {
+      const removed = await fixture.client.from('matches').delete().in('id', Array.from(new Set(requestIds))).eq('group_id', fixture.groupId);
+      expect(removed.error).toBeNull();
+      const remaining = await fixture.client.from('matches').select('id').in('id', Array.from(new Set(requestIds)));
+      expect(remaining.error).toBeNull(); expect(remaining.data).toEqual([]);
+    }
+    await fixture.cleanup();
+  }
+});
+
+for (const operation of ['create', 'edit'] as const) test(`arena match ${operation} cancels on form close and reopens without stale busy state`, async ({ page }) => {
+  test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
+  const fixture = operation === 'edit' ? await seedMatch() : null;
+  let started = 0, aborted = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const requests = new Set<import('@playwright/test').Request>();
+  page.on('requestfailed', request => { if (requests.has(request)) aborted++; });
+  await page.route('**/rest/v1/rpc/save_arena_match_v1', async route => {
+    requests.add(route.request()); started++;
+    await pending;
+    await route.fulfill({ status: 503, json: { message: 'Synthetic closed form reply' } }).catch(() => {});
+  });
+  try {
+    const action = operation === 'edit' ? await openSeeded(page, fixture!.notes, 'edit') : null;
+    if (action) { await action.click(); await page.getByRole('button', { name: 'Save Changes', exact: true }).click(); }
+    else await (await openCreate(page)).click();
+    await expect.poll(() => started).toBe(1);
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect.poll(() => aborted).toBe(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    if (action) await action.click();
+    else await page.getByRole('button', { name: 'Record Battle', exact: true }).click();
+    const save = page.getByRole('dialog').getByRole('button', { name: operation === 'edit' ? 'Save Changes' : 'Record Battle', exact: true });
+    await expect(save).toBeEnabled();
+    release();
+    await expect(page.getByText('Error', { exact: true })).toHaveCount(0);
+    expect(started).toBe(1);
+  } finally { release(); await fixture?.cleanup(); }
+});

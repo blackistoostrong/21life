@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |2728|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; create/edit e presentazione restante aperti |
+| Tavolo web |2686|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; create/edit atomici verificati, separazione draft/presentazione aperta |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -16,6 +16,8 @@ Profilo7b00ea55: quality772+3skip/71script/142floor, clean56route build/3.22MiB 
 ## Confini già introdotti
 
 Manual match writes: `packages/domain/arena-match-write.ts` builds the common typed header/participant snapshot and localized failure copy. `packages/data/arena-match-write.ts` owns one actor-bound RPC, a 15-second deadline, cancellation and exact UUID acknowledgement. Each platform supplies its own installed SDK adapter. `hooks/use-arena-match-write.ts` owns web request identity and command leases; `expo/hooks/use-arena-match-write.ts` owns native transactions, and `use-arena-match-form-command.ts` owns native form cancellation and feedback. Create/edit no longer issue separate header/participant writes or duplicate notification HTTP calls. Existing server triggers own notifications and guest timestamps transactionally. Form drafts/presentation extraction and broader native catalog lifecycle remain separate pending work; this checkpoint does not close point6.
+
+App26028392: clean web/Android/iOS exports and56 real Dev API/browser cases PASS; another6 web cases verify committed-response-loss replay and form-close cancellation/reopen. `tests/e2e/arena-match-native-owners.spec.ts` bundles the actual native command/form hooks with native React19.2.3 and ReactDOM using the installed Vitest toolchain; only SDK and RNG boundaries are supplied by the fixture. Eight browser cases prove duplicate suppression, retry identity, fresh identity after success/reopening, cancellation on close/account/unmount, A→B→A and discarded late feedback. These are functional hook lifetime checks, not physical-device or visual-parity certification.
 
 `packages/domain` contiene un'unica implementazione di win rate, identità partecipanti e visibilità ranking. Web e mobile mantengono adapter ai percorsi precedenti. Nessuna dipendenza React/Next/Expo/Supabase/storage nel dominio. Il controllo AST `verify-domain-boundaries.mjs` rifiuta import esterni, accesso a globali di piattaforma e cicli; entrambi i quality lo invocano.
 
