@@ -1,3 +1,5 @@
+import { useArenaMatchFormCommand } from '@/hooks/use-arena-match-form-command';
+import { getArenaMatchWriteFailureMessage } from '../../../../packages/domain/arena-match-write';
 import {useArenaAnalytics} from '@/hooks/use-arena-analytics';
 import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
 import {ArenaAnalyticsStatus} from '@/components/table/arena-analytics-status';
@@ -6,7 +8,7 @@ import {arenaHistoryScope} from '../../../../packages/domain/arena-history';
 import {getArenaAnalyticsSince} from '@/lib/arena-analytics-bundle';
 import {ArenaHistoryStatus} from '@/components/table/arena-history-status';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -175,8 +177,6 @@ export default function TableScreen() {
   const [detailsRecapLoading, setDetailsRecapLoading] = useState(false);
   const [exportSelection,setExportSelection]=useState<{id:number;owner:string;dayKey:string;since:string|null;intro:string}|null>(null);
   const exportSequence=useRef(0);
-  const [savingMatch, setSavingMatch] = useState(false);
-  const [savingEditMatch, setSavingEditMatch] = useState(false);
   const [savingArena, setSavingArena] = useState(false);
   const [leavingArena, setLeavingArena] = useState(false);
   const [deletingArena, setDeletingArena] = useState(false);
@@ -264,6 +264,13 @@ export default function TableScreen() {
     isPlatformAdmin: false,
   });
   const isArenaManager = Boolean(user && group?.created_by === user.id);
+  const matchFormContext = JSON.stringify([user?.id, groupId, isArenaManager]);
+  const createFormCommand = useArenaMatchFormCommand(matchFormContext, showRecordModal);
+  const editFormCommand = useArenaMatchFormCommand(matchFormContext, editingMatch?.id ?? null);
+  const savingMatch = createFormCommand.saving;
+  const savingEditMatch = editFormCommand.saving;
+  useLayoutEffect(() => { setShowRecordModal(false); setEditingMatch(null); }, [matchFormContext]);
+
   const canLeave = canLeaveArena(members.length, isMember);
 
   const periodMatches = useMemo(
@@ -1162,17 +1169,9 @@ export default function TableScreen() {
         onClose={() => setShowRecordModal(false)}
         onError={(message) => showAppAlert(copy('error'), message)}
         onSave={async (input) => {
-          setSavingMatch(true);
-          try {
-            await createMatch(input);
-            setShowRecordModal(false);
-            void hapticSuccess();
-            showToast(copy('battleRecordedHint'));
-          } catch (error) {
-            showAppAlert(copy('error'), getSupabaseErrorMessage(error, copy('saveMatchFailed')));
-          } finally {
-            setSavingMatch(false);
-          }
+          await createFormCommand.run(signal => createMatch({ ...input, signal, requestScope: createFormCommand.opening }),
+            () => { setShowRecordModal(false); void hapticSuccess(); showToast(copy('battleRecordedHint')); },
+            error => showAppAlert(copy('error'), getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en')));
         }}
       />
 
@@ -1263,17 +1262,9 @@ export default function TableScreen() {
         onClose={() => setEditingMatch(null)}
         onError={(message) => showAppAlert(copy('error'), message)}
         onSave={async (input) => {
-          setSavingEditMatch(true);
-          try {
-            await updateMatch({ ...input, isArenaManager });
-            setEditingMatch(null);
-            void hapticSuccess();
-            showToast(copy('matchUpdated'));
-          } catch (error) {
-            showAppAlert(copy('error'), getSupabaseErrorMessage(error, copy('saveMatchFailed')));
-          } finally {
-            setSavingEditMatch(false);
-          }
+          await editFormCommand.run(signal => updateMatch({ ...input, isArenaManager, signal }),
+            () => { setEditingMatch(null); void hapticSuccess(); showToast(copy('matchUpdated')); },
+            error => showAppAlert(copy('error'), getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en')));
         }}
       />
 

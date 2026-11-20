@@ -17,7 +17,7 @@ import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
 import {ArenaHistoryPagination} from '@/components/arena/arena-history-pagination';
 import {ArenaDataStatus} from '@/components/arena/arena-data-status';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +62,8 @@ import { MatchParticipantRow, toDeckOption } from '@/components/arena/match-part
 import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecBadge } from '@/components/deck/edhrec-badge';
 
-import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { useArenaMatchWrite } from '@/hooks/use-arena-match-write';
+import { getArenaMatchWriteFailureMessage } from '@/packages/domain/arena-match-write';
 import { buildArenaShareText } from '@/lib/arena-share';
 import {
   canKickArenaMember,
@@ -387,6 +388,25 @@ export default function TablePage() {
   const dayExport=useArenaDayExport(user?.id,history.scope,activeExportDayKey);
 
   const canManageGroup = Boolean(group && user && (group.created_by === user.id || adminMode));
+  const matchAccessKey = JSON.stringify([adminMode, canManageGroup]);
+  const createWriter = useArenaMatchWrite(user?.id ?? null, groupId, matchAccessKey, showMatchModal);
+  const editWriter = useArenaMatchWrite(user?.id ?? null, groupId, matchAccessKey, editingMatch?.id ?? null);
+  useLayoutEffect(() => {
+    if (!showMatchModal) setSavingMatch(false);
+    if (!editingMatch) setSavingEditMatch(false);
+  }, [showMatchModal, editingMatch]);
+  useLayoutEffect(() => {
+    setShowMatchModal(false); setEditingMatch(null);
+    setSelectedParticipantKeys([]); setParticipantDecks({}); setParticipantDeckSearches({});
+    setHiddenParticipantDeckLists({}); setWinnerKey(''); setMatchIsDraw(false);
+    setMatchWinCondition('other'); setMatchNotes(''); setMatchPlayedAt(toMatchDateValue());
+    setSavingMatch(false); setSavingEditMatch(false);
+    setEditMatchPlayerKeys({}); setEditMatchPlayerDecks({}); setEditMatchDeckSearches({});
+    setHiddenEditMatchDeckLists({}); setEditMatchWinnerKey(''); setEditMatchIsDraw(false);
+    setEditMatchWinCondition('other'); setEditMatchNotes(''); setEditMatchPlayedAt(toMatchDateValue());
+    setOccasionalChoices([]); setOccasionalCreationBusy({});
+  }, [user?.id, groupId, matchAccessKey]);
+
   const currentUserIsMember = isArenaMember(members, user?.id);
   const canLeaveCurrentArena = canLeaveArena(members.length, currentUserIsMember);
   const membership = useArenaMembership(user, group, adminMode, canLeaveCurrentArena, setMembers);
@@ -680,6 +700,7 @@ export default function TablePage() {
   const { deletingGuestIds, handleDeleteGuest, openGuestModal, openAddGuestDeckModal } = guestCommands;
 
   const resetMatchForm = () => {
+    createWriter.cancel('save');
     setShowMatchModal(false);
     setSelectedParticipantKeys([]);
     setParticipantDecks({});
@@ -728,65 +749,19 @@ export default function TablePage() {
       return;
     }
 
+    if (!showMatchModal || !user) return;
+    const job = createWriter.begin('save'); if (!job) return;
     setSavingMatch(true);
     try {
-      const userDeckIds = selectedParticipantKeys
-        .filter((key) => key.startsWith('user:'))
-        .map((key) => participantDecks[key])
-        .filter(Boolean);
+      const input = { mode: 'create' as const, isDraw: matchIsDraw, winnerKey: winnerKey || null,
+        notes: matchNotes, playedAt: playedAtIso, winCondition: matchWinCondition,
+        players: selectedParticipantKeys.map(key => ({ key, deckId: participantDecks[key] || null })) };
+      const userDeckIds = selectedParticipantKeys.filter(key => key.startsWith('user:'))
+        .map(key => participantDecks[key]).filter(Boolean);
       await refreshMissingImportedDeckImages(userDeckIds);
-
-      const winnerParsed = matchIsDraw ? null : parseParticipantKey(winnerKey);
-      const { data: match, error: matchError } = await supabase.from('matches').insert({
-        group_id: groupId,
-        is_draw: matchIsDraw,
-        winner_id: !matchIsDraw && winnerParsed?.type === 'user' ? winnerParsed.id : null,
-        winner_guest_id: !matchIsDraw && winnerParsed?.type === 'guest' ? winnerParsed.id : null,
-        win_condition: matchIsDraw ? null : matchWinCondition,
-        created_by: user!.id,
-        notes: matchNotes || null,
-        played_at: playedAtIso,
-      }).select().single();
-      if (matchError) throw matchError;
-
-      const participants = selectedParticipantKeys.map((participantKey) => {
-        const parsed = parseParticipantKey(participantKey);
-        const deckId = participantDecks[participantKey] || null;
-        const isGuest = parsed?.type === 'guest';
-
-        return {
-          match_id: match.id,
-          user_id: isGuest ? null : parsed?.id,
-          guest_id: isGuest ? parsed?.id : null,
-          deck_id: isGuest ? null : deckId,
-          guest_deck_id: isGuest ? deckId : null,
-          is_winner: !matchIsDraw && participantKey === winnerKey,
-        };
-      });
-
-      const { error: participantsError } = await supabase.from('match_participants').insert(participants);
-      if (participantsError) {
-        await supabase.from('matches').delete().eq('id', match.id);
-        throw participantsError;
-      }
-      void authenticatedFetch('/api/notifications/match-completed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matchId: match.id }),
-      });
-
-      const guestIds = selectedParticipantKeys
-        .map((key) => parseParticipantKey(key))
-        .filter((parsed) => parsed?.type === 'guest')
-        .map((parsed) => parsed!.id);
-
-      if (guestIds.length > 0) {
-        await supabase
-          .from('arena_guests')
-          .update({ last_played_at: new Date().toISOString() })
-          .in('id', guestIds);
-        await reloadGuests();
-      }
+      if (!job.active()) return;
+      await createWriter.save(job, input);
+      if (!job.active()) return;
 
       toast({
         title: t({ it: 'Partita registrata!', en: 'Battle recorded!' }),
@@ -794,12 +769,16 @@ export default function TablePage() {
           ? t({ it: 'Esito registrato: patta', en: 'Result logged: draw' })
           : t({ it: 'La vittoria è stata salvata', en: 'Victory has been logged' }),
       });
-      resetMatchForm();
-      refreshMatches();
+      setShowMatchModal(false);
+      setSelectedParticipantKeys([]); setParticipantDecks({}); setParticipantDeckSearches({});
+      setHiddenParticipantDeckLists({}); setWinnerKey(''); setMatchIsDraw(false);
+      setMatchWinCondition('other'); setMatchNotes(''); setMatchPlayedAt(toMatchDateValue());
+      await Promise.allSettled([refreshMatches(), reloadGuests()]);
     } catch (error: unknown) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : t({ it: 'Impossibile salvare la partita', en: 'Failed to save match' }), variant: 'destructive' });
+      if (job.active()) toast({ title: t({ it: 'Errore', en: 'Error' }), description: getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en'), variant: 'destructive' });
     } finally {
-      setSavingMatch(false);
+      if (job.active()) setSavingMatch(previous => job.active() ? false : previous);
+      job.finish();
     }
   };
 
@@ -1159,58 +1138,29 @@ export default function TablePage() {
       return;
     }
 
+    if (!user) return;
+    const job = editWriter.begin('save'); if (!job) return;
     setSavingEditMatch(true);
     try {
-      const winnerParsed = editMatchIsDraw ? null : parseParticipantKey(editMatchWinnerKey);
-      const { data: updatedMatch, error: matchError } = await supabase
-        .from('matches')
-        .update({
-          is_draw: editMatchIsDraw,
-          winner_id: !editMatchIsDraw && winnerParsed?.type === 'user' ? winnerParsed.id : null,
-          winner_guest_id: !editMatchIsDraw && winnerParsed?.type === 'guest' ? winnerParsed.id : null,
-          notes: editMatchNotes || null,
-          played_at: playedAtIso,
-          win_condition: editMatchIsDraw ? null : editMatchWinCondition,
-        })
-        .eq('id', editingMatch.id)
-        .select('id')
-        .maybeSingle();
-      if (matchError) throw matchError;
-      if (!updatedMatch) throw new Error(t({ it: 'Partita non aggiornata: verifica i permessi sull’arena.', en: 'Match was not updated: check arena permissions.' }));
-
-      for (const { participant: p, selectedKey } of assignments) {
-        const parsedPlayer = selectedKey ? parseParticipantKey(selectedKey) : null;
-        const selectedPlayer = editMatchPlayerOptions.find((option) => option.key === selectedKey);
-        if (!parsedPlayer || !selectedPlayer) throw new Error(t({ it: 'Seleziona un giocatore valido.', en: 'Select a valid player.' }));
-        const deckId = editMatchPlayerDecks[p.id] || null;
-        const isGuest = parsedPlayer.type === 'guest';
-
-        const { data: updatedParticipant, error: pError } = await supabase
-          .from('match_participants')
-          .update({
-            user_id: isGuest ? null : parsedPlayer.id,
-            guest_id: isGuest ? parsedPlayer.id : null,
-            participant_name_snapshot: selectedPlayer.label,
-            deck_id: isGuest ? null : deckId,
-            guest_deck_id: isGuest ? deckId : null,
-            is_winner: !editMatchIsDraw && selectedKey === editMatchWinnerKey,
-          })
-          .eq('id', p.id)
-          .select('id')
-          .maybeSingle();
-        if (pError) throw pError;
-        if (!updatedParticipant) throw new Error(t({ it: 'Giocatore non aggiornato: verifica i permessi sull’arena.', en: 'Player was not updated: check arena permissions.' }));
-      }
-
+      const players = assignments.map(({ participant, selectedKey }) => {
+        const selectedPlayer = editMatchPlayerOptions.find(option => option.key === selectedKey);
+        if (!selectedKey || !selectedPlayer) throw new Error('MATCH_PARTICIPANT_INVALID');
+        return { id: participant.id, key: selectedKey, deckId: editMatchPlayerDecks[participant.id] || null,
+          snapshotName: selectedPlayer.label };
+      });
+      await editWriter.save(job, { mode: 'edit', isDraw: editMatchIsDraw, winnerKey: editMatchWinnerKey || null,
+        notes: editMatchNotes, playedAt: playedAtIso, winCondition: editMatchWinCondition, players }, editingMatch.id);
+      if (!job.active()) return;
       toast({ title: t({ it: 'Partita aggiornata!', en: 'Battle updated!' }) });
       setEditingMatch(null);
       setEditMatchDeckSearches({});
       setHiddenEditMatchDeckLists({});
-      refreshMatches();
+      await Promise.allSettled([refreshMatches()]);
     } catch (error: unknown) {
-      toast({ title: t({ it: 'Errore', en: 'Error' }), description: error instanceof Error ? error.message : t({ it: 'Impossibile aggiornare la partita', en: 'Failed to update match' }), variant: 'destructive' });
+      if (job.active()) toast({ title: t({ it: 'Errore', en: 'Error' }), description: getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en'), variant: 'destructive' });
     } finally {
-      setSavingEditMatch(false);
+      if (job.active()) setSavingEditMatch(previous => job.active() ? false : previous);
+      job.finish();
     }
   };
 

@@ -1,6 +1,5 @@
 import {useArenaHistory} from '@/hooks/use-arena-history';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { parseParticipantKey } from '@/lib/participant-keys';
 import type { ArenaGuest } from '@/lib/arena-participants';
 import {
   fetchArenaGroup,
@@ -16,7 +15,7 @@ import { addDeckToGuest, createGuestWithDeck } from '@/lib/guest-arena';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { supabase } from '@/lib/supabase';
 import { deleteArenaMatch } from '@/lib/arena-match-write';
-import { apiPost } from '@/lib/api';
+import { useArenaMatchWrite } from '@/hooks/use-arena-match-write';
 import type { ArenaDetail, ArenaMatch, ArenaProfile, MemberDeck } from '@/lib/types/arena';
 import { subscribeToArenaCatalog } from '@/lib/arena-catalog-realtime';
 import {
@@ -203,6 +202,8 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     }, { scopeKey: userId });
   }, [groupId, loadMemberDecks, refresh, userId,isCurrent]);
 
+  const writeMatch = useArenaMatchWrite(groupId, userId);
+
   const playerStats = useMemo(() => calculatePlayerStats(matches), [matches]);
 
   const createMatch = useCallback(async (input: {
@@ -213,71 +214,23 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     matchPlayedAtIso: string;
     matchNotes: string;
     winCondition: NonNullable<import('@/lib/types/arena').ArenaMatch['win_condition']>;
+    signal?: AbortSignal;
+    requestScope?: unknown;
   }) => {
     if (!groupId || !userId) {
       throw new Error('Missing arena context');
     }
 
-    const winnerParsed = !input.isDraw && input.winnerKey
-      ? parseParticipantKey(input.winnerKey)
-      : null;
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .insert({
-        group_id: groupId,
-        is_draw: input.isDraw,
-        winner_id: !input.isDraw && winnerParsed?.type === 'user' ? winnerParsed.id : null,
-        winner_guest_id: !input.isDraw && winnerParsed?.type === 'guest' ? winnerParsed.id : null,
-        created_by: userId,
-        notes: input.matchNotes || null,
-        played_at: input.matchPlayedAtIso,
-        win_condition: input.isDraw ? null : input.winCondition,
-      })
-      .select()
-      .single();
+    await writeMatch({ mode: 'create', isDraw: input.isDraw, winnerKey: input.winnerKey,
+      notes: input.matchNotes, playedAt: input.matchPlayedAtIso, winCondition: input.winCondition,
+      players: input.selectedParticipantKeys.map(key => ({ key, deckId: input.participantDecks[key] || null })) }, undefined, input.signal, input.requestScope);
+    const hasGuests = input.selectedParticipantKeys.some(key => key.startsWith('guest:'));
+    if (!isCurrent()) return;
 
-    if (matchError) throw matchError;
-
-    const participants = input.selectedParticipantKeys.map((participantKey) => {
-      const parsed = parseParticipantKey(participantKey);
-      const deckId = input.participantDecks[participantKey] || null;
-      const isGuest = parsed?.type === 'guest';
-
-      return {
-        match_id: match.id,
-        user_id: isGuest ? null : parsed?.id,
-        guest_id: isGuest ? parsed?.id : null,
-        deck_id: isGuest ? null : deckId,
-        guest_deck_id: isGuest ? deckId : null,
-        is_winner: !input.isDraw && participantKey === input.winnerKey,
-      };
-    });
-
-    const { error: participantsError } = await supabase.from('match_participants').insert(participants);
-    if (participantsError) {
-      await supabase.from('matches').delete().eq('id', match.id);
-      throw participantsError;
-    }
-    void apiPost('/api/notifications/match-completed', { matchId: match.id });
-
-    const guestIds = input.selectedParticipantKeys
-      .map((key) => parseParticipantKey(key))
-      .filter((parsed) => parsed?.type === 'guest')
-      .map((parsed) => parsed!.id);
-
-    if (guestIds.length > 0) {
-      await supabase
-        .from('arena_guests')
-        .update({ last_played_at: new Date().toISOString() })
-        .in('id', guestIds);
-    }
-
-    await refreshMatches();
-    if (guestIds.length > 0) {
-      const guestData = await fetchArenaGuests(supabase, groupId);
-      if(isCurrent())setGuests(guestData);
-    }
-  }, [groupId, refreshMatches, userId,isCurrent]);
+    await Promise.allSettled([refreshMatches(), ...(hasGuests ? [fetchArenaGuests(supabase, groupId).then(guestData => {
+      if (isCurrent()) setGuests(guestData);
+    })] : [])]);
+  }, [groupId, refreshMatches, userId, isCurrent, writeMatch]);
 
   const updateGroup = useCallback(async (name: string, description: string, isPublic?: boolean) => {
     if (!groupId) return;
@@ -313,6 +266,7 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     matchNotes: string;
     winCondition: import('@/lib/types/arena').ArenaMatch['win_condition'];
     isArenaManager: boolean;
+    signal?: AbortSignal;
     participants: Array<{
       id: string;
       participantKey: string | null;
@@ -323,63 +277,17 @@ export function useArena(groupId: string | undefined, userId: string | undefined
     if (input.participants.some((participant) => participant.replacementKey) && !input.isArenaManager) {
       throw new Error('Only the arena manager can replace match participants');
     }
-    const winnerParsed = !input.isDraw && input.winnerKey
-      ? parseParticipantKey(input.winnerKey)
-      : null;
-    const { error: matchError } = await supabase
-      .from('matches')
-      .update({
-        is_draw: input.isDraw,
-        winner_id: !input.isDraw && winnerParsed?.type === 'user' ? winnerParsed.id : null,
-        winner_guest_id: !input.isDraw && winnerParsed?.type === 'guest' ? winnerParsed.id : null,
-        notes: input.matchNotes || null,
-        played_at: input.matchPlayedAtIso,
-        win_condition: input.isDraw ? null : input.winCondition,
-      })
-      .eq('id', input.matchId);
+    const winnerKey = input.participants.find(participant => participant.participantKey === input.winnerKey)?.replacementKey || input.winnerKey;
+    await writeMatch({ mode: 'edit', isDraw: input.isDraw, winnerKey, notes: input.matchNotes,
+      playedAt: input.matchPlayedAtIso, winCondition: input.winCondition ?? null,
+      players: input.participants.map(participant => {
+        const key = participant.replacementKey || participant.participantKey;
+        return { id: participant.id, key, deckId: key ? input.participantDecks[key] || null : null };
+      }) }, input.matchId, input.signal);
+    if (!isCurrent()) return;
 
-    if (matchError) throw matchError;
-
-    for (const participant of input.participants) {
-      const replacement = participant.replacementKey
-        ? parseParticipantKey(participant.replacementKey)
-        : null;
-      const participantKey = participant.replacementKey || participant.participantKey;
-      const isGuest = replacement ? replacement.type === 'guest' : participant.isGuest;
-      const deckId = participantKey
-        ? input.participantDecks[participantKey] || null
-        : null;
-
-      const { error: participantError } = await supabase
-        .from('match_participants')
-        .update({
-          ...(participant.replacementKey ? {
-            user_id: replacement?.type === 'user' ? replacement.id : null,
-            guest_id: replacement?.type === 'guest' ? replacement.id : null,
-          } : {}),
-          deck_id: isGuest ? null : deckId,
-          guest_deck_id: isGuest ? deckId : null,
-          is_winner: !input.isDraw && participantKey === input.winnerKey,
-        })
-        .eq('id', participant.id);
-
-      if (participantError) throw participantError;
-    }
-
-    if (input.participants.some((participant) => participant.replacementKey)) {
-      const replacementWinner = input.participants.find((participant) => participant.participantKey === input.winnerKey && participant.replacementKey);
-      if (replacementWinner) {
-        const parsed = parseParticipantKey(replacementWinner.replacementKey!);
-        const { error: winnerError } = await supabase.from('matches').update({
-          winner_id: parsed?.type === 'user' ? parsed.id : null,
-          winner_guest_id: parsed?.type === 'guest' ? parsed.id : null,
-        }).eq('id', input.matchId);
-        if (winnerError) throw winnerError;
-      }
-    }
-
-    await refreshMatches();
-  }, [refreshMatches]);
+    await Promise.allSettled([refreshMatches()]);
+  }, [refreshMatches, isCurrent, writeMatch]);
 
   const kickMember = useCallback(async (memberId: string) => {
     if (!groupId) return;

@@ -28,7 +28,6 @@ const authenticatedFetchClients = [
   'hooks/use-profile-deck-link.ts',
   'hooks/use-profile-metadata-enrichment.ts',
   'lib/profile-commander.ts',
-  'app/table/[id]/page.tsx',
   'lib/deck-color-sync.ts',
   'components/deck/edhrec-badge.tsx',
   'components/arena/guest-commander-picker.tsx',
@@ -36,6 +35,15 @@ const authenticatedFetchClients = [
 ];
 
 describe('protected routes', () => {
+  it('saves manual arena matches through the actor-bound atomic command, without duplicate notification calls', () => {
+    const page = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'utf8');
+    const owner = readFileSync(join(root, 'hooks/use-arena-match-write.ts'), 'utf8');
+    expect(page).not.toMatch(/authenticatedFetch|\/api\/notifications\/match-completed/);
+    expect(page).toContain('createWriter.save(job, input)');
+    expect(page).toContain('editWriter.save(job,');
+    expect(owner).toContain('actorId: userId');
+    expect(owner).toContain('job.signal');
+  });
   it('requires auth on sensitive API routes', () => {
     for (const routePath of protectedRoutes) {
       const source = readFileSync(join(root, routePath), 'utf8');

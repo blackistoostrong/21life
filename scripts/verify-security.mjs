@@ -53,7 +53,6 @@ const clientFiles = [
   'hooks/use-profile-deck-link.ts',
   'hooks/use-profile-metadata-enrichment.ts',
   'lib/profile-commander.ts',
-  'app/table/[id]/page.tsx',
   'lib/deck-color-sync.ts',
   'components/deck/edhrec-badge.tsx',
   'components/arena/guest-commander-picker.tsx',
@@ -65,6 +64,13 @@ for (const filePath of clientFiles) {
 }
 
 const profileComposition = readFileSync(join(root, 'app/profile/page.tsx'), 'utf8');
+const arenaComposition = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'utf8');
+const matchWriteOwner = readFileSync(join(root, 'hooks/use-arena-match-write.ts'), 'utf8');
+assert.doesNotMatch(arenaComposition, /authenticatedFetch|\/api\/notifications\/match-completed/, 'Manual match notifications must come from the atomic database transaction');
+assert.match(arenaComposition, /createWriter\.save\(job, input\)/, 'Create must use the scoped atomic match owner');
+assert.match(arenaComposition, /editWriter\.save\(job,/, 'Edit must use the scoped atomic match owner');
+assert.match(matchWriteOwner, /actorId: userId/, 'Atomic match writes must bind the captured actor');
+assert.match(matchWriteOwner, /job\.signal/, 'Atomic match writes must use context cancellation');
 assert.doesNotMatch(profileComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch)/, 'Profile route must delegate private transports to feature owners');
 assert.doesNotMatch(profileComposition, /\b(?:fetch|authenticatedFetch)\s*\(/, 'Profile route must not issue network requests directly');
 

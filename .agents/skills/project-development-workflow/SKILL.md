@@ -98,4 +98,6 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Persistent checklist
 
+Manual arena match writes: `packages/domain/arena-match-write.ts` owns payload mapping and failure copy; `packages/data/arena-match-write.ts` owns the actor-bound atomic RPC and deadline/ACK contract. Web/native `lib/arena-match-write.ts` supply local SDK adapters. Web `hooks/use-arena-match-write.ts` owns leases/request identity; native counterpart owns persistence and `use-arena-match-form-command.ts` owns form cancellation/feedback. Notifications come from existing transactional triggers, with the legacy HTTP endpoint retained for older clients. Draft/presentation extraction remains pending.
+
 Use `.agents/PROJECT_CHECKLIST.md`. Keep it concise and never create a competing task ledger.

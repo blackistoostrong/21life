@@ -874,5 +874,17 @@
     "branches": 70,
     "functions": 100,
     "statements": 94.73
+  },
+  "packages/domain/arena-match-write.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/data/arena-match-write.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
   }
 }

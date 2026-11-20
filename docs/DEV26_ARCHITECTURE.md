@@ -15,6 +15,8 @@ Profilo7b00ea55: quality772+3skip/71script/142floor, clean56route build/3.22MiB 
 
 ## Confini già introdotti
 
+Manual match writes: `packages/domain/arena-match-write.ts` builds the common typed header/participant snapshot and localized failure copy. `packages/data/arena-match-write.ts` owns one actor-bound RPC, a 15-second deadline, cancellation and exact UUID acknowledgement. Each platform supplies its own installed SDK adapter. `hooks/use-arena-match-write.ts` owns web request identity and command leases; `expo/hooks/use-arena-match-write.ts` owns native transactions, and `use-arena-match-form-command.ts` owns native form cancellation and feedback. Create/edit no longer issue separate header/participant writes or duplicate notification HTTP calls. Existing server triggers own notifications and guest timestamps transactionally. Form drafts/presentation extraction and broader native catalog lifecycle remain separate pending work; this checkpoint does not close point6.
+
 `packages/domain` contiene un'unica implementazione di win rate, identità partecipanti e visibilità ranking. Web e mobile mantengono adapter ai percorsi precedenti. Nessuna dipendenza React/Next/Expo/Supabase/storage nel dominio. Il controllo AST `verify-domain-boundaries.mjs` rifiuta import esterni, accesso a globali di piattaforma e cicli; entrambi i quality lo invocano.
 
 Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie alle implementazioni condivise. Il mobile raccoglie esplicitamente coverage dei file esterni tramite percorso assoluto e allowExternal; senza questa configurazione Vitest ometteva i file e il ratchet ha correttamente fallito. Non sono state abbassate soglie.
