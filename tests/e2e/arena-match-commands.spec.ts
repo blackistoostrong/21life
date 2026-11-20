@@ -178,24 +178,40 @@ test('arena match create reuses its request UUID after a committed response is l
   test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');
   const fixture = await seedMatch();
   const requestIds: string[] = [];
+  let forwarded = 0, replied = 0;
   await page.route('**/rest/v1/rpc/save_arena_match_v1', async route => {
     requestIds.push(route.request().postDataJSON().p_match_id);
     const response = await route.fetch();
+    forwarded++;
     expect(response.ok()).toBe(true);
     if (requestIds.length === 1) await route.fulfill({ status: 503, json: { message: 'Synthetic lost acknowledgement after commit' } });
     else await route.fulfill({ response });
+    replied++;
   });
   try {
-    await (await openCreate(page)).click();
-    await expect(page.getByText('Error', { exact: true })).toBeVisible();
+    const saveInitial = await openCreate(page);
+    const failedReply = page.waitForResponse(response => response.url().endsWith('/rest/v1/rpc/save_arena_match_v1') && response.status() === 503);
+    await Promise.all([failedReply, saveInitial.click()]);
+    // The existing one-toast queue can replace command feedback with the real
+    // match-completed notification. Assert durable UI/DB state instead.
     const save = page.getByRole('dialog').getByRole('button', { name: 'Record Battle', exact: true });
-    await expect(save).toBeEnabled(); await save.click();
-    await expect(page.getByText('Battle recorded!', { exact: true })).toBeVisible();
+    await expect(save).toBeEnabled();
+    expect(requestIds).toHaveLength(1);
+    const committed = await fixture.client.from('matches').select('id').eq('id', requestIds[0]).eq('group_id', fixture.groupId);
+    expect(committed.error).toBeNull(); expect(committed.data).toHaveLength(1);
+    const successfulReply = page.waitForResponse(response => response.url().endsWith('/rest/v1/rpc/save_arena_match_v1') && response.status() === 200);
+    await Promise.all([successfulReply, save.click()]);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(requestIds).toHaveLength(2); expect(requestIds[1]).toBe(requestIds[0]);
     const participants = await fixture.client.from('match_participants').select('id').eq('match_id', requestIds[0]);
     expect(participants.error).toBeNull(); expect(participants.data).toHaveLength(2);
     const parent = await fixture.client.from('matches').select('id').eq('id', requestIds[0]).eq('group_id', fixture.groupId);
     expect(parent.error).toBeNull(); expect(parent.data).toHaveLength(1);
+  } catch (error) {
+    console.log('Lost match acknowledgement diagnostic', JSON.stringify({ requests: requestIds.length, forwarded, replied,
+      dialogVisible: await page.getByRole('dialog').isVisible().catch(() => false),
+      errorCount: await page.getByText('Error', { exact: true }).count().catch(() => -1) }));
+    throw error;
   } finally {
     if (requestIds.length) {
       const removed = await fixture.client.from('matches').delete().in('id', Array.from(new Set(requestIds))).eq('group_id', fixture.groupId);

@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1821|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; creazione164/dialogo224 ed editor203/dialogo342 verificati; dettagli49/dialogo114 in verifica, presentazione restante aperta |
+| Tavolo web |1821|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; creazione164/dialogo224, editor203/dialogo342 e dettagli49/dialogo114 verificati; partita attiva/presentazione restante aperte |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -26,6 +26,8 @@ Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie all
 ## Proprietari attuali e destinazione
 
 Historical details: `hooks/use-arena-match-details.ts` owns the private opening snapshot, optional legacy request, cancellation/deadline and guarded response/loading state. Its epoch binds actor/group/admin; each opening has a serial, so closure/reopening and A→B→A cannot revive previous state. `fetchLiveGameByMatchId` accepts a captured group and SDK AbortSignal while preserving existing unscoped-call compatibility. The owner adds a15-second deadline. Current tracking>=3 uses the match snapshot without another lookup; legacy failures retain the existing historical fallback. `arena-match-details-dialog.tsx` presents the model and delegates only the image container. A real pre-fix browser case proved Close left one request active; final browser verification remains pending at this checkpoint.
+
+Details393c650e verified: quality851+3skip/71scripts/148coverage floors, clean56route build/3.24MiB and42/42 desktop/mobile match cases PASS, including12detail lifecycle cases; Dev cleanup verified. The committed-response-loss test now asserts HTTP, persistent data, retry availability and form closure: the existing single-toast queue can replace transient command feedback with the transactional match-completed notification. Diagnostics confirmed two completed replies and a closed form while that notification was visible; no persistence defect was inferred from a missing toast. No application patch, timeout increase or click retry was used to hide that test assumption.
 
 `hooks/use-arena-match-editor.ts` owns the historical match snapshot, winner/draw/date/notes, participant identity/deck/search state, historical-user options, owner-only replacement validation, opening and atomic save. `lib/types/arena-match.ts` supplies the unchanged web view contract. `components/arena/arena-match-edit-dialog.tsx` presents that model and delegates only occasional-deck/image containers. The route composes the editor and supplies shared catalog/enrichment/invalidation callbacks. Seventeen copied statements, view types and full JSX were compared againstef85de25, with only actor/type spelling normalized. A positive baseline confirms notes can be saved without inventing unknown dates or changing participant identities; the fixture uses the existing all-time mode because a current-season report excludes undated matches.
 
