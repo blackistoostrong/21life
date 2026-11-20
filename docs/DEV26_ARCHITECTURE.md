@@ -7,7 +7,7 @@ Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring 
 | Target | Righe non vuote | Stato |
 |---|---:|---|
 | Profilo web |529|I/O privato delegato agli owner; tranche comandi verificata80/80 browser |
-| Tavolo web |1936|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; creazione164/dialogo224 verificati66/66 browser; editor203/dialogo342 in verifica, presentazione restante aperta |
+| Tavolo web |1936|Letture/subscription168 + enrichment156 + membership135 + guest152 + delete42 verificati; creazione164/dialogo224 verificati66/66 browser; editor203/dialogo342 verificati34/34 browser; presentazione restante aperta |
 | Live web |1191|Lifecycle/sync e finalizzazione ancora da completare |
 | Live native |2227|Ownership sessione/outbox/setup/finalizzazione ancora da completare |
 
@@ -26,6 +26,8 @@ Coverage: mantenute le soglie dei vecchi adapter e aggiunte le stesse soglie all
 ## Proprietari attuali e destinazione
 
 `hooks/use-arena-match-editor.ts` owns the historical match snapshot, winner/draw/date/notes, participant identity/deck/search state, historical-user options, owner-only replacement validation, opening and atomic save. `lib/types/arena-match.ts` supplies the unchanged web view contract. `components/arena/arena-match-edit-dialog.tsx` presents that model and delegates only occasional-deck/image containers. The route composes the editor and supplies shared catalog/enrichment/invalidation callbacks. Seventeen copied statements, view types and full JSX were compared againstef85de25, with only actor/type spelling normalized. A positive baseline confirms notes can be saved without inventing unknown dates or changing participant identities; the fixture uses the existing all-time mode because a current-season report excludes undated matches.
+
+Editorbb27c2b0 verified: quality848+3skip/71scripts/148coverage floors, clean56route build/3.24MiB and34/34 desktop/mobile match/guest cases PASS with verified Dev cleanup. Positive unknown-date edits retain participant identities; rollback, context/form cancellation, retry identity and guest recovery remain green. No native executable change or visual/physical-device certification.
 
 `hooks/use-arena-match-creation.ts` owns the creation draft, participant selection/default deck, validation, opening/reset and coordination with the scoped atomic writer. It receives catalog lookup/enrichment/invalidation callbacks and does not own catalog reads or subscriptions. `components/arena/arena-match-create-dialog.tsx` renders that typed model; only the existing occasional-deck and image containers own their own I/O. The route supplies shared catalog data, composes the dialog and connects guest/occasional-deck results. The edit draft remains a separate pending extraction. Fifteen statements and the creation JSX were compared against439ef34f; only actor/type names were normalized, with no new UI behavior.
 
