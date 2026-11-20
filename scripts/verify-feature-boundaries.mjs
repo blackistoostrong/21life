@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-arena-match-details.ts',
     'hooks/use-arena-match-editor.ts',
     'hooks/use-arena-match-creation.ts',
     'hooks/use-arena-match-write.ts',
@@ -43,6 +44,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/arena/arena-match-details-dialog.tsx',
     'components/arena/arena-match-edit-dialog.tsx',
     'components/arena/arena-match-create-dialog.tsx',
     'components/arena/arena-guest-dialog.tsx',
@@ -66,6 +68,7 @@ export const featureOwners = {
   // Existing image container owns its own cache/network lifecycle. Composition
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
+    'components/arena/arena-match-details-dialog.tsx': ['components/deck-image.tsx'],
     'components/arena/arena-match-edit-dialog.tsx': ['components/arena/occasional-deck-form.tsx', 'components/deck-image.tsx'],
     'components/arena/arena-match-create-dialog.tsx': ['components/arena/occasional-deck-form.tsx', 'components/deck-image.tsx'],
     'components/arena/arena-guest-dialog.tsx': ['components/arena/guest-commander-picker.tsx'],
