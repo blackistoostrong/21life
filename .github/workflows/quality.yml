@@ -102,7 +102,7 @@ jobs:
         env:
           E2E_LIVE_GAME_FLOW: "1"
       - name: Verify complete analytics errors, retries and request cleanup
-        run: npx playwright test tests/e2e/analytics-v2.spec.ts --workers=1
+        run: node scripts/run-ci-analytics-e2e.mjs
         env:
           E2E_ANALYTICS_FLOW: "1"
 
