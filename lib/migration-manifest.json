@@ -484,6 +484,56 @@
       "version": "20261114110000",
       "name": "20261114110000_recommend_v9_2_1_runtime_update.sql",
       "checksum": "3a33d890210448d253c9104d41297c1566ac56d4b3d850298c336e9ef2f49a4d"
+    },
+    {
+      "version": "20261116094824",
+      "name": "20261116094824_admin_user_directory.sql",
+      "checksum": "548158b55a20acf8a726da89b0186121a11da2e7696e369ce3501569b8e85f7c"
+    },
+    {
+      "version": "20261116135644",
+      "name": "20261116135644_analytics_dashboard_v2.sql",
+      "checksum": "ad669ddcc30e98287d109debb1e50a166a74396ef8ee767f4aec8062e937b7fc"
+    },
+    {
+      "version": "20261116150922",
+      "name": "20261116150922_profile_catalog_metrics_v2.sql",
+      "checksum": "34ad64ed1a1c154dbcb72b5d0b5076a3d3d10e96ab7e5e40fb1f442d3ab9df15"
+    },
+    {
+      "version": "20261117075535",
+      "name": "20261117075535_arena_history_pages_v2.sql",
+      "checksum": "16bb98bb68da141dc41f351a1f645b7c492bea89fea1e7c6f3cb30aeca76e3df"
+    },
+    {
+      "version": "20261117082649",
+      "name": "20261117082649_scope_admin_row_security_setting.sql",
+      "checksum": "d5cff62fe23cd65ffc8d24347574128dcd848aa8adbe7a57df39b0d240d5b52e"
+    },
+    {
+      "version": "20261117134213",
+      "name": "20261117134213_arena_analytics_bundle_v2.sql",
+      "checksum": "953c89f6c38c61fd219bc93a08e63bcf68eb2130d15c7c44fc0c3757f9dc1288"
+    },
+    {
+      "version": "20261119181403",
+      "name": "20261119181403_grant_arena_catalog_realtime_select.sql",
+      "checksum": "f39f3491bacb7bdb99665dfd8b8f05697015ec57955d934a3ff38413dbe333b4"
+    },
+    {
+      "version": "20261119193048",
+      "name": "20261119193048_enforce_arena_guest_deck_group_scope.sql",
+      "checksum": "e3e64f6819b3259cccb05be235f6977ebea2eb6a14c24e8b3dabdc37ac959a45"
+    },
+    {
+      "version": "20261120074242",
+      "name": "20261120074242_atomic_arena_match_writes.sql",
+      "checksum": "d488b8b44468d5772060645efd49e806f4838adf196ac29cf16495f0edc9f009"
+    },
+    {
+      "version": "20261120080129",
+      "name": "20261120080129_arena_match_conflict_http_status.sql",
+      "checksum": "cfdf413b88d951435af6939fa5106e89ebc2be3efcda0945b0eb0186bec04e46"
     }
   ]
 }

@@ -292,6 +292,11 @@ export function buildArenaAnalyticsView(
   };
 }
 
+export function getArenaAnalyticsSince(dateFilter:ArenaDateFilter,seasonStart?:string|null):string|null {
+  const since=laterIsoDate(getAnalyticsSince(dateFilter),seasonStart??null);
+  return since?new Date(since).toISOString():null;
+}
+
 export async function fetchArenaAnalytics(
   client: SupabaseClient,
   groupId: string,
@@ -300,7 +305,7 @@ export async function fetchArenaAnalytics(
 ): Promise<ArenaAnalyticsPayload> {
   const { data, error } = await client.rpc('get_arena_analytics_bundle', {
     p_group_id: groupId,
-    p_since: laterIsoDate(getAnalyticsSince(dateFilter), seasonStart ?? null),
+    p_since: getArenaAnalyticsSince(dateFilter, seasonStart),
     p_until: null,
   });
   if (error) throw error;

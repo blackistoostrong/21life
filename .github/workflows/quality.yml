@@ -40,6 +40,17 @@ jobs:
           supabase db lint --local --schema public --level error --fail-on error
       - name: Verify arena Archidekt synchronization permissions and atomicity
         run: docker exec -i supabase_db_phyrexian-arena psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < scripts/qa/arena-archidekt-sync.sql
+      - name: Verify admin directory completeness, filters and permissions
+        run: docker exec -i supabase_db_phyrexian-arena psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < scripts/qa/admin-user-directory.sql
+      - name: Verify complete analytics, roles and serialized client contract
+        run: |
+          node scripts/profile-catalog-qa.mjs | docker exec -i supabase_db_phyrexian-arena psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d postgres > "$RUNNER_TEMP/analytics-qa.log"
+          node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/analytics-payload.json"
+          node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/history-payload.json" history
+          echo "ANALYTICS_SQL_PAYLOAD_PATH=$RUNNER_TEMP/analytics-payload.json" >> "$GITHUB_ENV"
+          echo "HISTORY_SQL_PAYLOAD_PATH=$RUNNER_TEMP/history-payload.json" >> "$GITHUB_ENV"
+          node scripts/analytics-qa-payload.mjs "$RUNNER_TEMP/analytics-qa.log" "$RUNNER_TEMP/arena-bundle-payload.json" arena-bundle
+          echo "ARENA_BUNDLE_SQL_PAYLOAD_PATH=$RUNNER_TEMP/arena-bundle-payload.json" >> "$GITHUB_ENV"
       - name: Verify self-hosted migration atomicity against disposable CI database
         run: npm run test:selfhosted-db-runner
         env:
@@ -90,6 +101,10 @@ jobs:
         run: npx playwright test tests/e2e/live-game-complete-flow.spec.ts --project=desktop --workers=1
         env:
           E2E_LIVE_GAME_FLOW: "1"
+      - name: Verify complete analytics errors, retries and request cleanup
+        run: node scripts/run-ci-analytics-e2e.mjs
+        env:
+          E2E_ANALYTICS_FLOW: "1"
 
   expo:
     runs-on: ubuntu-latest
@@ -104,6 +119,9 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: expo/package-lock.json
+      - name: Install shared test toolchain
+        working-directory: .
+        run: npm ci
       - run: npm ci
       - run: npm run audit:production
       - run: npm audit --audit-level=critical

@@ -34,6 +34,7 @@ type DeckCardProps = {
   archiveLabel?: string;
   hideDetails?: boolean;
   hideDelete?: boolean;
+  metricsAvailable?: boolean;
 };
 
 function externalLinkTone(sourceType: string | null | undefined): 'violet' | 'blue' | 'purple' {
@@ -59,6 +60,7 @@ export const DeckCard = memo(function DeckCard({
   archiveLabel,
   hideDetails = false,
   hideDelete = false,
+  metricsAvailable = true,
 }: DeckCardProps) {
   const { copy } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -108,9 +110,9 @@ export const DeckCard = memo(function DeckCard({
         </View>
 
         <View style={styles.performanceRow}>
-          <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} language={language} />
+          {metricsAvailable ? <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} language={language} /> : null}
           <View style={styles.winRateStat}>
-            <Text style={styles.statValue}>{winRate?.winRate ?? 0}%</Text>
+            <Text style={styles.statValue}>{metricsAvailable ? `${winRate?.winRate ?? 0}%` : '—'}</Text>
             <Text style={styles.statLabel}>{copy('winRate')}</Text>
           </View>
         </View>

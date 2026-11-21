@@ -4,7 +4,7 @@ import {
   parseLiveGameState,
   type LiveGameEvent,
   type LiveGameRecord,
-} from '@/lib/live-game';
+} from '../../packages/domain/live-game';
 import {
   getParticipantDeckSnapshot,
   getParticipantDisplayName,

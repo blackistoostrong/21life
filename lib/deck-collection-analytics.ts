@@ -1,6 +1,6 @@
-import { expandDeckCommanderNames } from '@/lib/deck-color-sync';
+import { getDeckCommanderNames } from '@/lib/deck-commander-names';
+export { getDeckCommanderNames } from '@/lib/deck-commander-names';
 import {
-  getCommanderOptions,
   getDeckDisplayColors,
   type DeckColorRecord,
 } from '@/lib/deck-metadata';
@@ -69,18 +69,6 @@ function normalizeSourceType(sourceType: string | null | undefined) {
     return normalized;
   }
   return 'other';
-}
-
-export function getDeckCommanderNames(deck: Pick<DeckCollectionSnapshot, 'commander' | 'commander_options'>) {
-  const optionNames = getCommanderOptions(deck)
-    .map((option) => option.name.trim())
-    .filter(Boolean);
-
-  if (optionNames.length > 0) {
-    return Array.from(new Set(optionNames));
-  }
-
-  return expandDeckCommanderNames(deck.commander);
 }
 
 export function buildDeckColorCombination(colors: string[]) {

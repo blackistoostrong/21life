@@ -18,8 +18,8 @@ export function MatchDetailsModal({ visible, match, liveGame, recapLoading, onCl
   const { width } = useWindowDimensions();
   if (!match) return null;
   const phoneLayout = width < 600;
-  const recapRecord = liveGame ?? (match.tracking_version != null
-    ? buildHistoricalLiveGameRecord(match)
+  const recapRecord = liveGame ?? (match.tracking_version != null && match.created_by && match.played_at
+    ? buildHistoricalLiveGameRecord({...match,created_by:match.created_by,played_at:match.played_at})
     : null);
   return <Modal visible={visible} onClose={onClose} presentation="dialog" maxWidth={620}>
     <ModalHeader title={labels.title} subtitle={match.duration_seconds != null ? `${labels.duration}: ${formatGameDuration(match.duration_seconds)}` : undefined} icon="stats-chart-outline" onClose={onClose} />

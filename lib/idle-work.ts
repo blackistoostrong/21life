@@ -7,20 +7,30 @@ export function runWhenIdle(
   task: () => void | Promise<void>,
   options: IdleWorkOptions = {},
 ) {
-  if (typeof window === 'undefined') {
+  let active = true;
+  const run = () => {
+    if (!active) return;
+    active = false;
     void task();
-    return;
+  };
+  if (typeof window === 'undefined') {
+    run();
+    return () => {};
   }
 
   const timeoutMs = options.timeoutMs ?? 4000;
-  const run = () => {
-    void task();
-  };
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(run, { timeout: timeoutMs });
-    return;
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: timeoutMs });
+    return () => {
+      if (!active) return;
+      active = false;
+      window.cancelIdleCallback?.(id);
+    };
   }
 
-  globalThis.setTimeout(run, Math.min(timeoutMs, 1500));
+  const timer = globalThis.setTimeout(run, Math.min(timeoutMs, 1500));
+  return () => {
+    active = false;
+    globalThis.clearTimeout(timer);
+  };
 }

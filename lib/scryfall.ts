@@ -1,3 +1,4 @@
+import { fetchScryfall } from '@/packages/data/scryfall-transport';
 import { isScryfallError, resolveCommanderCmcFromCard } from '@/lib/commander-cmc';
 import { buildCommanderNameSearchClause } from '@/lib/commander-search-aliases';
 import { unstable_cache } from 'next/cache';
@@ -56,13 +57,6 @@ export interface CommanderArtOption {
   releasedAt: string | null;
 }
 
-const SCRYFALL_HEADERS = {
-  Accept: 'application/json',
-  'User-Agent': '21Life/9.0 (https://app.phyrexianarena.dpdns.org)',
-};
-
-const SCRYFALL_MAX_RETRIES = 2;
-const SCRYFALL_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const ART_OPTIONS_CACHE_MS = 365 * 24 * 60 * 60 * 1_000;
 const ART_OPTIONS_EMPTY_CACHE_MS = 60 * 60 * 1_000;
 const ART_OPTIONS_CACHE_LIMIT = 500;
@@ -116,23 +110,10 @@ function sanitizeCommanderQuery(query: string): string {
 }
 
 async function fetchScryfallJson<T>(url: string): Promise<T | null> {
-  for (let attempt = 0; attempt <= SCRYFALL_MAX_RETRIES; attempt += 1) {
-    const response = await fetch(url, { headers: SCRYFALL_HEADERS });
-    if (response.status === 404) return null;
-    if (response.ok) return response.json() as Promise<T>;
-
-    if (!SCRYFALL_RETRYABLE_STATUSES.has(response.status) || attempt === SCRYFALL_MAX_RETRIES) {
-      throw new Error(`Scryfall request failed (${response.status})`);
-    }
-
-    const retryAfterSeconds = Number(response.headers.get('retry-after'));
-    const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-      ? retryAfterSeconds * 1_000
-      : 250 * (2 ** attempt);
-    await new Promise((resolve) => setTimeout(resolve, retryDelay));
-  }
-
-  throw new Error('Scryfall request retry loop exhausted');
+  const response = await fetchScryfall(url);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Scryfall request failed (${response.status})`);
+  return response.json() as Promise<T>;
 }
 
 function isResolvedScryfallCard(card: ScryfallCard | null): card is ScryfallCard {
@@ -163,33 +144,33 @@ export async function fetchCardByName(name: string): Promise<ScryfallCard | null
 
 const fetchCommanderCardPersistent = unstable_cache(
   async (queryText: string) => {
-    try {
-      const named = await fetchCardByName(queryText);
-      if (named) return named;
+    const named = await fetchCardByName(queryText);
+    if (named) return named;
 
-      const commanderSearch = await fetchScryfallJson<ScryfallSearchResponse>(
-        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`is:commander name:"${queryText}"`)}&unique=cards`,
-      );
-      const commanderCard = commanderSearch?.data?.[0];
-      if (commanderCard) return commanderCard;
+    const commanderSearch = await fetchScryfallJson<ScryfallSearchResponse>(
+      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`is:commander name:"${queryText}"`)}&unique=cards`,
+    );
+    const commanderCard = commanderSearch?.data?.[0];
+    if (commanderCard) return commanderCard;
 
-      const broadSearch = await fetchScryfallJson<ScryfallSearchResponse>(
-        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(queryText)}&unique=cards`,
-      );
-      return broadSearch?.data?.[0] || null;
-    } catch (error) {
-      console.error('fetchCommanderCard error for', queryText, error);
-      return null;
-    }
+    const broadSearch = await fetchScryfallJson<ScryfallSearchResponse>(
+      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(queryText)}&unique=cards`,
+    );
+    return broadSearch?.data?.[0] || null;
   },
-  ['scryfall-commander-card-v7'],
+  ['scryfall-commander-card-v8'],
   { revalidate: 30 * 24 * 60 * 60 },
 );
 
 export async function fetchCommanderCard(commanderName: string): Promise<ScryfallCard | null> {
   const queryText = sanitizeCommanderQuery(commanderName);
   if (!queryText || queryText === 'Unknown Commander') return null;
-  return fetchCommanderCardPersistent(queryText);
+  try {
+    return await fetchCommanderCardPersistent(queryText);
+  } catch (error) {
+    console.error('fetchCommanderCard error for', queryText, error);
+    return null;
+  }
 }
 
 export async function fetchCommanderCmc(commanderName: string): Promise<number | null> {

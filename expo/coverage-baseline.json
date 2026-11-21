@@ -1,4 +1,16 @@
 {
+  "../packages/data/arena-match-delete.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/arena-match-write.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
   "lib/access-log.ts": {
     "lines": 0,
     "branches": 0,
@@ -600,6 +612,210 @@
     "statements": 0
   },
   "lib/life-feedback.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/win-rate.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/participant-keys.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/live-game-journal-writer.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/live-game-sync-presentation.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/live-game-sync-presentation.ts": {
+    "lines": 83.33,
+    "branches": 66,
+    "functions": 83.33,
+    "statements": 64.86
+  },
+  "lib/analytics-dashboard-query.ts": {
+    "lines": 88.88,
+    "branches": 66.66,
+    "functions": 80,
+    "statements": 76
+  },
+  "../packages/domain/analytics-dashboard-contract.ts": {
+    "lines": 89.06,
+    "branches": 70,
+    "functions": 90.62,
+    "statements": 80.24
+  },
+  "../packages/domain/analytics-dashboard.ts": {
+    "lines": 87.5,
+    "branches": 61.11,
+    "functions": 81.81,
+    "statements": 90
+  },
+  "../packages/domain/deck-ranking-visibility.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/profile-catalog-query.ts": {
+    "lines": 100,
+    "branches": 64.28,
+    "functions": 100,
+    "statements": 80
+  },
+  "../packages/domain/profile-catalog-metrics.ts": {
+    "lines": 87.5,
+    "branches": 75,
+    "functions": 100,
+    "statements": 82.35
+  },
+  "lib/profile-catalog-pages.ts": {
+    "lines": 95.12,
+    "branches": 81.15,
+    "functions": 80,
+    "statements": 80.32
+  },
+  "../packages/domain/arena-session.ts": {
+    "lines": 100,
+    "branches": 84,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/arena-history-query.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/arena-history-query.ts": {
+    "lines": 100,
+    "branches": 65.62,
+    "functions": 100,
+    "statements": 83.33
+  },
+  "../packages/data/request-deadline.ts": {
+    "lines": 100,
+    "branches": 91.66,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/arena-history.ts": {
+    "lines": 87.14,
+    "branches": 70.12,
+    "functions": 84.61,
+    "statements": 76.69
+  },
+  "../packages/domain/guest-directory.ts": {
+    "lines": 100,
+    "branches": 87.5,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/commander-names.ts": {
+    "lines": 100,
+    "statements": 100,
+    "functions": 100,
+    "branches": 100
+  },
+  "../packages/data/live-game-runtime.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/match-datetime-runtime.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/live-game-events.ts": {
+    "lines": 96.82,
+    "branches": 92.85,
+    "functions": 100,
+    "statements": 95.52
+  },
+  "../packages/domain/live-game-history.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/live-game-mutations.ts": {
+    "lines": 91.52,
+    "branches": 85.29,
+    "functions": 84.61,
+    "statements": 84.72
+  },
+  "../packages/domain/live-game-players.ts": {
+    "lines": 100,
+    "branches": 87.5,
+    "functions": 100,
+    "statements": 92.42
+  },
+  "../packages/domain/live-game-results.ts": {
+    "lines": 100,
+    "branches": 81.08,
+    "functions": 100,
+    "statements": 88.88
+  },
+  "../packages/domain/live-game-state.ts": {
+    "lines": 89.47,
+    "branches": 85.24,
+    "functions": 77.77,
+    "statements": 86.36
+  },
+  "../packages/domain/live-game-types.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/live-game.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/scryfall-transport.ts": {
+    "lines": 100,
+    "branches": 95,
+    "functions": 95,
+    "statements": 95
+  },
+  "../packages/data/arena-catalog-realtime.ts": {
+    "lines": 100,
+    "branches": 70,
+    "functions": 100,
+    "statements": 94.73
+  },
+  "../packages/domain/commander-presentation.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/arena-match-write.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/arena-match-write.ts": {
     "lines": 100,
     "branches": 100,
     "functions": 100,

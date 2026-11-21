@@ -1,3 +1,4 @@
+import { buildMatchRecord } from '@/lib/win-rate';
 import { CollapsiblePanel } from '@/components/ui/collapsible-panel';
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -60,6 +61,9 @@ export default function ProfileScreen() {
     winRates,
     performance,
     loading: decksLoading,
+    metricsLoading,
+    metricsError,
+    catalogError,
     refresh,
     deleteDeck,
     toggleDeckFavorite,
@@ -143,7 +147,8 @@ export default function ProfileScreen() {
     const games = entries.reduce((sum, item) => sum + item.gamesPlayed, 0);
     const wins = entries.reduce((sum, item) => sum + item.wins, 0);
     const favorite = getHighestMasteryDeck(decks, (deck) => performance[deck.id]);
-    return { games, winRate: games ? Math.round((wins / games) * 100) : 0, favorite };
+    const draws=entries.reduce((sum,item)=>sum+item.draws,0);
+    return { games, winRate: buildMatchRecord({gamesPlayed:games,wins,draws}).winRate, favorite };
   }, [decks, performance]);
 
   const handleRefresh = async () => {
@@ -214,6 +219,8 @@ export default function ProfileScreen() {
       <DeckCard
         deck={deck}
         winRate={winRates[deck.id]}
+        metricsAvailable={!metricsLoading && !metricsError}
+        hideDetails={metricsLoading || metricsError}
         language={language}
         openDeckLabel={copy('openDeck')}
         viewOnEdhrecLabel={copy('viewOnEdhrec')}
@@ -230,10 +237,11 @@ export default function ProfileScreen() {
         })}
       />
     </View>
-  ), [copy, handleDeleteDeck, handleRefreshDeck, language, openEditDeck, refreshingDeckIds, setDeckArchived, showToast, toggleDeckFavorite, winRates]);
+  ), [metricsLoading, metricsError, copy, handleDeleteDeck, handleRefreshDeck, language, openEditDeck, refreshingDeckIds, setDeckArchived, showToast, toggleDeckFavorite, winRates]);
 
   const listHeader = (
     <View style={styles.listHeader}>
+        {metricsError || catalogError ? <PhyrexianPanel><Text accessibilityRole="alert">{language==='it' ? 'Statistiche non disponibili. Riprova.' : 'Statistics unavailable. Please retry.'}</Text><Button label={language==='it' ? 'Riprova' : 'Retry'} onPress={()=>void refresh()} /></PhyrexianPanel> : null}
         <PhyrexianPanel style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <View style={styles.profileMeta}>
@@ -249,12 +257,12 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.snapshotRow}>
-            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Partite' : 'Matches'}</Text><Text style={styles.snapshotValue}>{personalSnapshot.games}</Text></View>
-            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>Win rate</Text><Text style={styles.snapshotValue}>{personalSnapshot.winRate}%</Text></View>
-            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Mazzi' : 'Decks'}</Text><Text style={styles.snapshotValue}>{activeDecks.length}</Text></View>
+            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Partite' : 'Matches'}</Text><Text style={styles.snapshotValue}>{metricsLoading || metricsError ? '—' : personalSnapshot.games}</Text></View>
+            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>Win rate</Text><Text style={styles.snapshotValue}>{metricsLoading || metricsError ? '—' : `${personalSnapshot.winRate}%`}</Text></View>
+            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Mazzi' : 'Decks'}</Text><Text style={styles.snapshotValue}>{catalogError ? '—' : activeDecks.length}</Text></View>
           </View>
-          <Button label={`${copy('archivedDecks')} (${decks.length - activeDecks.length})`} icon="archive-outline" variant="ghost" size="sm" onPress={() => router.push('/archived-decks')} />
-          {personalSnapshot.favorite ? <Text style={styles.favorite}>{language === 'it' ? 'Preferito' : 'Favorite'} · {personalSnapshot.favorite.name}</Text> : null}
+          <Button label={`${copy('archivedDecks')} (${catalogError ? '—' : decks.length - activeDecks.length})`} icon="archive-outline" variant="ghost" size="sm" onPress={() => router.push('/archived-decks')} />
+          {!metricsLoading && !metricsError && personalSnapshot.favorite ? <Text style={styles.favorite}>{language === 'it' ? 'Preferito' : 'Favorite'} · {personalSnapshot.favorite.name}</Text> : null}
         </PhyrexianPanel>
 
         {activeDecks.length > 0 ? (
@@ -361,7 +369,7 @@ export default function ProfileScreen() {
           />
         ) : null}
 
-      {filteredDecks.length === 0 ? (
+      {!catalogError && !decksLoading && filteredDecks.length === 0 ? (
         <PhyrexianPanel style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>{copy('noDecksTitle')}</Text>
           <Text style={styles.emptyBody}>{copy('noDecksBody')}</Text>
@@ -564,7 +572,7 @@ export default function ProfileScreen() {
       />
 
       <DeckPerformanceModal
-        visible={Boolean(detailsDeck)}
+        visible={Boolean(detailsDeck) && !metricsLoading && !metricsError}
         deck={detailsDeck}
         performance={detailsDeck ? performance[detailsDeck.id] : undefined}
         onClose={() => setDetailsDeck(null)}

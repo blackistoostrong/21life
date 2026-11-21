@@ -1,5 +1,11 @@
-export function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  const aborted = () => { const error = new Error('Operation aborted'); error.name = 'AbortError'; return error; };
+  if (signal?.aborted) return Promise.reject(aborted());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => { clearTimeout(timer); reject(aborted()); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export async function runTasksWithConcurrency<TItem, TResult>(

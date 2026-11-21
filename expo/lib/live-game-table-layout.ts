@@ -15,7 +15,8 @@ export type SeatRole =
   | 'bottomRight';
 
 export type TableOrientation = 'portrait' | 'landscape';
-export type TableLayoutVariant = 'classic' | 'opposed';
+import type { TableLayoutVariant } from '../../packages/domain/live-game-types';
+export type { TableLayoutVariant } from '../../packages/domain/live-game-types';
 
 export type SquareSeatLayout = {
   left: number;

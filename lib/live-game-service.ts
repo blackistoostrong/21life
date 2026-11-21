@@ -26,16 +26,20 @@ export async function fetchActiveLiveGame(
   client: SupabaseClient,
   groupId: string,
   participantKey: string,
+  signal?: AbortSignal,
 ): Promise<LiveGameRecord | null> {
-  const { data: participant, error: participantError } = await client
+  signal?.throwIfAborted();
+  let participantQuery = client
     .from('live_game_participants')
     .select('live_game_id')
     .eq('group_id', groupId)
     .eq('participant_key', participantKey)
     .eq('status', 'active')
     .eq('is_eliminated', false)
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (signal) participantQuery = participantQuery.abortSignal(signal);
+  const { data: participant, error: participantError } = await participantQuery.maybeSingle();
+  signal?.throwIfAborted();
   if (participantError) throw participantError;
 
   if (participant) {
@@ -45,12 +49,14 @@ export async function fetchActiveLiveGame(
     // A participant row has an ON DELETE CASCADE foreign key to live_games,
     // so the row must exist. An invisible row is a transient RLS/read
     // failure, not an ended game: throw so callers keep the local journal.
-    const { data, error } = await client
+    let gameQuery = client
       .from('live_games')
       .select('*')
       .eq('id', participant.live_game_id)
-      .eq('group_id', groupId)
-      .maybeSingle();
+      .eq('group_id', groupId);
+    if (signal) gameQuery = gameQuery.abortSignal(signal);
+    const { data, error } = await gameQuery.maybeSingle();
+    signal?.throwIfAborted();
     if (error) throw error;
     if (!data) throw new Error('Live game is not readable');
     return data.status === 'active' ? toLiveGameRecord(data) : null;
@@ -62,15 +68,17 @@ export async function fetchActiveLiveGame(
   if (!creatorId) return null;
 
   // Hosts who have been eliminated keep access to the game they created.
-  const { data, error } = await client
+  let creatorQuery = client
     .from('live_games')
     .select('*')
     .eq('group_id', groupId)
     .eq('status', 'active')
     .eq('created_by', creatorId)
     .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (signal) creatorQuery = creatorQuery.abortSignal(signal);
+  const { data, error } = await creatorQuery.maybeSingle();
+  signal?.throwIfAborted();
   if (error) throw error;
   return data ? toLiveGameRecord(data) : null;
 }
@@ -195,12 +203,15 @@ export async function applyQueuedLiveGameMutations(
 export async function fetchLiveGameByMatchId(
   client: SupabaseClient,
   matchId: string,
+  options?: { groupId: string; signal?: AbortSignal },
 ): Promise<LiveGameRecord | null> {
-  const { data, error } = await client
+  let query = client
     .from('live_games')
     .select('*')
-    .eq('match_id', matchId)
-    .maybeSingle();
+    .eq('match_id', matchId);
+  if (options) query = query.eq('group_id', options.groupId);
+  if (options?.signal) query = query.abortSignal(options.signal);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data ? { ...data, state: parseLiveGameState(data.state) } as LiveGameRecord : null;
 }

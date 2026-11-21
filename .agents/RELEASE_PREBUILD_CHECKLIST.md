@@ -1,6 +1,11 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] JobExpo CI con test condivisi root: `npm ci` sia root sia Expo; il PASS locale con entrambi i node_modules non certifica un runner con il solo Expo. Verificare check remoti prima del merge e APK dal commit finale di Dev.
+
+- [ ] Se cambiano backup/restore: le query sul sorgente devono essere server-side READ ONLY; SQL di ripristino soltanto emesso nel pacchetto ed eseguito sul clone. Eseguire la regressione backup-source-readonly e verificare che la prova reale rifiuti una mutazione. Incidente Dev documentato in docs/DEV26_BACKUP_INCIDENT.md.
+
 Leggere il [registro dei merge falliti](MERGE_FAILURES.md) prima di iniziare.
+Se Next interrompe il build con `SecurityFatalError`, conservare advisory/report e correggere la versione compatibile prima di riprovare. La compilazione precedente al gate non certifica il build; il suggerimento di ripetere il comando non sostituisce la patch.
 Controllare tutti i punti applicabili PRIMA di lanciare ogni build, creare o
 pubblicare un tag, oppure avviare un deploy. Registrare le prove e gli SHA nella
 voce del task in `PROJECT_CHECKLIST.md`. Un punto non verificato blocca il passo
@@ -71,3 +76,7 @@ che ne dipende; non equivale a un risultato positivo.
 - [ ] Il candidato finale deve includere ENTRAMBI: recupero offline live game PR246 (archiviazione riuscita prima di sostituire il journal, reset flag terminali/history, sync escluso durante bootstrap) e rinomina GitHub PR247/248 a blackistoostrong/21life. Verificare il contenuto sui rami effettivamente rilasciati, inclusa la variante F-Droid se richiesta; la sola presenza delle PR non basta.
 - [ ] Eseguire regressioni recupero/persistenza/sync e controlli web/Expo sul candidato finale, senza ridurre le soglie o ignorare dipendenze segnalate. Pubblicare anche il candidato statico aggiornato (link, client compatibile, CSP) registrato in docs/GITHUB_USERNAME_RENAME_2026-11-16.md; backup/candidato in artifacts/github-rename.
 - [ ] Nessuna nuova APK/IPA o distribuzione prima della prossima release autorizzata: il PM ha rinviato esplicitamente le pubblicazioni. Nessun obbligo di aggiornare F-Droid9.2.1 per il solo cambio username.
+
+- [ ] Promozione9.3.0: migrazione20261119181403_grant_arena_catalog_realtime_select verificata SOLO Dev. Prima di applicarla in produzione servono autorizzazione PM esplicita e verifica della policy membership/RLS; non estendere grant a INSERT o anon. Provare ricezione membro e rifiuto nonmembro. Nessuna applicazione produzione attestata da questo checkpoint.
+- [ ] Promozione9.3.0: migrazione20261119193048_enforce_arena_guest_deck_group_scope verificata SOLO Dev. Prima della produzione: autorizzazione PM esplicita, conteggio mismatch guest/deck nullo, vincolo composto validato e unico rapporto FK guest/deck per preservare embedding PostgREST; rigetto23503 su insert/update tra gruppi e CRUD/cascade positivi. Nessun dato incoerente cancellato o riparato automaticamente; migrazione fail-closed se ne esistono.
+- [ ] Promozione9.3.0: migrazioni20261120074242 e20261120080129 per save_arena_match_v1 verificate SOLO Dev. Prima della produzione servono autorizzazione PM e test invoker/RLS, binding actor, rollback header/partecipanti/notifiche e replay esatto; conflitti logici HTTP409/PT409, nessun fallback client alle scritture multiple. Migrazioni applicate immutabili; i client vanno collegati e verificati prima di chiudere la tranche. Nessuna applicazione produzione attestata.

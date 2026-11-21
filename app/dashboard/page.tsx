@@ -14,15 +14,7 @@ import { AppProfileButton } from '@/components/navigation/app-profile-button';
 import { MotionItem, MotionList, MotionPanel } from '@/components/ui/motion';
 import { useLanguage } from '@/components/language-provider';
 import { usePlatformAdmin } from '@/hooks/use-platform-admin';
-import { deckHasColorIdentity, getDeckDisplayColors } from '@/lib/deck-metadata';
-import { syncDeckCommanderColors } from '@/lib/deck-color-sync';
-import { runWhenIdle } from '@/lib/idle-work';
-import {
-  buildPersonalAnalytics,
-  emptyPersonalAnalytics,
-  type PersonalAnalytics,
-} from '@/lib/personal-analytics';
-import { fetchPersonalAnalyticsInputs } from '@/lib/personal-analytics-query';
+import { useDashboardAnalytics } from '@/hooks/use-dashboard-analytics';
 import { DeckImage } from '@/components/deck-image';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { isDemoUser } from '@/lib/demo';
@@ -72,7 +64,7 @@ interface Group {
 
 export default function DashboardPage() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { adminMode } = usePlatformAdmin();
+  const { adminMode, loading: adminLoading } = usePlatformAdmin();
   const router = useRouter();
   const { toast } = useToast();
   const { copy: t } = useLanguage();
@@ -85,7 +77,8 @@ export default function DashboardPage() {
   const [joiningCode, setJoiningCode] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [personalAnalytics, setPersonalAnalytics] = useState<PersonalAnalytics | null>(null);
+  const { analytics: personalAnalytics, loading: analyticsLoading, error: analyticsError, refresh: refreshAnalytics }
+    = useDashboardAnalytics(user?.id,adminMode,!authLoading && !adminLoading);
   const [showProvisionalDecks, setShowProvisionalDecks] = useState(false);
   const visiblePersonalDecks = useMemo(
     () => filterDeckRankings(personalAnalytics?.topDecks ?? [], showProvisionalDecks),
@@ -149,83 +142,9 @@ export default function DashboardPage() {
     }
   }, [adminMode, user]);
 
-  const fetchPersonalAnalytics = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      if (adminMode) {
-        const response = await fetch('/api/admin/global-analytics');
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(typeof payload.error === 'string' ? payload.error : 'Failed to fetch global analytics');
-        }
-
-        setPersonalAnalytics(payload.analytics ?? null);
-        return;
-      }
-
-      const { participants, decksById } = await fetchPersonalAnalyticsInputs(supabase, user.id);
-      if (decksById.size === 0) {
-        setPersonalAnalytics(emptyPersonalAnalytics());
-        return;
-      }
-
-      const colorOverrides = new Map<string, string[]>();
-      decksById.forEach((deck, deckId) => {
-        const colors = getDeckDisplayColors(deck);
-        if (colors.length > 0) {
-          colorOverrides.set(deckId, colors);
-        }
-      });
-
-      setPersonalAnalytics(buildPersonalAnalytics(participants, decksById, colorOverrides));
-
-      const decksMissingColors = Array.from(decksById.values()).filter((deck) =>
-        !deckHasColorIdentity(deck) && Boolean(deck.commander?.trim())
-      );
-
-      if (decksMissingColors.length > 0) {
-        runWhenIdle(async () => {
-          const resolved = await syncDeckCommanderColors(
-            decksMissingColors.map((deck) => ({
-              id: deck.id,
-              commander: deck.commander,
-              source_type: deck.source_type,
-              source_url: deck.source_url,
-              color_identity: deck.color_identity,
-            })),
-            Object.fromEntries(colorOverrides),
-            5,
-          );
-
-          if (resolved.size === 0) return;
-
-          const enrichedOverrides = new Map(colorOverrides);
-          resolved.forEach((colors, deckId) => {
-            if (colors.length > 0) {
-              enrichedOverrides.set(deckId, colors);
-            }
-          });
-
-          setPersonalAnalytics(buildPersonalAnalytics(participants, decksById, enrichedOverrides));
-        }, { timeoutMs: 5000 });
-      }
-    } catch (error) {
-      console.error(
-        'Error fetching personal analytics:',
-        getSupabaseErrorMessage(error, 'Failed to fetch personal analytics'),
-      );
-      setPersonalAnalytics(null);
-    }
-  }, [adminMode, user]);
-
   useEffect(() => {
-    if (user) {
-      fetchGroups();
-      fetchPersonalAnalytics();
-    }
-  }, [user, fetchGroups, fetchPersonalAnalytics]);
+    if (user) void fetchGroups();
+  }, [user, fetchGroups]);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,6 +288,11 @@ export default function DashboardPage() {
             <span className="max-w-[16rem] truncate text-sm text-muted-foreground hidden sm:block" title={user?.email}>{user?.email}</span>
             {adminMode && (
               <>
+              <Link href="/admin/users">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label={t({ it: 'Utenti e report', en: 'Users and reports' })}>
+                  <Users className="h-5 w-5" />
+                </Button>
+              </Link>
               <Link href="/admin/operations">
                 <Button
                   variant="ghost"
@@ -598,7 +522,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {!personalAnalytics || personalAnalytics.gamesPlayed === 0 ? (
+          {analyticsLoading ? <Card><CardContent className="py-8 text-center" role="status">{t({ it: 'Caricamento statistiche…', en: 'Loading statistics…' })}</CardContent></Card>
+            : analyticsError ? <Card><CardContent className="space-y-3 py-8 text-center"><p role="alert">{t({ it: 'Statistiche non disponibili. Nessun risultato parziale viene mostrato.', en: 'Statistics unavailable. Partial results are not displayed.' })}</p><Button variant="outline" onClick={refreshAnalytics}>{t({ it: 'Riprova', en: 'Retry' })}</Button></CardContent></Card>
+            : !personalAnalytics || personalAnalytics.gamesPlayed === 0 ? (
             <Card className="border-border/70 bg-card/50">
               <CardContent className="py-8 text-center">
                 <BarChart3 className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />

@@ -32,3 +32,9 @@ describe('match-datetime', () => {
     expect(fallback).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
+it('preserves unknown dates and unchanged microseconds', () => {
+  expect(isoToMatchDateValue(null)).toBe('');
+  expect(matchDateToIso('', null)).toBeNull();
+  const original = '2026-03-15T10:30:00.123456Z';
+  expect(matchDateToIso(isoToMatchDateValue(original), original)).toBe(original);
+});

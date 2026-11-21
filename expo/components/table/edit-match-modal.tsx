@@ -78,7 +78,7 @@ type EditMatchModalProps = {
     winnerKey: string | null;
     isDraw: boolean;
     participantDecks: Record<string, string>;
-    matchPlayedAtIso: string;
+    matchPlayedAtIso: string | null;
     matchNotes: string;
     winCondition: ArenaMatch['win_condition'];
     isArenaManager: boolean;
@@ -230,7 +230,7 @@ export function EditMatchModal({
     }
 
     const playedAtIso = matchDateToIso(matchPlayedAt, match.played_at);
-    if (!playedAtIso) {
+    if (!playedAtIso && !(match.played_at === null && matchPlayedAt.trim() === '')) {
       onError(labels.dateError);
       return;
     }

@@ -28,8 +28,8 @@ export interface ArenaMatch {
   winner_id: string | null;
   winner_guest_id?: string | null;
   is_draw?: boolean;
-  played_at: string;
-  created_by: string;
+  played_at: string | null;
+  created_by: string | null;
   notes: string | null;
   starting_life?: number | null;
   duration_seconds?: number | null;

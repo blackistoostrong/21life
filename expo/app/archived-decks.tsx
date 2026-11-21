@@ -18,7 +18,7 @@ export default function ArchivedDecksScreen() {
   const { user } = useAuth();
   const { copy, language } = useLanguage();
   const { showToast } = useToast();
-  const { decks, winRates, setDeckArchived, toggleDeckFavorite, loading } = useProfileDecks(user?.id);
+  const { decks, winRates, setDeckArchived, toggleDeckFavorite, loading, metricsLoading, metricsError, catalogError, refresh } = useProfileDecks(user?.id);
   const archivedDecks = useMemo(() => decks.filter((deck) => deck.is_archived), [decks]);
 
   return (
@@ -26,7 +26,8 @@ export default function ArchivedDecksScreen() {
       <View style={styles.content}>
         <Button label={language === 'it' ? 'Profilo' : 'Profile'} icon="arrow-back" variant="ghost" onPress={() => router.back()} />
         <Text style={styles.title}>{copy('archivedDecks')}</Text>
-        {archivedDecks.length === 0 && !loading ? (
+        {metricsError || catalogError ? <PhyrexianPanel><Text accessibilityRole="alert">{language === 'it' ? 'Dati non disponibili. Riprova.' : 'Data unavailable. Please retry.'}</Text><Button label={language === 'it' ? 'Riprova' : 'Retry'} onPress={() => void refresh()} /></PhyrexianPanel> : null}
+        {catalogError ? null : archivedDecks.length === 0 && !loading ? (
           <PhyrexianPanel style={styles.empty}><Text style={styles.emptyTitle}>{copy('noArchivedDecks')}</Text></PhyrexianPanel>
         ) : (
           <FlashList
@@ -38,6 +39,7 @@ export default function ArchivedDecksScreen() {
               <DeckCard
                 deck={deck}
                 winRate={winRates[deck.id]}
+                metricsAvailable={!metricsLoading && !metricsError}
                 language={language}
                 openDeckLabel={copy('openDeck')}
                 viewOnEdhrecLabel={copy('viewOnEdhrec')}

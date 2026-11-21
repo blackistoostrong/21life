@@ -1,3 +1,4 @@
+import {fetchArenaAnalyticsReport} from '@/packages/data/arena-analytics-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getColorIdentityGroupKey,
@@ -257,14 +258,9 @@ export async function fetchArenaAnalyticsPayload(
   client: SupabaseClient,
   groupId: string,
   since: Date | null,
+  signal?: AbortSignal,
 ) {
-  const { data, error } = await client.rpc('get_arena_analytics_bundle', {
-    p_group_id: groupId,
-    p_since: since?.toISOString() ?? null,
-    p_until: null,
-  });
-  if (error) throw error;
-  return (data || {}) as ArenaAnalyticsBundlePayload;
+  return await fetchArenaAnalyticsReport(client,groupId,since?.toISOString()??null,signal) as unknown as ArenaAnalyticsBundlePayload;
 }
 
 export async function fetchArenaAnalyticsBundle(

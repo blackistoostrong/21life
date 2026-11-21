@@ -128,3 +128,14 @@ describe('parallel occasional creation', () => {
   expect(render().find(n => n.type === 'Button' && n.props.label === 'Save')!.props.disabled).toBe(false);
  });
 });
+
+describe('unknown historical date',()=>{
+ beforeEach(()=>{hooks.values=[];hooks.cursor=0;hooks.initialized=false;});
+ it('preserves null when editing an undated match without choosing a replacement date',async()=>{
+   const {props,render}=fixture();props.match!.played_at=null;
+   render().find(node=>node.type==='DateField')!.props.onChange('');
+   await render().find(node=>node.type==='Button' && node.props.label==='Save')!.props.onPress();
+   expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({matchPlayedAtIso:null}));
+   expect(props.onError).not.toHaveBeenCalled();
+ });
+});

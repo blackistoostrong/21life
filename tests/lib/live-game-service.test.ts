@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLiveGamePlayer, type LiveGameRecord } from '@/lib/live-game';
-import { fetchActiveLiveGame } from '@/lib/live-game-service';
+import { fetchActiveLiveGame, fetchLiveGameByMatchId } from '@/lib/live-game-service';
 
 function record(overrides: Partial<LiveGameRecord> = {}): LiveGameRecord {
   return {
@@ -34,7 +34,7 @@ function record(overrides: Partial<LiveGameRecord> = {}): LiveGameRecord {
 
 function selectQuery(result: unknown) {
   const query: Record<string, ReturnType<typeof vi.fn>> = {};
-  ['select', 'eq', 'limit', 'order', 'or'].forEach((method) => {
+  ['select', 'eq', 'limit', 'order', 'or', 'abortSignal'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query);
   });
   query.maybeSingle = vi.fn().mockReturnValue(Promise.resolve(result));
@@ -42,6 +42,30 @@ function selectQuery(result: unknown) {
 }
 
 describe('web active live game lookup', () => {
+  it('does not start SDK I/O with an already cancelled scope', async () => {
+    const controller = new AbortController(); controller.abort(); const client = { from: vi.fn() };
+    await expect(fetchActiveLiveGame(client as never, 'group-1', 'user:a', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(client.from).not.toHaveBeenCalled();
+  });
+  it.each([null, { live_game_id: 'live-1' }])('does not continue the query chain after cancellation, participation %j', async participant => {
+    const controller = new AbortController(), query = selectQuery(null);
+    let resolve!: (value: unknown) => void;
+    query.maybeSingle.mockReturnValue(new Promise(done => { resolve = done; }));
+    const client = { from: vi.fn().mockReturnValue(query) };
+    const result = fetchActiveLiveGame(client as never, 'group-1', 'user:a', controller.signal);
+    controller.abort(); resolve({ data: participant, error: null });
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(client.from).toHaveBeenCalledOnce(); expect(query.abortSignal).toHaveBeenCalledWith(controller.signal);
+  });
+  it.each([false, true])('carries the same SDK signal through the full lookup, participation %j', async participating => {
+    const signal = new AbortController().signal;
+    const participantQuery = selectQuery({ data: participating ? { live_game_id: 'live-1' } : null, error: null });
+    const gameQuery = selectQuery({ data: record(), error: null });
+    const client = { from: vi.fn().mockReturnValueOnce(participantQuery).mockReturnValueOnce(gameQuery) };
+    expect((await fetchActiveLiveGame(client as never, 'group-1', 'user:a', signal))?.id).toBe('live-1');
+    expect(participantQuery.abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(gameQuery.abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+  });
   it('filters participant rows to the active, non-eliminated game', async () => {
     const participantQuery = selectQuery({ data: null, error: null });
     const creatorQuery = selectQuery({ data: null, error: null });
@@ -89,5 +113,28 @@ describe('web active live game lookup', () => {
     const client = { from: vi.fn().mockReturnValue(participantQuery) };
     expect(await fetchActiveLiveGame(client as never, 'group-1', 'guest:g1')).toBeNull();
     expect(client.from).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('web historical live game lookup', () => {
+  it('scopes a legacy recap to the captured match and group with its SDK cancellation signal', async () => {
+    const query = selectQuery({ data: record({ status: 'ended', match_id: 'match-1' }), error: null });
+    const client = { from: vi.fn().mockReturnValue(query) }, signal = new AbortController().signal;
+    const result = await fetchLiveGameByMatchId(client as never, 'match-1', { groupId: 'group-1', signal });
+    expect(result?.id).toBe('live-1'); expect(result?.state.players).toHaveLength(1);
+    expect(client.from).toHaveBeenCalledExactlyOnceWith('live_games');
+    expect(query.eq.mock.calls).toEqual([['match_id', 'match-1'], ['group_id', 'group-1']]);
+    expect(query.abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(query.maybeSingle).toHaveBeenCalledOnce();
+  });
+  it('preserves missing legacy rows and callers without explicit scope', async () => {
+    const query = selectQuery({ data: null, error: null });
+    expect(await fetchLiveGameByMatchId({ from: vi.fn().mockReturnValue(query) } as never, 'match-1')).toBeNull();
+    expect(query.eq.mock.calls).toEqual([['match_id', 'match-1']]); expect(query.abortSignal).not.toHaveBeenCalled();
+  });
+  it('does not discard a supplied empty group filter or hide an SDK failure', async () => {
+    const error = { code: '42501' }, query = selectQuery({ data: null, error });
+    await expect(fetchLiveGameByMatchId({ from: vi.fn().mockReturnValue(query) } as never, 'match-1', { groupId: '' })).rejects.toBe(error);
+    expect(query.eq).toHaveBeenCalledWith('group_id', ''); expect(query.abortSignal).not.toHaveBeenCalled();
   });
 });

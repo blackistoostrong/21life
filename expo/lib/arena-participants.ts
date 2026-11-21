@@ -135,10 +135,11 @@ export function getParticipantDeckId(participant: MatchParticipantRecord) {
 
 export function getLastDeckSelectionForParticipant(
   participantKey: ParticipantKey,
-  matches: Array<{ played_at: string; match_participants: MatchParticipantRecord[] }>,
+  matches: Array<{ played_at: string | null; match_participants: MatchParticipantRecord[] }>,
 ): string | null {
   const sortedMatches = [...matches].sort(
-    (a, b) => new Date(b.played_at).getTime() - new Date(a.played_at).getTime(),
+    (a, b) => (b.played_at === null ? -Infinity : new Date(b.played_at).getTime())
+      - (a.played_at === null ? -Infinity : new Date(a.played_at).getTime()),
   );
 
   for (const match of sortedMatches) {

@@ -4,9 +4,18 @@ import {
   buildDeckCollectionAnalytics,
   buildDeckColorCombination,
   getDeckCommanderNames,
+  collectUniqueCommanderNames,
 } from '@/lib/deck-collection-analytics';
 
 describe('deck-collection-analytics', () => {
+  it('deduplicates commander lookup requests across partner strings and explicit options', () => {
+    expect(collectUniqueCommanderNames([
+      { id: 'one', commander: ' A // B / A ', bracket: null, commander_options: null },
+      { id: 'two', commander: 'Ignored', bracket: null, commander_options: [
+        { name: 'B', imageUrl: null }, { name: ' C ', imageUrl: null },
+      ] },
+    ])).toEqual(['A', 'B', 'C']);
+  });
   it('prefers commander_options names over parsed commander string', () => {
     const names = getDeckCommanderNames({
       commander: 'Ignored / String',

@@ -1,46 +1,54 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { isAdministrator } from '@/lib/admin';
 import { supabase } from '@/lib/supabase';
+import { withRequestDeadline } from '@/packages/data/request-deadline';
+
+type Identity = { userId: string | null; email: string };
+type RoleState = { identity: Identity; adminMode: boolean };
 
 export function usePlatformAdmin() {
   const { user, loading: authLoading } = useAuth();
-  const [adminMode, setAdminMode] = useState(false);
-  const [resolving, setResolving] = useState(true);
+  const userId = user?.id ?? null;
+  const email = user?.email?.toLowerCase() ?? '';
+  const identity = useMemo<Identity>(() => ({ userId, email }), [userId, email]);
+  const [role, setRole] = useState<RoleState | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
-      setAdminMode(false);
-      setResolving(false);
+      setRole({ identity, adminMode: false });
       return;
     }
 
     if (isAdministrator(user)) {
-      setAdminMode(true);
-      setResolving(false);
+      setRole({ identity, adminMode: true });
       return;
     }
 
     let cancelled = false;
-    setResolving(true);
+    const controller = new AbortController();
 
-    void supabase.rpc('is_admin', { p_user_id: user.id }).then(({ data, error }) => {
+    // Revalidate every Auth snapshot without discarding the already-known role
+    // for the same identity. A different identity is masked immediately below.
+    void withRequestDeadline(supabase.rpc('is_admin', { p_user_id: user.id }), 15000, controller.signal).then(({ data, error }) => {
       if (cancelled) return;
-      setAdminMode(!error && data === true);
-      setResolving(false);
+      setRole({ identity, adminMode: !error && data === true });
+    }).catch(() => {
+      if (!cancelled) setRole({ identity, adminMode: false });
     });
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [authLoading, user]);
+  }, [authLoading, identity, user]);
 
   return {
-    adminMode,
-    loading: authLoading || resolving,
+    adminMode: !authLoading && role?.identity === identity ? role.adminMode : false,
+    loading: authLoading || role?.identity !== identity,
   };
 }

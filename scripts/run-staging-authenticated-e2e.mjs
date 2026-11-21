@@ -1,14 +1,17 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { runNodeCommand } from './qa-command.mjs';
 import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { runMaestro } from '../expo/scripts/maestro-command.mjs';
 
 const envRoot = resolve(process.env.E2E_ENV_ROOT || '.');
 const driver = process.env.E2E_DRIVER || 'playwright';
+const playerCount = Number(process.env.E2E_PLAYER_COUNT || 2);
+if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 6) throw new Error('E2E_PLAYER_COUNT must be 2–6.');
 if (!['playwright', 'maestro'].includes(driver)) throw new Error('E2E_DRIVER must be playwright or maestro.');
 if (driver === 'maestro') {
   const preflight = spawnSync(process.execPath, [resolve('expo/scripts/e2e-android-preflight.mjs')], { stdio: 'inherit' });
@@ -48,15 +51,17 @@ const groupId = randomUUID();
 let exitCode = 1;
 
 try {
-  for (let index = 0; index < 2; index += 1) {
+  for (let index = 0; index < playerCount; index += 1) {
     const username = `e2e_${randomBytes(8).toString('hex')}`;
     const { data, error } = await supabase.auth.admin.createUser({
-      email: index === 0 ? email : `second-${email}`, password, email_confirm: true,
+      email: index === 0 ? email : `player-${index}-${email}`, password, email_confirm: true,
       user_metadata: { username },
     });
     if (error || !data.user) throw new Error(`Could not provision staging E2E user: ${error?.code ?? 'no user returned'}`);
     userIds.push(data.user.id);
     usernames.push(username);
+    mkdirSync(resolve('artifacts/dev26'),{ recursive: true });
+    writeFileSync(resolve(`artifacts/dev26/staging-e2e-${groupId}.json`),JSON.stringify({ groupId,userIds,usernames,email }));
   }
   const check = ({ error }) => { if (error) throw new Error(`Staging E2E seed failed: ${error.code}`); };
   check(await supabase.from('groups').insert({ id: groupId, name: 'IMP synthetic playgroup', created_by: userIds[0] }));
@@ -67,15 +72,26 @@ try {
   process.env.E2E_USERNAME = email;
   process.env.E2E_PASSWORD = password;
   process.env.E2E_GROUP_ID = groupId;
+  process.env.E2E_USER_ID = userIds[0];
+  process.env.E2E_SECOND_USER_ID = userIds[1];
+  process.env.E2E_SECOND_EMAIL = `player-1-${email}`;
   process.env.E2E_LIVE_GAME_FLOW = '1';
+  process.env.E2E_ANALYTICS_FLOW = '1';
   const sessionCookies = [];
   const authClient = createServerClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     auth: { storageKey: 'sb-supabase-staging-auth-token' },
     cookies: { getAll: () => sessionCookies, setAll: (values) => sessionCookies.push(...values) },
   });
-  const { error: sessionError } = await authClient.auth.signInWithPassword({ email, password });
-  if (sessionError) throw new Error(`Staging fixture login failed: ${sessionError.code}`);
+  const { data:sessionData,error: sessionError } = await authClient.auth.signInWithPassword({ email, password });
+  if (sessionError || !sessionData.session) throw new Error(`Staging fixture login failed: ${sessionError?.code ?? 'no session'}`);
+  process.env.E2E_ACCESS_TOKEN=sessionData.session.access_token;
   process.env.E2E_SESSION_COOKIES = JSON.stringify(sessionCookies.map(({ name, value }) => ({ name, value })));
+  let initialHistoryRevision=null;
+  if(driver==='playwright' && (!process.env.E2E_GREP || /wizard → damage|history v2/.test(process.env.E2E_GREP))) {
+    const {data,error}=await authClient.rpc('get_arena_history_page_v2',{p_group_id:groupId});
+    if(error || data?.schemaVersion!==2 || data.complete!==true || data.total!==0)throw new Error('Staging history v2 seed contract failed');
+    initialHistoryRevision=data.revision;
+  }
   exitCode = 0;
   if (driver === 'maestro') {
     for (const flow of ['authenticated-live-game', 'authenticated-archive']) {
@@ -91,8 +107,8 @@ try {
       console.log('Staging native saved-match history verified.');
     }
   }
-  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks'])) {
-    const result = spawnSync(process.execPath, [
+  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API'])) {
+    const status = await runNodeCommand([
       resolve('node_modules/@playwright/test/cli.js'), 'test',
       'tests/e2e/public-ui.spec.ts',
       'tests/e2e/responsive-layout.spec.ts',
@@ -100,17 +116,49 @@ try {
       'tests/e2e/staging-archive.spec.ts',
       'tests/e2e/live-game-wizard.spec.ts',
       'tests/e2e/deck-ranking-filter.spec.ts',
+      'tests/e2e/analytics-v2.spec.ts',
+        'tests/e2e/profile-account.spec.ts',
+      'tests/e2e/profile-import.spec.ts',
+      'tests/e2e/profile-link.spec.ts',
+      'tests/e2e/profile-catalog-actions.spec.ts',
+      'tests/e2e/profile-editor.spec.ts',
+      'tests/e2e/profile-settings.spec.ts',
+      'tests/e2e/profile-autosync.spec.ts',
+      'tests/e2e/profile-auth-lifecycle.spec.ts',
+      'tests/e2e/profile-save.spec.ts',
+      'tests/e2e/profile-save-lifecycle.spec.ts',
+      'tests/e2e/profile-manual-lifecycle.spec.ts',
+      'tests/e2e/history-v2.spec.ts',
+      'tests/e2e/arena-catalog.spec.ts',
+      'tests/e2e/arena-enrichment.spec.ts',
+      'tests/e2e/arena-realtime.spec.ts',
+      'tests/e2e/arena-membership.spec.ts',
+      'tests/e2e/arena-guests.spec.ts',
+      'tests/e2e/arena-guest-scope.spec.ts',
+      'tests/e2e/arena-match-commands.spec.ts',
+      'tests/e2e/arena-match-details.spec.ts',
+      'tests/e2e/arena-active-game.spec.ts',
+      'tests/e2e/arena-reports.spec.ts',
+      'tests/e2e/arena-session-export.spec.ts',
+      'tests/e2e/arena-match-native-owners.spec.ts',
+      'tests/e2e/arena-match-atomic.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',
     ], { stdio: 'inherit' });
-    if ((result.status ?? 1) !== 0) exitCode = result.status ?? 1;
+    if (status !== 0) exitCode = status;
   }
   if (driver === 'playwright' && exitCode === 0 && (!process.env.E2E_GREP || process.env.E2E_GREP.includes('wizard → damage'))) {
     const { count, error } = await supabase.from('matches').select('id', { count: 'exact', head: true }).eq('group_id', groupId);
     if (error || count !== 2) throw new Error('Expected exactly one saved match per browser project after finalization retries.');
+    const history=await authClient.rpc('get_arena_history_page_v2',{p_group_id:groupId});
+    const days=await authClient.rpc('get_arena_match_day_summaries_v2',{p_group_id:groupId});
+    if(history.error || days.error || history.data?.schemaVersion!==2 || history.data.total!==2
+      || history.data.matches?.length!==2 || history.data.next!==null || history.data.revision===initialHistoryRevision
+      || days.data?.days?.reduce((sum,day)=>sum+day.matchCount,0)!==2)throw new Error('Staging finalized history v2 counts/revision failed');
     console.log('Staging finalization idempotency verified: exactly 2 matches for 2 browser flows.');
   }
 } finally {
+  let cleanupVerified=true;
   // Playwright error context can include entered passwords; redact before retaining evidence.
   const redact = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -118,36 +166,44 @@ try {
       if (entry.isDirectory()) redact(path);
       else if (/\.(md|txt|json)$/.test(entry.name)) {
         const original = readFileSync(path, 'utf8');
-        writeFileSync(path, original.replaceAll(password, '[redacted]'));
+        writeFileSync(path, [password,process.env.E2E_ACCESS_TOKEN].filter(Boolean).reduce((value,secret)=>value.replaceAll(secret,'[redacted]'),original));
       }
     }
   };
   try { redact(resolve('test-results')); } catch (error) { if (error.code !== 'ENOENT') exitCode = 1; }
   try { redact(resolve('artifacts/e2e/maestro')); } catch (error) { if (error.code !== 'ENOENT') exitCode = 1; }
   if (userIds.length) {
-    const { error: groupError } = await supabase.from('groups').delete().eq('id', groupId);
-    if (groupError) { console.error('Could not clean up disposable staging E2E group.'); exitCode = 1; }
+    const groupCleanup = await supabase.from('groups').delete().eq('id', groupId);
+    if (groupCleanup.error) {
+      console.error('Could not clean up disposable staging E2E group.', {
+        status: groupCleanup.status, code: groupCleanup.error.code || 'unknown',
+      });
+      exitCode = 1; cleanupVerified=false;
+    }
   }
   for (const userId of userIds) {
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) {
       console.error('Could not clean up the disposable staging E2E user.');
       exitCode = 1;
+      cleanupVerified=false;
     }
   }
   const { count, error: cleanupError } = await supabase.from('groups').select('id', { count: 'exact', head: true }).eq('id', groupId);
   if (cleanupError || count !== 0) {
     console.error('Disposable staging group cleanup verification failed.');
     exitCode = 1;
+    cleanupVerified=false;
   }
   for (const userId of userIds) {
     const { data, error } = await supabase.auth.admin.getUserById(userId);
     if (data?.user || (error && error.status !== 404 && error.code !== 'user_not_found')) {
       console.error('Disposable staging user cleanup verification failed.');
       exitCode = 1;
+      cleanupVerified=false;
     }
   }
-  console.log(`Staging fixture cleanup ${exitCode === 0 ? 'verified' : 'finished with failures'}.`);
+  console.log(`Staging fixture cleanup ${cleanupVerified ? 'verified' : 'FAILED'}.`);
 }
 
 process.exitCode = exitCode;

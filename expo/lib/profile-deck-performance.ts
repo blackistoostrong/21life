@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DeckPerformance, DeckWinRate } from '@/lib/types/profile';
 import { buildMatchRecord } from '@/lib/win-rate';
+import { fetchProfileCatalogMetrics } from './profile-catalog-query';
+import { buildProfileCatalogMetric } from '../../packages/domain/profile-catalog-metrics';
 
 export type ProfileDeckPerformanceRow = {
   deck_id: string;
@@ -64,10 +66,16 @@ export function buildProfileDeckPerformanceMaps(
 export async function fetchProfileDeckPerformance(
   client: SupabaseClient,
   userId: string,
-): Promise<ProfileDeckPerformanceMaps | null> {
-  const { data, error } = await client.rpc('get_profile_deck_performance', {
-    p_user_id: userId,
-  });
-  if (error) return null;
-  return buildProfileDeckPerformanceMaps((data || []) as ProfileDeckPerformanceRow[]);
+  signal?: AbortSignal,
+): Promise<ProfileDeckPerformanceMaps> {
+  const report=await fetchProfileCatalogMetrics(client,userId,signal);
+  const winRates: Record<string,DeckWinRate>={};
+  const performance: Record<string,DeckPerformance>={};
+  for (const row of report.decks) {
+    const metric=buildProfileCatalogMetric(row);
+    winRates[row.deck_id]=metric;
+    performance[row.deck_id]={ ...metric,damageDealt:metric.totalDamageDealt,damageTaken:metric.totalDamageTaken,
+      lifeGained:metric.totalLifeGained,commanderDamage:metric.commanderDamageDealt };
+  }
+  return { winRates,performance };
 }

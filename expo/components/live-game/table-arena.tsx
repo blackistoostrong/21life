@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   LayoutChangeEvent,
@@ -300,18 +301,24 @@ export function TableArena({
   const [dragHoverKey, setDragHoverKey] = useState<ParticipantKey | null>(null);
   const [pendingTransfer, setPendingTransfer] = useState<PendingTransfer | null>(null);
   const [syncBadgeVisible, setSyncBadgeVisible] = useState(true);
+  const announcedSyncLabel = useRef(syncLabel);
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
 
   useEffect(() => {
-    if (syncStatus === 'error' && pendingSyncCount === 0) {
-      setSyncBadgeVisible(false);
-      return;
-    }
     setSyncBadgeVisible(true);
     if (syncStatus !== 'synced' && syncStatus !== 'offline') return;
     const timer = setTimeout(() => setSyncBadgeVisible(false), 15_000);
     return () => clearTimeout(timer);
   }, [pendingSyncCount, syncStatus]);
+
+  useEffect(() => {
+    if (announcedSyncLabel.current === syncLabel) return;
+    const timer = setTimeout(() => {
+      announcedSyncLabel.current = syncLabel;
+      AccessibilityInfo.announceForAccessibility(syncLabel);
+    },1500);
+    return () => clearTimeout(timer);
+  },[syncLabel]);
 
   useEffect(() => {
     let active = true;
@@ -618,7 +625,22 @@ export function TableArena({
       </Pressable>
 
       <View style={[styles.durationPill, isVerticalCenterToolbar && styles.durationPillVertical]}>
-        <Ionicons name="time-outline" size={15} color={colors.muted} />
+        {syncBadgeVisible ? <Pressable
+          onPress={onRetrySync}
+          accessibilityRole="button"
+          accessibilityLabel={`${syncLabel}${pendingSyncCount > 0 ? ` · ${pendingSyncCount}` : ''}`}
+          accessibilityHint={syncError || undefined}
+          hitSlop={8}
+          style={[styles.syncBadge, syncStatus === 'error' && styles.syncBadgeError,
+            (syncStatus === 'offline' || syncStatus === 'pending') && styles.syncBadgeOffline]}
+        >
+          <Ionicons
+            name={syncStatus === 'syncing' ? 'sync' : syncStatus === 'pending' ? 'cloud-upload-outline' : syncStatus === 'offline' ? 'cloud-offline-outline' : syncStatus === 'error' ? 'warning-outline' : 'cloud-done-outline'}
+            size={10}
+            color={syncStatus === 'error' ? '#fecaca' : syncStatus === 'offline' || syncStatus === 'pending' ? '#fde68a' : '#bbf7d0'}
+          />
+          {pendingSyncCount > 0 ? <Text style={styles.syncPendingCount} accessibilityElementsHidden importantForAccessibility="no">{pendingSyncCount > 9 ? '9+' : pendingSyncCount}</Text> : null}
+        </Pressable> : <Ionicons name="time-outline" size={15} color={colors.muted} />}
         <GameDuration startedAt={startedAt} />
       </View>
 
@@ -715,27 +737,6 @@ export function TableArena({
 
   return (
     <View style={styles.root}>
-      {syncBadgeVisible ? <Pressable
-        onPress={onRetrySync}
-        accessibilityRole="button"
-        accessibilityLabel={syncLabel}
-        style={[
-          styles.syncBadge,
-          { top: Math.max(insets.top, SYSTEM_GESTURE_GUARD) + 6, right: Math.max(insets.right, SYSTEM_GESTURE_GUARD) + 6 },
-          syncStatus === 'error' && styles.syncBadgeError,
-          syncStatus === 'offline' && styles.syncBadgeOffline,
-        ]}
-      >
-        <Ionicons
-          name={syncStatus === 'syncing' ? 'sync' : syncStatus === 'offline' ? 'cloud-offline-outline' : syncStatus === 'error' ? 'warning-outline' : 'cloud-done-outline'}
-          size={13}
-          color={syncStatus === 'error' ? '#fecaca' : syncStatus === 'offline' ? '#fde68a' : '#bbf7d0'}
-        />
-        <Text style={styles.syncBadgeText} numberOfLines={1}>
-          {syncLabel}{pendingSyncCount > 0 ? ` · ${pendingSyncCount}` : ''}
-        </Text>
-        {syncError ? <Ionicons name="refresh" size={12} color="#fecaca" /> : null}
-      </Pressable> : null}
       <View
         style={[
           styles.gridHost,
@@ -1048,18 +1049,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#050508',
   },
   syncBadge: {
-    position: 'absolute',
-    zIndex: 90,
-    maxWidth: 150,
-    minHeight: 28,
-    flexDirection: 'row',
+    width: 18,
+    height: 18,
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(74,222,128,0.3)',
-    borderRadius: 16,
-    backgroundColor: 'rgba(4,4,8,0.82)',
-    paddingHorizontal: 9,
+    borderRadius: 9,
+    backgroundColor: 'rgba(4,4,8,0.3)',
   },
   syncBadgeError: {
     borderColor: 'rgba(248,113,113,0.45)',
@@ -1067,10 +1064,17 @@ const styles = StyleSheet.create({
   syncBadgeOffline: {
     borderColor: 'rgba(251,191,36,0.4)',
   },
-  syncBadgeText: {
-    flexShrink: 1,
+  syncPendingCount: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 8,
+    borderRadius: 3,
+    backgroundColor: '#18181b',
     color: colors.foreground,
-    fontSize: 10,
+    fontSize: 7,
+    lineHeight: 8,
+    textAlign: 'center',
     fontWeight: '800',
   },
   onboardingCard: { position: 'absolute', left: 12, right: 12, zIndex: 80, gap: 5, borderWidth: 1, borderColor: colors.selectionBorder, borderRadius: radii.lg, backgroundColor: colors.modalSurface, padding: spacing.md },

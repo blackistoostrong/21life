@@ -48,3 +48,10 @@ describe('arena filters', () => {
     expect(getBracketOptionsFromMatches([match])).toEqual(['2', '10']);
   });
 });
+
+it('includes unknown dates only when no date boundary is requested',()=>{
+  const rows=[{played_at:null},{played_at:new Date().toISOString()}];
+  expect(filterMatchesByDate(rows,'all')).toHaveLength(2);
+  expect(filterMatchesByDate(rows,'all','2020-01-01')).toEqual([rows[1]]);
+  expect(filterMatchesByDate(rows,'7d')).toEqual([rows[1]]);
+});

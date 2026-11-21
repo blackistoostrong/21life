@@ -1,9 +1,15 @@
 'use client';
 
 import { BarChart3, Crosshair, Shield, Skull, Swords } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useLanguage } from '@/components/language-provider';
 import { formatGameDuration } from '@/lib/live-game-duration';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
+
+const DeckOutcomeChart = dynamic(() => import('./deck-outcome-chart'), {
+  ssr: false,
+  loading: () => <div className="h-28 w-28 rounded-full bg-secondary" aria-hidden="true" />,
+});
 
 export function DeckPerformancePanel({ performance }: { performance: DeckPerformanceStats | undefined }) {
   const { copy: t } = useLanguage();
@@ -17,12 +23,9 @@ export function DeckPerformancePanel({ performance }: { performance: DeckPerform
                     <h3 className="mb-3 flex items-center gap-2 font-semibold text-foreground"><BarChart3 className="h-4 w-4 text-emerald-300" />{t({ it: 'Impronta del mazzo', en: 'Deck fingerprint' })}</h3>
                     <div className="grid gap-3 rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-background/35 to-cyan-500/5 p-4 sm:grid-cols-[9rem_1fr]">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: `conic-gradient(#34d399 ${winRate}%, #475569 ${winRate}% ${Math.max(winRate, winRate + (draws / Math.max(gamesPlayed, 1)) * 100)}%, #1e293b 0)` }}>
-                          <div className="grid h-20 w-20 place-items-center rounded-full bg-card text-center shadow-inner">
-                            <strong className="text-2xl text-emerald-300">{winRate}%</strong>
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">win rate</span>
-                          </div>
-                        </div>
+                        <DeckOutcomeChart wins={wins} draws={draws} losses={losses} winRate={winRate}
+                          label={t({ it: `Vittorie ${wins}, patte ${draws}, sconfitte ${losses}. Win rate ${winRate}%.`,
+                            en: `Wins ${wins}, draws ${draws}, losses ${losses}. Win rate ${winRate}%.` })} />
                         <p className="mt-2 text-xs text-muted-foreground">{gamesPlayed} {t({ it: 'partite', en: 'games' })}</p>
                       </div>
                       <div className="space-y-3 self-center">

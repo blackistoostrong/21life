@@ -1,5 +1,14 @@
+import { useArenaMatchFormCommand } from '@/hooks/use-arena-match-form-command';
+import { getArenaMatchWriteFailureMessage } from '../../../../packages/domain/arena-match-write';
+import {useArenaAnalytics} from '@/hooks/use-arena-analytics';
+import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
+import {ArenaAnalyticsStatus} from '@/components/table/arena-analytics-status';
+import {useArenaDayExport} from '@/hooks/use-arena-day-export';
+import {arenaHistoryScope} from '../../../../packages/domain/arena-history';
+import {getArenaAnalyticsSince} from '@/lib/arena-analytics-bundle';
+import {ArenaHistoryStatus} from '@/components/table/arena-history-status';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -49,18 +58,15 @@ import { useArena } from '@/hooks/use-arena';
 import { useScreenInsets } from '@/hooks/use-screen-insets';
 import { useToast } from '@/contexts/toast-context';
 import { hapticSuccess } from '@/lib/haptics';
-import { computeArenaColorAnalytics } from '@/lib/arena-color-analytics';
-import { calculateCommanderStats, type DeckStatsSort } from '@/lib/arena-deck-stats';
+import { type DeckStatsSort } from '@/lib/arena-deck-stats';
 import {
   buildArenaAnalyticsView,
-  fetchArenaAnalytics,
-  type ArenaAnalyticsPayload,
+  createEmptyArenaAnalyticsView,
 } from '@/lib/arena-analytics-bundle';
 import {
   filterMatchesByDate,
   filterMatchesByBracket,
   getArenaPeriodLabel,
-  getBracketOptionsFromMatches,
   type ArenaDateFilter,
 } from '@/lib/arena-filters';
 import { canKickArenaMember, canLeaveArena, canManageArenaMembership, isArenaMember } from '@/lib/arena-membership';
@@ -72,9 +78,8 @@ import {
 import { buildMatchShareText } from '@/lib/arena-match-share';
 import { groupMatchesByDay } from '@/lib/arena-session';
 import { buildArenaShareText } from '@/lib/arena-share';
-import { calculatePlayerStats, getMatchWinnerName } from '@/lib/arena-stats';
-import { calculateArenaAwards } from '@/lib/arena-awards';
-import { buildPlayerAwards } from '@/lib/player-awards';
+import { getMatchWinnerName } from '@/lib/arena-stats';
+import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
 import { getSiteUrl } from '@/lib/env';
 import { apiPost } from '@/lib/api';
 import { isLeaveArenaConfirmationValid } from '@/lib/leave-arena-confirm';
@@ -87,11 +92,9 @@ import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
 import { supabase } from '@/lib/supabase';
 import type { ArenaMatch } from '@/lib/types/arena';
 import {
-  fetchArenaSeasonContext,
   formatArenaSeasonDate,
   formatArenaSeasonLabel,
   setArenaSeasonSettings,
-  type ArenaSeasonContext,
 } from '@/lib/arena-seasons';
 
 type ArenaTab = 'matches' | 'players' | 'decks' | 'awards' | 'meta';
@@ -123,6 +126,7 @@ export default function TableScreen() {
     matches,
     hasMoreMatches,
     loadingMoreMatches,
+    historyRevision,historyTotal,historyLoading,historyError,historyCached,retryHistory,arenaError,
     guests,
     decks,
     loading,
@@ -171,10 +175,8 @@ export default function TableScreen() {
   }, [matchId, loading, matches, hasMoreMatches, loadingMoreMatches, loadMoreMatches, router]);
   const [detailsLiveGame, setDetailsLiveGame] = useState<LiveGameRecord | null>(null);
   const [detailsRecapLoading, setDetailsRecapLoading] = useState(false);
-  const [exportDayKey, setExportDayKey] = useState<string | null>(null);
-  const [exportIntro, setExportIntro] = useState('');
-  const [savingMatch, setSavingMatch] = useState(false);
-  const [savingEditMatch, setSavingEditMatch] = useState(false);
+  const [exportSelection,setExportSelection]=useState<{id:number;owner:string;dayKey:string;since:string|null;intro:string}|null>(null);
+  const exportSequence=useRef(0);
   const [savingArena, setSavingArena] = useState(false);
   const [leavingArena, setLeavingArena] = useState(false);
   const [deletingArena, setDeletingArena] = useState(false);
@@ -185,55 +187,31 @@ export default function TableScreen() {
   const [leaveConfirm, setLeaveConfirm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
-  const [sharePreview, setSharePreview] = useState<{ title: string; message: string } | null>(null);
+  const shareOwner=JSON.stringify([user?.id,groupId]);
+  const [sharePreviewState,setSharePreviewState]=useState<{title:string;message:string;owner:string}|null>(null);
+  const sharePreview=sharePreviewState?.owner===shareOwner?sharePreviewState:null;
+  const setSharePreview=useCallback((preview:{title:string;message:string}|null)=>setSharePreviewState(current=>preview?{...preview,owner:shareOwner}:current?.owner===shareOwner?null:current),[shareOwner]);
   const [sharing, setSharing] = useState(false);
-  const [analyticsPayload, setAnalyticsPayload] = useState<ArenaAnalyticsPayload | null>(null);
-  const [allTimeAnalyticsPayload, setAllTimeAnalyticsPayload] = useState<ArenaAnalyticsPayload | null>(null);
-  const [seasonContext, setSeasonContext] = useState<ArenaSeasonContext | null>(null);
+  const season=useArenaSeasonContext(user?.id,groupId??'');
+  const seasonContext=season.data;
+  const reportSince=useMemo(()=>getArenaAnalyticsSince(dateFilter,seasonContext?.currentSeasonStart),[dateFilter,seasonContext?.currentSeasonStart]);
+  const seasonSince=seasonContext?new Date(seasonContext.currentSeasonStart+'T00:00:00Z').toISOString():null;
+  const report=useArenaAnalytics(season.ready?user?.id:undefined,groupId??'',reportSince,seasonSince,bracketFilter,historyRevision);
+  const analyticsPayload=report.ready?report.current:null;
+  const allTimeAnalyticsPayload=report.ready?report.awards:null;
+  const exportOwner=JSON.stringify([user?.id,groupId]);
+  const activeExport=exportSelection?.owner===exportOwner?exportSelection:null;
+  const exportDayKey=activeExport?.dayKey??null;
+  const exportIntro=activeExport?.intro??'';
+  const hasExport=activeExport!==null;
+  const exportSince=activeExport?.since??null;
+  const exportScope=useMemo(()=>hasExport && groupId?arenaHistoryScope(groupId,{since:exportSince}):null,[hasExport,exportSince,groupId]);
+  const dayExport=useArenaDayExport(user?.id,exportScope,exportDayKey);
+  const setExportIntro=(intro:string)=>{if(activeExport)setExportSelection(current=>current?.id===activeExport.id?{...current,intro}:current);};
+
   const [editResetMonth, setEditResetMonth] = useState(1);
 
-  const refreshSeasonContext = useCallback(async () => {
-    if (!groupId || !user?.id) {
-      setSeasonContext(null);
-      return;
-    }
-    try {
-      setSeasonContext(await fetchArenaSeasonContext(supabase, groupId));
-    } catch {
-      setSeasonContext(null);
-    }
-  }, [groupId, user?.id]);
-
-  useEffect(() => {
-    void refreshSeasonContext();
-  }, [refreshSeasonContext]);
-
-  useEffect(() => {
-    if (!groupId || !user?.id) {
-      setAnalyticsPayload(null);
-      setAllTimeAnalyticsPayload(null);
-      return;
-    }
-    let active = true;
-    const seasonStart = seasonContext?.currentSeasonStart ?? null;
-    const currentRequest = fetchArenaAnalytics(supabase, groupId, dateFilter, seasonStart);
-    const allTimeRequest = dateFilter === 'all'
-      ? currentRequest
-      : fetchArenaAnalytics(supabase, groupId, 'all', seasonStart);
-    void Promise.all([currentRequest, allTimeRequest])
-      .then(([current, allTime]) => {
-        if (!active) return;
-        setAnalyticsPayload(current);
-        setAllTimeAnalyticsPayload(allTime);
-      })
-      .catch(() => {
-        if (!active) return;
-        // V6 backends without the aggregate RPC keep the client fallback.
-        setAnalyticsPayload(null);
-        setAllTimeAnalyticsPayload(null);
-      });
-    return () => { active = false; };
-  }, [dateFilter, groupId, seasonContext?.currentSeasonStart, user?.id]);
+  const refreshSeasonContext=season.reload;
 
   useEffect(() => {
     if (!detailsMatch?.id || detailsMatch.tracking_version == null) {
@@ -286,6 +264,13 @@ export default function TableScreen() {
     isPlatformAdmin: false,
   });
   const isArenaManager = Boolean(user && group?.created_by === user.id);
+  const matchFormContext = JSON.stringify([user?.id, groupId, isArenaManager]);
+  const createFormCommand = useArenaMatchFormCommand(matchFormContext, showRecordModal);
+  const editFormCommand = useArenaMatchFormCommand(matchFormContext, editingMatch?.id ?? null);
+  const savingMatch = createFormCommand.saving;
+  const savingEditMatch = editFormCommand.saving;
+  useLayoutEffect(() => { setShowRecordModal(false); setEditingMatch(null); }, [matchFormContext]);
+
   const canLeave = canLeaveArena(members.length, isMember);
 
   const periodMatches = useMemo(
@@ -304,41 +289,19 @@ export default function TableScreen() {
     [analyticsPayload, bracketFilter, deckStatsSort],
   );
 
-  const playerStats = useMemo(
-    () => (bracketFilter === 'all' ? analyticsView?.players : null) ?? calculatePlayerStats(filteredMatches),
-    [analyticsView?.players, bracketFilter, filteredMatches],
-  );
-
-  const commanderStats = useMemo(
-    () => analyticsView?.commanders
-      ?? calculateCommanderStats(filteredMatches, bracketFilter, deckStatsSort),
-    [analyticsView?.commanders, bracketFilter, deckStatsSort, filteredMatches],
-  );
-
-  const bracketOptions = useMemo(
-    () => getBracketOptionsFromMatches(periodMatches),
-    [periodMatches],
-  );
-
-  const colorAnalytics = useMemo(
-    () => analyticsView?.colors
-      ?? computeArenaColorAnalytics(filteredMatches, new Map(), bracketFilter),
-    [analyticsView?.colors, bracketFilter, filteredMatches],
-  );
-  const arenaAwards = useMemo(
-    () => allTimeAnalyticsPayload
-      ? buildArenaAnalyticsView(allTimeAnalyticsPayload).awards
-      : calculateArenaAwards(matches),
-    [allTimeAnalyticsPayload, matches],
-  );
-  const playerAwards = useMemo(() => buildPlayerAwards(matches), [matches]);
-  const reportedMatchCount = bracketFilter === 'all'
-    ? analyticsView?.totalMatches ?? filteredMatches.length
-    : filteredMatches.length;
+  const emptyAnalytics=createEmptyArenaAnalyticsView();
+  const playerStats=analyticsView?.players??emptyAnalytics.players;
+  const commanderStats=analyticsView?.commanders??emptyAnalytics.commanders;
+  const bracketOptions=analyticsPayload?.bracketOptions??[];
+  const colorAnalytics=analyticsView?.colors??emptyAnalytics.colors;
+  const arenaAwards=useMemo(()=>allTimeAnalyticsPayload?buildArenaAnalyticsView(allTimeAnalyticsPayload).awards:[],[allTimeAnalyticsPayload]);
+  const playerAwards=useMemo(()=>buildPlayerAwardsFromAggregates(allTimeAnalyticsPayload?.players??[]),[allTimeAnalyticsPayload]);
+  const reportedMatchCount=analyticsView?.totalMatches??0;
 
   const matchDayGroups = useMemo(() => {
     const locale = language === 'it' ? 'it-IT' : 'en-US';
     return groupMatchesByDay(filteredMatches, {
+      unknownDateLabel:language==='it'?'Data non disponibile':'Date unavailable',
       formatLabel: (dayKey) => {
         const [year, month, day] = dayKey.split('-').map(Number);
         return new Intl.DateTimeFormat(locale, {
@@ -383,15 +346,11 @@ export default function TableScreen() {
     });
   }, []);
 
-  const closeExportModal = useCallback(() => {
-    setExportDayKey(null);
-    setExportIntro('');
-  }, []);
-
+  const closeExportModal = useCallback(() => {setExportSelection(null);}, []);
   const openDayExportModal = useCallback((dayKey: string) => {
-    setExportDayKey(dayKey);
-    setExportIntro('');
-  }, []);
+    setExportSelection({id:++exportSequence.current,owner:exportOwner,dayKey,
+      since:getArenaAnalyticsSince(dateFilter,seasonContext?.currentSeasonStart),intro:''});
+  }, [dateFilter,exportOwner,seasonContext?.currentSeasonStart]);
 
   const exportDayGroup = useMemo(
     () => matchDayGroups.find((entry) => entry.dayKey === exportDayKey) ?? null,
@@ -410,7 +369,7 @@ export default function TableScreen() {
   }, [group]);
 
   const buildArenaStatsShareMessage = useCallback(() => {
-    if (!group) return '';
+    if (!group || !report.ready || !season.ready) return '';
 
     const locale = language === 'it' ? 'it-IT' : 'en-US';
     return buildArenaShareText({
@@ -487,16 +446,18 @@ export default function TableScreen() {
     group,
     language,
     playerStats,
-    reportedMatchCount,
+    reportedMatchCount,report.ready,season.ready,
   ]);
 
   const shareArenaStats = useCallback(() => {
     if (!group) return;
+    const message=buildArenaStatsShareMessage();
+    if(!message)return;
     setSharePreview({
       title: `${group.name} - 21Life`,
-      message: buildArenaStatsShareMessage(),
+      message,
     });
-  }, [buildArenaStatsShareMessage, group]);
+  }, [buildArenaStatsShareMessage, group,setSharePreview]);
 
   const confirmSharePreview = useCallback(async () => {
     if (!sharePreview) return;
@@ -506,7 +467,7 @@ export default function TableScreen() {
         title: sharePreview.title,
         message: sharePreview.message,
       });
-      setSharePreview(null);
+      setSharePreviewState(current=>current===sharePreview?null:current);
       showToast(copy('statsShared'));
     } catch {
       showAppAlert(copy('error'), copy('shareStatsFailed'));
@@ -528,9 +489,9 @@ export default function TableScreen() {
   });
 
   const handleExportDayMatches = useCallback(async () => {
-    if (!group || !exportDayGroup) return;
+    if (!group || !activeExport || !dayExport.ready || !dayExport.matches.length) return;
 
-    const exportMatches = [...exportDayGroup.matches]
+    const exportMatches = [...dayExport.matches as unknown as ArenaMatch[]]
       .reverse()
       .map((match) => buildSessionExportMatch(match));
     const text = buildArenaSessionExportText(exportIntro, exportMatches);
@@ -538,15 +499,15 @@ export default function TableScreen() {
 
     try {
       await Share.share({
-        title: exportDayGroup.label,
+        title: exportDayGroup?.label ?? activeExport.dayKey,
         message: text,
       });
-      closeExportModal();
+      setExportSelection(current=>current?.id===activeExport.id?null:current);
       showToast(copy('exportCopied'));
     } catch {
       showAppAlert(copy('error'), copy('shareStatsFailed'));
     }
-  }, [closeExportModal, copy, exportDayGroup, exportIntro, group, showToast]);
+  }, [activeExport,dayExport.matches,dayExport.ready,copy, exportDayGroup, exportIntro, group, showToast]);
 
   const handleShareMatch = useCallback(
     (match: ArenaMatch) => {
@@ -566,7 +527,7 @@ export default function TableScreen() {
       }, locale);
       setSharePreview({ title: copy('shareMatchLog'), message });
     },
-    [copy, group, language],
+    [copy, group, language,setSharePreview],
   );
 
   const openEditModal = () => {
@@ -587,7 +548,8 @@ export default function TableScreen() {
       const seasonSettingsChanged = editSeasonsEnabled !== (group?.seasons_enabled ?? true)
         || editResetMonth !== (seasonContext?.resetMonth ?? group?.season_reset_month ?? 1);
       if (seasonSettingsChanged) {
-        setSeasonContext(await setArenaSeasonSettings(supabase, groupId, editSeasonsEnabled, editResetMonth));
+        await setArenaSeasonSettings(supabase, groupId, editSeasonsEnabled, editResetMonth);
+        await refreshSeasonContext();
         await refresh();
       }
       setShowEditModal(false);
@@ -714,7 +676,8 @@ export default function TableScreen() {
     return (
       <Screen safeBottom>
         <PhyrexianPanel style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>{copy('arenaNotFound')}</Text>
+          <Text style={styles.emptyTitle}>{arenaError ? (language==='it'?'Playgroup non disponibile':'Playgroup unavailable'):copy('arenaNotFound')}</Text>
+          {arenaError?<Button label={language==='it'?'Riprova':'Retry'} onPress={()=>void refresh()}/>:null}
           <Button label={copy('goToDashboard')} onPress={() => router.replace('/(tabs)')} />
         </PhyrexianPanel>
       </Screen>
@@ -734,6 +697,7 @@ export default function TableScreen() {
           <Text style={styles.backLabel}>{copy('back')}</Text>
         </Pressable>
 
+        {arenaError?<View style={{gap:10}}><Text accessibilityRole="alert" style={{color:colors.destructive}}>{language==='it'?'Dati del playgroup non aggiornati. Riprova.':'Playgroup data is not current. Retry.'}</Text><Button label={language==='it'?'Riprova':'Retry'} onPress={()=>void refresh()}/></View>:null}
         {activeLiveGameId ? (
           <PhyrexianPanel style={styles.resumePanel}>
             <Text style={styles.resumeTitle}>{copy('gameInProgress')}</Text>
@@ -805,10 +769,12 @@ export default function TableScreen() {
 
         {activeTab === 'matches' ? (
           <View style={styles.matchesContent}>
-            <TableMatchesList
+            <ArenaHistoryStatus loaded={matches.length} total={historyTotal} loading={historyLoading} error={historyError}
+              cached={historyCached} language={language} onRetry={retryHistory}/>
+            {(!historyLoading && !historyError || matches.length>0) ? <TableMatchesList
               dayGroups={matchDayGroups}
               expandedDayKeys={expandedDayKeys}
-              emptyTitle={copy('noMatchesTitle')}
+              emptyTitle={hasMoreMatches || historyCached ? (language==='it'?'Nessuna partita tra quelle caricate':'No matches among loaded pages'):copy('noMatchesTitle')}
               emptyBody={copy('noMatchesBody')}
               recordBattleLabel={copy('recordBattle')}
               matchCountLabel={(count) => copy(count === 1 ? 'matchSingular' : 'matchPlural')}
@@ -821,17 +787,18 @@ export default function TableScreen() {
               exportDayLabel={copy('exportDay')}
               drawLabel={copy('liveGameDraw')}
               onExportDay={openDayExportModal}
-              hasMore={hasMoreMatches}
+              hasMore={hasMoreMatches && !historyError}
               loadingMore={loadingMoreMatches}
               loadMoreLabel={copy('loadOlderMatches')}
               loadingMoreLabel={copy('loadingOlderMatches')}
               onLoadMore={loadMoreMatches}
-            />
+            /> : null}
             {seasonContext ? <PreviousSeasonsPanel archives={seasonContext.archives} /> : null}
           </View>
         ) : null}
 
         {activeTab === 'players' ? (
+          <ArenaAnalyticsStatus loading={season.loading || report.loading} error={season.error || report.error} language={language} onRetry={season.error?season.reload:report.reload}>
           <TablePlayersTab
             filteredMatchCount={reportedMatchCount}
             members={members}
@@ -865,9 +832,11 @@ export default function TableScreen() {
             onKickMember={handleKickMember}
             onMessage={(message, error) => error ? showAppAlert(copy('error'), message) : showToast(message)}
           />
+          </ArenaAnalyticsStatus>
         ) : null}
 
         {activeTab === 'decks' ? (
+          <ArenaAnalyticsStatus loading={season.loading || report.loading} error={season.error || report.error} language={language} onRetry={season.error?season.reload:report.reload}>
           <TableDecksTab
             commanderStats={commanderStats}
             labels={{
@@ -886,9 +855,11 @@ export default function TableScreen() {
               noRankedDecks: copy('noRankedDecks'),
             }}
           />
+          </ArenaAnalyticsStatus>
         ) : null}
 
         {activeTab === 'awards' ? (
+          <ArenaAnalyticsStatus loading={season.loading || report.loading} error={season.error || report.error} language={language} onRetry={season.error?season.reload:report.reload}>
           <View style={styles.awardsSection}>
           <View style={styles.awardsToggle}>
             {(['decks', 'players'] as const).map((view) => <Pressable key={view} onPress={() => setAwardsView(view)} style={[styles.awardsToggleButton, awardsView === view && styles.awardsToggleButtonActive]}><Text style={[styles.awardsToggleText, awardsView === view && styles.awardsToggleTextActive]}>{view === 'players' ? (language === 'it' ? 'Giocatori' : 'Players') : (language === 'it' ? 'Mazzi' : 'Decks')}</Text></Pressable>)}
@@ -919,9 +890,11 @@ export default function TableScreen() {
             }}
           /> : <PlayerAwardsTab awards={playerAwards} language={language} />}
           </View>
+          </ArenaAnalyticsStatus>
         ) : null}
 
         {activeTab === 'meta' ? (
+          <ArenaAnalyticsStatus loading={season.loading || report.loading} error={season.error || report.error} language={language} onRetry={season.error?season.reload:report.reload}>
           <TableMetaTab
             filteredMatchCount={reportedMatchCount}
             colorAnalytics={colorAnalytics}
@@ -947,10 +920,13 @@ export default function TableScreen() {
               pentacolor: copy('pentacolor'),
             }}
           />
+          </ArenaAnalyticsStatus>
         ) : null}
 
         {false && (canManage || guests.length > 0) ? (
           <TableGuestsSection
+              key={`${user?.id}:${groupId}`}
+              language={language}
             guests={guests}
             canManage={canManage}
             labels={{
@@ -979,7 +955,7 @@ export default function TableScreen() {
 
         {isMember ? (
           <TableArenaManagement
-            showExportStats={reportedMatchCount > 0}
+            showExportStats={report.ready && reportedMatchCount > 0}
             canManage={canManage}
             canLeave={canLeave}
             labels={{
@@ -1043,6 +1019,8 @@ export default function TableScreen() {
         manager={<>
             <Text style={styles.modalTitle}>{copy('guestManagement')}</Text>
             <TableGuestsSection
+              key={`${user?.id}:${groupId}`}
+              language={language}
               guests={guests}
               canManage={canManage}
               labels={{ guestManagement: copy('guestManagement'), addGuest: copy('addGuest'), noGuestsBody: copy('noGuestsBody'), guestBadge: copy('guestBadge'), upgradeGuest: copy('upgradeGuest'), addDeckToGuest: copy('addDeckToGuest'), deleteGuest: copy('deleteGuest') }}
@@ -1191,17 +1169,9 @@ export default function TableScreen() {
         onClose={() => setShowRecordModal(false)}
         onError={(message) => showAppAlert(copy('error'), message)}
         onSave={async (input) => {
-          setSavingMatch(true);
-          try {
-            await createMatch(input);
-            setShowRecordModal(false);
-            void hapticSuccess();
-            showToast(copy('battleRecordedHint'));
-          } catch (error) {
-            showAppAlert(copy('error'), getSupabaseErrorMessage(error, copy('saveMatchFailed')));
-          } finally {
-            setSavingMatch(false);
-          }
+          await createFormCommand.run(signal => createMatch({ ...input, signal, requestScope: createFormCommand.opening }),
+            () => { setShowRecordModal(false); void hapticSuccess(); showToast(copy('battleRecordedHint')); },
+            error => showAppAlert(copy('error'), getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en')));
         }}
       />
 
@@ -1292,17 +1262,9 @@ export default function TableScreen() {
         onClose={() => setEditingMatch(null)}
         onError={(message) => showAppAlert(copy('error'), message)}
         onSave={async (input) => {
-          setSavingEditMatch(true);
-          try {
-            await updateMatch({ ...input, isArenaManager });
-            setEditingMatch(null);
-            void hapticSuccess();
-            showToast(copy('matchUpdated'));
-          } catch (error) {
-            showAppAlert(copy('error'), getSupabaseErrorMessage(error, copy('saveMatchFailed')));
-          } finally {
-            setSavingEditMatch(false);
-          }
+          await editFormCommand.run(signal => updateMatch({ ...input, isArenaManager, signal }),
+            () => { setEditingMatch(null); void hapticSuccess(); showToast(copy('matchUpdated')); },
+            error => showAppAlert(copy('error'), getArenaMatchWriteFailureMessage(error, language === 'it' ? 'it' : 'en')));
         }}
       />
 
@@ -1417,9 +1379,11 @@ export default function TableScreen() {
           <Text style={styles.modalBody}>
             {exportDayGroup.label}
             {' · '}
-            {exportDayGroup.matchCount} {copy(exportDayGroup.matchCount === 1 ? 'matchSingular' : 'matchPlural')}
+            {dayExport.ready?dayExport.matches.length:'—'} {copy('matchPlural')}
           </Text>
         ) : null}
+        {dayExport.loading?<Text style={styles.modalBody}>{language==='it'?'Caricamento giornata completa…':'Loading complete day…'}</Text>:null}
+        {dayExport.error?<View><Text accessibilityRole="alert" style={styles.modalBody}>{language==='it'?'Export non disponibile. Nessun risultato parziale.':'Export unavailable. No partial results.'}</Text><Button label={language==='it'?'Riprova':'Retry'} onPress={dayExport.retry}/></View>:null}
         <RichTextInput
           label={copy('exportIntro')}
           value={exportIntro}
@@ -1429,7 +1393,7 @@ export default function TableScreen() {
         />
         <View style={styles.modalActions}>
           <Button label={copy('cancel')} variant="outline" onPress={closeExportModal} style={styles.modalButton} />
-          <Button label={copy('generateExport')} onPress={handleExportDayMatches} style={styles.modalButton} />
+          <Button label={copy('generateExport')} disabled={!dayExport.ready || !dayExport.matches.length} onPress={handleExportDayMatches} style={styles.modalButton} />
         </View>
       </Modal>
     </Screen>

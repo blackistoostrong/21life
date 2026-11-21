@@ -19,7 +19,8 @@ export type MatchShareLabels = {
   eliminations: string;
 };
 
-function formatPlayedAt(playedAt: string, locale: string) {
+function formatPlayedAt(playedAt: string | null, locale: string) {
+  if (playedAt === null) return '—';
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
