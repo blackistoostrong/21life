@@ -55,7 +55,7 @@ def produce_package(output, compose_file, project, db_container, storage_contain
     counts_query = """SELECT jsonb_object_agg(table_schema || '.' || table_name,
       ((xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I',
       table_schema, table_name), false, true, '')))[1]::text)::bigint)
-      FROM information_schema.tables WHERE table_schema IN ('public','auth','storage')
+      FROM information_schema.tables WHERE table_schema IN ('public','auth','storage','app_private')
       AND table_type='BASE TABLE';"""
     snapshot = subprocess.Popen(['docker', 'exec', '-i', db_container, 'psql', '-X', '-qAt',
                                  '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', 'postgres'],
@@ -152,7 +152,7 @@ WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema';
     (output / 'recovery-inventory.json').write_text(json.dumps({
         'schemaVersion': 2, 'project': project, 'images': images,
         'snapshotCounts': counts, 'storageFiles': storage_inventory,
-        'tableSecurity': json.loads(sql("SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM\n(SELECT n.nspname||'.'||c.relname AS name, pg_get_userbyid(c.relowner) AS owner,\n ARRAY(SELECT a::text FROM unnest(coalesce(c.relacl,'{}'::aclitem[])) a ORDER BY a::text) AS acl\n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p','v','m','S')) r;")), 'storageUid': int(command(['docker','exec',storage_container,'id','-u'])),
+        'tableSecurity': json.loads(sql("SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM\n(SELECT n.nspname||'.'||c.relname AS name, pg_get_userbyid(c.relowner) AS owner,\n ARRAY(SELECT a::text FROM unnest(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::\"char\" ELSE 'r'::\"char\" END,c.relowner))) a ORDER BY a::text) AS acl\n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n WHERE n.nspname IN ('public','auth','storage','app_private') AND c.relkind IN ('r','p','v','m','S')) r;")), 'storageUid': int(command(['docker','exec',storage_container,'id','-u'])),
         'storageGid': int(command(['docker','exec',storage_container,'id','-g'])),
         'schemaSecurity': json.loads(sql("SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM (SELECT n.nspname AS name,pg_get_userbyid(n.nspowner) AS owner,ARRAY(SELECT a::text FROM unnest(coalesce(n.nspacl,'{}'::aclitem[])) a ORDER BY a::text) AS acl FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema') r;")),
         'configurationContainsSecrets': True,
