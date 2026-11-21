@@ -510,7 +510,16 @@ export default function LiveGameScreen() {
   }, []);
 
   useEffect(() => {
-    void loadLiveGameOutbox().then(setRecoveryOutbox);
+    let active = true;
+    void loadLiveGameOutbox().then(outbox => {
+      if (active) setRecoveryOutbox(outbox);
+    }).catch(() => {
+      if (active) {
+        setLocalPersistenceAvailable(false);
+        setSyncError('LIVE_GAME_OUTBOX_UNAVAILABLE');
+      }
+    });
+    return () => { active = false; };
   }, []);
 
   const syncJournal = useCallback(() => {
@@ -1482,6 +1491,8 @@ export default function LiveGameScreen() {
     authenticationRequired, hasError: syncError !== null,
   });
   const presentationCopy = getLiveGameSyncCopy(presentationState,language);
+  const visibleSyncError = syncError === 'LIVE_GAME_OUTBOX_UNAVAILABLE'
+    ? getLiveGameSyncCopy('storage_unavailable', language).label : syncError;
   const activePlayers = (gameState?.players ?? []).filter((player: LiveGamePlayer) => !player.isEliminated);
   const endGameWarnings = gameState ? getLiveGameResultWarnings(gameState, {
     winnerKey: endIsDraw ? null : endWinnerKey || null,
@@ -1555,7 +1566,7 @@ export default function LiveGameScreen() {
           syncStatus={getLiveGameSyncIndicator(presentationState)}
           syncLabel={presentationCopy.label}
           pendingSyncCount={presentationPendingCount}
-          syncError={presentationCopy.hint || (!localPersistenceAvailable ? presentationCopy.label : syncError)}
+          syncError={presentationCopy.hint || (!localPersistenceAvailable ? presentationCopy.label : visibleSyncError)}
           onRetrySync={() => void syncJournal()}
           onEndGame={() => openEndGameModal(liveGame.state)}
           onAdjust={handleAdjust}
@@ -1874,7 +1885,7 @@ export default function LiveGameScreen() {
       <ScrollView contentContainerStyle={[scrollContentStyle, styles.content]}>
           {recoveryOutbox.length > 0 ? (
             <LiveGameRecoveryPanel count={recoveryOutbox.length} language={language} syncing={syncStatus === 'syncing'}
-              error={syncError} onSync={() => void syncJournal()} onDiscard={() => setShowClearRecoveryConfirm(true)} />
+              error={visibleSyncError} onSync={() => void syncJournal()} onDiscard={() => setShowClearRecoveryConfirm(true)} />
           ) : null}
           <PhyrexianPanel style={styles.setupPanel}>
             <Text style={styles.setupTitle}>{copy('liveGameSetupTitle')}</Text>

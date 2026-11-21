@@ -127,9 +127,12 @@ export async function loadLiveGameOutbox(): Promise<ArchivedLiveGameOperation[]>
   try {
     const raw = await AsyncStorage.getItem(OUTBOX_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) throw new Error('Invalid outbox');
+    return parsed;
   } catch {
-    return [];
+    // An unreadable archive is not an empty archive: callers must not replace
+    // its bytes or clear the active journal on this failure.
+    throw new Error('LIVE_GAME_OUTBOX_UNAVAILABLE');
   }
 }
 

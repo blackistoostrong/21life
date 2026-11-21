@@ -101,14 +101,27 @@ describe('live game offline persistence', () => {
     expect((await loadLiveGameOfflineSession('group-1'))?.record.id).toBe('fresh');
   });
 
-  it('round-trips outbox entries and recovers from corrupted storage', async () => {
+  it('round-trips outbox entries and reports corrupted storage without discarding it', async () => {
     const item = { id: 'op-1', serverRecord: record(), needsCreate: false, mutations: [], finalization: null, cancel: true };
     await saveLiveGameOutbox([item]);
     expect(await loadLiveGameOutbox()).toEqual([item]);
     storage.set(outboxKey, '{broken');
-    expect(await loadLiveGameOutbox()).toEqual([]);
+    await expect(loadLiveGameOutbox()).rejects.toThrow('LIVE_GAME_OUTBOX_UNAVAILABLE');
     storage.set(outboxKey, JSON.stringify({ not: 'an array' }));
-    expect(await loadLiveGameOutbox()).toEqual([]);
+    await expect(loadLiveGameOutbox()).rejects.toThrow('LIVE_GAME_OUTBOX_UNAVAILABLE');
+  });
+
+  it('does not overwrite a corrupt outbox or clear the session when archival fails', async () => {
+    storage.set(outboxKey, '{broken');
+    storage.set(sessionKey, 'original-session');
+    storage.set(backupSessionKey, 'original-backup');
+    const item = { id: 'op-1', serverRecord: record(), needsCreate: false, mutations: [], finalization: null, cancel: true };
+    const writesBefore = multiSet.mock.calls.length;
+    await expect(archiveAndClearLiveGameSession('group-1', item)).rejects.toThrow('LIVE_GAME_OUTBOX_UNAVAILABLE');
+    expect(storage.get(outboxKey)).toBe('{broken');
+    expect(storage.get(sessionKey)).toBe('original-session');
+    expect(storage.get(backupSessionKey)).toBe('original-backup');
+    expect(multiSet.mock.calls.length).toBe(writesBefore);
   });
 
   it('deduplicates archived operations and clears the active session atomically', async () => {
