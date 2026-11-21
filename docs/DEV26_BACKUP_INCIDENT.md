@@ -53,3 +53,19 @@ confrontano i comandi normalizzati e le autorizzazioni, non l'ordine dei byte.
 L'evidenza privata dell'incidente resta conservata per diagnosi; non va aggiunta
 al repository o allegata a una PR. Le successive prove verdi non cancellano
 l'incidente né lo trasformano in una verifica mai fallita.
+
+## Verifica aggiuntiva21 novembre
+
+L'inventario ora comprende anche `app_private`, portando il confronto a61tabelle.
+Un primo confronto ha segnalato tre differenze: ACL esplicite del solo owner
+contro ACL implicite PostgreSQL equivalenti, con owner identico. La diagnostica
+privata è stata conservata; non sono stati modificati permessi sorgente.
+Il confronto normalizza soltanto ACL NULL tramite `acldefault` per tipo e owner,
+conservando il confronto integrale delle ACL esplicite.
+
+Drill `imp12-drill-466cdf90ebac` passato dal pacchetto automatico v2 scaricato
+dal deposito cifrato:61tabelle,2login, REST autorizzato e diniego cross-user,
+4oggetti Storage/hash/xattr/privacy, owner/ACL, configurazione recuperata senza
+leggere il sorgente durante il restore. Guard READ ONLY e cleanup verificati.
+Restore19.9s, prova41.06s; clone isolato sulla stessaVM, nessuna prova di perdita
+totalehost o certificazione SLA. Nessuna modifica a produzione o schedule.
