@@ -1,21 +1,22 @@
+import { useNativeLiveSetup } from '@/hooks/use-native-live-setup';
+import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
+import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
-import { restoreSetupDecks } from '@/components/live-game/restore-setup-decks';
 import { useFocusEffect , useLocalSearchParams, useRouter } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
 
 import * as Crypto from 'expo-crypto';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { DeckImage } from '@/components/deck/deck-image';
-import { LiveGameConfigurator, type SetupParticipant } from '@/components/live-game/live-game-configurator';
+import { LiveGameConfigurator } from '@/components/live-game/live-game-configurator';
 import { TableArena } from '@/components/live-game/table-arena';
 import { LiveGameRecapView } from '@/components/live-game/live-game-recap';
 import { LiveGameRecoveryPanel } from '@/components/live-game/recovery-panel';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
-import { toDeckOption } from '@/components/table/match-participant-row';
 import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Modal } from '@/components/ui/modal';
@@ -39,8 +40,6 @@ import { apiPost } from '@/lib/api';
 import { ArenaSyncError, syncAndRefreshArenaMember } from '@/lib/arena-archidekt-sync';
 import { queueLiveGameJournalWrite } from '@/lib/live-game-journal-writer';
 import { countLiveGamePendingOperations, getLiveGameSyncState, getLiveGameSyncIndicator, getLiveGameSyncCopy, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
-import { getLastDeckSelectionForParticipant } from '@/lib/arena-participants';
-import { getPreferredDeckId } from '@/lib/arena-deck-selection';
 import {
   applyLiveGameMutation,
   createLiveGamePlayer,
@@ -59,26 +58,13 @@ import {
   type WinCondition,
 } from '@/lib/live-game';
 import { buildRouletteSequence } from '@/lib/live-game-roulette';
-import type { TableLayoutVariant } from '@/lib/live-game-table-layout';
 import {
-  createDefaultLiveGameSetup,
-  clearLiveGameSeats,
-  loadLiveGameSetup,
   saveLiveGameSetup,
-  type LiveGameSeatSetup,
 } from '@/lib/live-game-setup';
 import { formatGameDuration, getGameDurationSeconds } from '@/lib/live-game-duration';
 import { withLiveGameTimeout } from '@/lib/live-game-async';
 import { getDiscardConfirmationVisibility } from '@/lib/live-game-modal-state';
-import {
-  applyQueuedLiveGameMutations,
-  cancelLiveGame,
-  ensureLiveGameCreated,
-  fetchActiveLiveGame,
-  fetchBusyLiveGameParticipantKeys,
-  finalizePendingLiveGame,
-  subscribeToLiveGame,
-} from '@/lib/live-game-service';
+import { applyQueuedLiveGameMutations, cancelLiveGame, ensureLiveGameCreated, fetchActiveLiveGame, fetchBusyLiveGameParticipantKeys, subscribeToLiveGame } from '@/lib/live-game-service';
 import {
   LIVE_GAME_SYNC_BATCH_SIZE,
   getLiveGameSyncDelay,
@@ -111,14 +97,9 @@ import {
   applyLiveGameOrientationLock,
   clearLiveGameOrientationLock,
 } from '@/lib/live-game-orientation';
-import { parseParticipantKey, toGuestParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+import { parseParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { prefetchCommanderNames, prefetchDeckImageUrls } from '@/lib/deck-image-cache';
 import { supabase } from '@/lib/supabase';
-import type { MemberDeck } from '@/lib/types/arena';
-
-type LifePreset = '20' | '25' | '30' | '40' | '60' | 'custom';
-const LIFE_PRESETS: LifePreset[] = ['20', '25', '30', '40', '60'];
 const WIN_CONDITIONS: {
   value: WinCondition;
   icon: keyof typeof Ionicons.glyphMap;
@@ -150,8 +131,10 @@ export default function LiveGameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const groupId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const currentUserId = user?.id;
+  const { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient, beginCommand: beginLiveCommand } =
+    useLiveGameCommandScope(currentUserId, groupId, session);
   const { copy, language } = useLanguage();
   const { featureFlags } = useRuntimeConfig();
   const { showToast } = useToast();
@@ -159,17 +142,11 @@ export default function LiveGameScreen() {
 
   const { members, guests, decks, matches, loading, group, refreshMemberDecks } = useArena(groupId, user?.id);
 
+  const { selectedKeys, participantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup } = useNativeLiveSetup(groupId, user, { members, guests, decks, matches, loading },
+    { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient });
+
   const [liveGame, setLiveGame] = useState<LiveGameRecord | null>(null);
   const [booting, setBooting] = useState(true);
-  const [selectedKeys, setSelectedKeys] = useState<ParticipantKey[]>([]);
-  const [participantDecks, setParticipantDecks] = useState<Record<string, string>>({});
-  const [playerCount, setPlayerCount] = useState(4);
-  const [layoutVariant, setLayoutVariant] = useState<TableLayoutVariant>('classic');
-  const [seatSetups, setSeatSetups] = useState<LiveGameSeatSetup[]>(
-    createDefaultLiveGameSetup().seats,
-  );
-  const [lifePreset, setLifePreset] = useState<LifePreset>('40');
-  const [customLife, setCustomLife] = useState('40');
   const [starting, setStarting] = useState(false);
   const [archidektSyncRequest, setArchidektSyncRequest] = useState<{
     userId: string;
@@ -228,11 +205,6 @@ export default function LiveGameScreen() {
       needsCreate: needsCreateRef.current, finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
   },[]);
   const telemetrySessionRef = useRef(Crypto.randomUUID());
-  const [setupReadyKey, setSetupReadyKey] = useState<string | null>(null);
-  const [setupRestoreError, setSetupRestoreError] = useState(false);
-  const [setupRetry, setSetupRetry] = useState(0);
-  const setupHydratingRef = useRef(false);
-  const setupHydratedRef = useRef<string | null>(null);
 
   const openEndGameModal = useCallback((state: LiveGameState) => {
     const suggested = getSuggestedWinner(state);
@@ -266,107 +238,6 @@ export default function LiveGameScreen() {
       openEndGameModal(liveGame.state);
     }
   }, [liveGame, openEndGameModal]);
-
-  const startingLife = useMemo(() => {
-    if (lifePreset === 'custom') {
-      const parsed = Number.parseInt(customLife, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 40;
-    }
-    return Number.parseInt(lifePreset, 10);
-  }, [customLife, lifePreset]);
-
-  const [occasionalDecks, setOccasionalDecks] = useState<MemberDeck[]>([]);
-  const decksByUser = useMemo(() => {
-    const map = new Map<string, MemberDeck[]>();
-    [...decks, ...occasionalDecks].forEach((deck) => {
-      const current = map.get(deck.user_id) || [];
-      current.push(deck);
-      map.set(deck.user_id, current);
-    });
-    return map;
-  }, [decks, occasionalDecks]);
-
-  const getDeckOptions = useCallback((key: ParticipantKey) => {
-    if (key.startsWith('guest:')) {
-      const guestId = key.slice(6);
-      const guestDecks = guests.find((guest) => guest.id === guestId)?.arena_guest_decks || [];
-      return guestDecks.map(toDeckOption);
-    }
-    return (decksByUser.get(key.slice(5)) || []).map(toDeckOption);
-  }, [decksByUser, guests]);
-
-  const setupParticipants = useMemo<SetupParticipant[]>(() => [
-    ...members.map((member) => {
-      const key = toUserParticipantKey(member.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: getProfileDisplayName(member),
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-    ...guests.map((guest) => {
-      const key = toGuestParticipantKey(guest.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: guest.display_name,
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-  ], [getDeckOptions, guests, matches, members]);
-
-  const applySeatSetups = useCallback((nextSeats: LiveGameSeatSetup[]) => {
-    setSeatSetups(nextSeats);
-    const assigned = nextSeats.filter(
-      (seat): seat is { participantKey: ParticipantKey; deckId: string | null } => Boolean(seat.participantKey),
-    );
-    setSelectedKeys(assigned.map((seat) => seat.participantKey));
-    setParticipantDecks(Object.fromEntries(
-      assigned.filter((seat) => seat.deckId).map((seat) => [seat.participantKey, seat.deckId!]),
-    ));
-  }, []);
-
-  const applyStartingLife = useCallback((value: number) => {
-    const preset = String(value) as LifePreset;
-    if (LIFE_PRESETS.includes(preset)) {
-      setLifePreset(preset);
-      setCustomLife(String(value));
-    } else {
-      setLifePreset('custom');
-      setCustomLife(String(value));
-    }
-  }, []);
-
-  const handlePlayerCountChange = useCallback((count: number) => {
-    setPlayerCount(count);
-    applySeatSetups(Array.from({ length: count }, (_, index) => (
-      seatSetups[index] ?? { participantKey: null, deckId: null }
-    )));
-  }, [applySeatSetups, seatSetups]);
-
-  const handleAssignSeat = useCallback((
-    index: number,
-    participantKey: ParticipantKey | null,
-    deckId: string | null,
-  ) => {
-    const next = seatSetups.map((seat, seatIndex) => {
-      if (seatIndex === index) return { participantKey, deckId };
-      if (participantKey && seat.participantKey === participantKey) {
-        return { participantKey: null, deckId: null };
-      }
-      return seat;
-    });
-    applySeatSetups(next);
-  }, [applySeatSetups, seatSetups]);
 
   const handleSelectSetupParticipant = useCallback((participantKey: ParticipantKey) => {
     const generation = ++archidektSyncGeneration.current;
@@ -425,26 +296,41 @@ export default function LiveGameScreen() {
     });
   }, [archidektSyncRequest, copy, handleSelectSetupParticipant, language, refreshMemberDecks]);
 
-  const resetSetup = useCallback(() => {
-    applySeatSetups(clearLiveGameSeats(seatSetups));
-  }, [applySeatSetups, seatSetups]);
-
-  useEffect(() => {
-    const selectedDecks = seatSetups.flatMap((seat) => {
-      if (!seat.participantKey || !seat.deckId) return [];
-      const deck = getDeckOptions(seat.participantKey).find((option) => option.id === seat.deckId);
-      return deck ? [deck] : [];
-    });
-    if (selectedDecks.length === 0) return;
-    void prefetchDeckImageUrls(selectedDecks.map((deck) => deck.commander_image), { background: true });
-    void prefetchCommanderNames(selectedDecks.map((deck) => deck.commander), { background: true });
-  }, [getDeckOptions, seatSetups]);
-
   const setOptimisticRecord = useCallback((record: LiveGameRecord | null) => {
+    if (liveGameRef.current?.id !== record?.id) {
+      syncPromiseRef.current = null;
+      syncRunningRef.current = false;
+    }
     liveGameRef.current = record;
     replaceLiveGameRuntimePlayers(record?.state.players ?? []);
     setLiveGame(record);
   }, []);
+
+  useLayoutEffect(() => {
+    bootstrappingRef.current = true;
+    syncPromiseRef.current = null;
+    syncRunningRef.current = false;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = null;
+    journalWriteRef.current = Promise.resolve();
+    serverRecordRef.current = null;
+    mutationQueueRef.current = [];
+    needsCreateRef.current = false;
+    pendingFinalizationRef.current = null;
+    pendingCancelRef.current = false;
+    sessionClosedRef.current = false;
+    historyRef.current = createLiveGameHistory();
+    setOptimisticRecord(null);
+    setBooting(true);
+    setRecoveryOutbox([]);
+    setUndoDepth(0); setRedoDepth(0); setPendingSyncCount(0);
+    setShowEndGame(false); setShowRematch(false); setCompletedGame(null);
+    setShowDiscardConfirm(false); setShowExitChoice(false); setShowClearRecoveryConfirm(false);
+    setEndWinnerKey(''); setEndIsDraw(false); setEndWinCondition(null);
+    setStarting(false); setEndingGame(false); setDiscardingGame(false);
+    setPendingEliminate(null); setDamagePulse({}); setRandomHighlight(null); setStartingHighlight(null);
+    rouletteTimersRef.current.forEach(clearTimeout); rouletteTimersRef.current = [];
+  }, [liveScopeEpoch, setOptimisticRecord]);
 
   useEffect(() => () => {
     clearLiveGameRuntimePlayers();
@@ -465,58 +351,42 @@ export default function LiveGameScreen() {
     };
     publishPendingSyncCount();
     journalWriteRef.current = queueLiveGameJournalWrite(journalWriteRef.current, async () => {
-        if (sessionClosedRef.current) return;
-        await saveLiveGameOfflineSession(groupId, snapshot);
+        if (isLiveScopeCurrent() && sessionClosedRef.current) return;
+        await saveLiveGameOfflineSession(groupId, snapshot, currentUserId);
       }, saved => {
-        if (!sessionClosedRef.current) setLocalPersistenceAvailable(saved);
+        if (isLiveScopeCurrent() && !sessionClosedRef.current) setLocalPersistenceAvailable(saved);
       });
     return journalWriteRef.current;
-  }, [groupId, publishPendingSyncCount]);
+  }, [currentUserId, groupId, isLiveScopeCurrent, publishPendingSyncCount]);
 
   const flushOutbox = useCallback(async () => {
-    const outbox = await loadLiveGameOutbox();
-    setRecoveryOutbox(outbox);
-    while (outbox.length > 0) {
-      const item = outbox[0];
-      let serverRecord = item.serverRecord;
-      if (item.needsCreate) {
-        serverRecord = await ensureLiveGameCreated(supabase, serverRecord);
-        item.serverRecord = serverRecord;
-        item.needsCreate = false;
-        await saveLiveGameOutbox(outbox);
-      }
-      while (item.mutations.length > 0) {
-        const batch = item.mutations.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
-        serverRecord = await applyQueuedLiveGameMutations(supabase, serverRecord, batch);
-        item.serverRecord = serverRecord;
-        item.mutations = item.mutations.slice(batch.length);
-        await saveLiveGameOutbox(outbox);
-      }
-      if (item.finalization) {
-        const matchId = await finalizePendingLiveGame(
-          supabase,
-          serverRecord.id,
-          item.finalization,
-          serverRecord.state,
-        );
-        void apiPost('/api/notifications/match-completed', { matchId });
-      } else if (item.cancel) {
-        await cancelLiveGame(supabase, serverRecord.id);
-      }
-      outbox.shift();
-      await saveLiveGameOutbox(outbox);
-      setRecoveryOutbox([...outbox]);
-    }
-  }, []);
+    if (!isLiveScopeCurrent()) return;
+    const bound = bindLiveClient();
+    await replayLiveGameOutbox(bound.client, currentUserId ?? '', setRecoveryOutbox, isLiveScopeCurrent,
+      matchId => { void apiPost('/api/notifications/match-completed', { matchId }, {
+        authenticated: false, headers: { Authorization: `Bearer ${bound.accessToken}` },
+      }); });
+  }, [bindLiveClient, currentUserId, isLiveScopeCurrent]);
 
   useEffect(() => {
-    void loadLiveGameOutbox().then(setRecoveryOutbox);
-  }, []);
+    let active = true;
+    void loadLiveGameOutbox(currentUserId).then(outbox => {
+      if (active && isLiveScopeCurrent()) setRecoveryOutbox(outbox);
+    }).catch(() => {
+      if (active && isLiveScopeCurrent()) {
+        setLocalPersistenceAvailable(false);
+        setSyncError('LIVE_GAME_OUTBOX_UNAVAILABLE');
+      }
+    });
+    return () => { active = false; };
+  }, [currentUserId, isLiveScopeCurrent]);
 
   const syncJournal = useCallback(() => {
     // Bootstrap owns journal/outbox replacement; reconnect must not sync the
     // old session concurrently while its operations are being archived.
-    if (bootstrappingRef.current) return Promise.resolve();
+    if (bootstrappingRef.current || !isLiveScopeCurrent()) return Promise.resolve();
+    const gameId = liveGameRef.current?.id ?? null;
+    const active = () => isLiveScopeCurrent() && (liveGameRef.current?.id ?? null) === gameId;
     if (syncTimerRef.current) {
       clearTimeout(syncTimerRef.current);
       syncTimerRef.current = null;
@@ -528,23 +398,25 @@ export default function LiveGameScreen() {
     let tracked: Promise<void>;
     tracked = (async () => {
       let failed = false;
+      let commandClient: ReturnType<typeof bindLiveClient>['client'] | null = null;
       try {
+        commandClient = bindLiveClient().client;
         await flushOutbox();
-        if (sessionClosedRef.current) return;
+        if (!active() || sessionClosedRef.current) return;
         let serverRecord = serverRecordRef.current;
         if (!serverRecord) return;
         if (needsCreateRef.current) {
-          serverRecord = await ensureLiveGameCreated(supabase, serverRecord);
-          if (sessionClosedRef.current) return;
+          serverRecord = await ensureLiveGameCreated(commandClient, serverRecord);
+          if (!active() || sessionClosedRef.current) return;
           serverRecordRef.current = serverRecord;
           needsCreateRef.current = false;
           await saveJournal();
         }
 
-        while (mutationQueueRef.current.length > 0) {
+        while (active() && mutationQueueRef.current.length > 0) {
           const batch = mutationQueueRef.current.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
-          serverRecord = await applyQueuedLiveGameMutations(supabase, serverRecord, batch);
-          if (sessionClosedRef.current) return;
+          serverRecord = await applyQueuedLiveGameMutations(commandClient, serverRecord, batch);
+          if (!active() || sessionClosedRef.current) return;
           serverRecordRef.current = serverRecord;
           mutationQueueRef.current = mutationQueueRef.current.slice(batch.length);
           if (mutationQueueRef.current.length === 0) syncBatchStartedAtRef.current = null;
@@ -553,12 +425,14 @@ export default function LiveGameScreen() {
           await saveJournal();
         }
 
-        if (pendingCancelRef.current) {
-          await cancelLiveGame(supabase, serverRecord.id);
+        if (active() && pendingCancelRef.current) {
+          await cancelLiveGame(commandClient, serverRecord.id);
+          if (!active()) return;
           pendingCancelRef.current = false;
-          await clearLiveGameOfflineSession(groupId);
+          await clearLiveGameOfflineSession(groupId, currentUserId);
         }
       } catch (error) {
+        if (!active()) return;
         failed = true;
         setAuthenticationRequired(isLiveGameAuthenticationError(error));
         const message = getSupabaseErrorMessage(error, 'Sync failed');
@@ -566,14 +440,14 @@ export default function LiveGameScreen() {
         recordLiveGameSyncError(new Error(message));
         setSyncStatus('error');
         // Offline, timeout or a transient Realtime gap: the durable journal retries later.
-      } finally {
+      } finally { if (active()) {
         syncRunningRef.current = false;
         if (!failed) {
           setAuthenticationRequired(false);
           setSyncStatus(mutationQueueRef.current.length ? 'pending' : 'synced');
         }
-        if (currentUserId) {
-          void persistLiveGameTelemetry(supabase, {
+        if (currentUserId && commandClient) {
+          void persistLiveGameTelemetry(commandClient, {
             userId: currentUserId,
             liveGameId: liveGameRef.current?.id ?? null,
             sessionId: telemetrySessionRef.current,
@@ -581,13 +455,13 @@ export default function LiveGameScreen() {
             force: failed,
           }).catch(() => undefined);
         }
-      }
+      } }
     })().finally(() => {
       if (syncPromiseRef.current === tracked) syncPromiseRef.current = null;
     });
     syncPromiseRef.current = tracked;
     return tracked;
-  }, [currentUserId, flushOutbox, groupId, publishPendingSyncCount, saveJournal, setOptimisticRecord]);
+  }, [bindLiveClient, currentUserId, flushOutbox, groupId, isLiveScopeCurrent, publishPendingSyncCount, saveJournal, setOptimisticRecord]);
 
   const flushArchivedOutbox = useCallback(() => {
     const pendingSync = syncPromiseRef.current;
@@ -618,6 +492,7 @@ export default function LiveGameScreen() {
 
   useEffect(() => {
     return NetInfo.addEventListener((state) => {
+      if (!isLiveScopeCurrent()) return;
       const online = state.isConnected === true && state.isInternetReachable !== false;
       setNetworkOnline(online);
       if (!online) {
@@ -630,7 +505,7 @@ export default function LiveGameScreen() {
       }
       void syncJournal();
     });
-  }, [syncJournal]);
+  }, [isLiveScopeCurrent, syncJournal]);
 
   // Depend on the stable user id, not the session object: Supabase replaces
   // `user` on every token refresh and the old dependency re-ran this bootstrap
@@ -641,15 +516,16 @@ export default function LiveGameScreen() {
     let mounted = true;
     void (async () => {
       let cached = await withLiveGameTimeout(
-        loadLiveGameOfflineSession(groupId),
+        loadLiveGameOfflineSession(groupId, currentUserId),
         3_000,
       ).catch(() => null);
-      if (!mounted) return;
+      if (!mounted || !isLiveScopeCurrent()) return;
       const participantKey = toUserParticipantKey(currentUserId);
       if (cached && !cached.record.state.players.some(
         (player) => player.participantKey === participantKey,
       )) {
-        await clearLiveGameOfflineSession(groupId);
+        await clearLiveGameOfflineSession(groupId, currentUserId);
+        if (!mounted || !isLiveScopeCurrent()) return;
         cached = null;
       }
       if (cached) {
@@ -670,15 +546,15 @@ export default function LiveGameScreen() {
 
       try {
         const remote = await withLiveGameTimeout(
-          fetchActiveLiveGame(supabase, groupId, participantKey),
+          fetchActiveLiveGame(bindLiveClient().client, groupId, participantKey),
         );
-        if (!mounted) return;
+        if (!mounted || !isLiveScopeCurrent()) return;
         if (remote && (!cached || !cached.needsCreate || remote.id === cached.record.id)) {
           if (cached && remote.id !== cached.record.id) {
             const replacement = await prepareLiveGameReplacement(
-              groupId, cached, remote, journalWriteRef.current,
+              groupId, cached, remote, journalWriteRef.current, currentUserId,
             );
-            if (!mounted) return;
+            if (!mounted || !isLiveScopeCurrent()) return;
             // Terminal flags and undo history belong to the archived game.
             // Clear them before installing the new server record or syncing it.
             pendingFinalizationRef.current = replacement.pendingFinalization;
@@ -697,7 +573,8 @@ export default function LiveGameScreen() {
           setOptimisticRecord(replayQueuedMutations(remote, queue));
           await saveJournal();
         } else if (!remote && cached && !cached.needsCreate) {
-          await clearLiveGameOfflineSession(groupId);
+          await clearLiveGameOfflineSession(groupId, currentUserId);
+          if (!mounted || !isLiveScopeCurrent()) return;
           serverRecordRef.current = null;
           mutationQueueRef.current = [];
           syncBatchStartedAtRef.current = null;
@@ -712,7 +589,7 @@ export default function LiveGameScreen() {
       } catch {
         // Cached session remains fully playable while offline.
       } finally {
-        if (mounted) {
+        if (mounted && isLiveScopeCurrent()) {
           bootstrappingRef.current = false;
           setBooting(false);
           void syncJournal();
@@ -720,32 +597,32 @@ export default function LiveGameScreen() {
       }
     })();
     return () => { mounted = false; };
-  }, [currentUserId, groupId, publishPendingSyncCount, saveJournal, setOptimisticRecord, syncJournal]);
+  }, [bindLiveClient, currentUserId, groupId, isLiveScopeCurrent, publishPendingSyncCount, saveJournal, setOptimisticRecord, syncJournal]);
 
   const refreshAuthoritativeState = useCallback(async () => {
     const current = liveGameRef.current;
-    if (!groupId || !currentUserId || !current || needsCreateRef.current || syncRunningRef.current) return;
-    const remote = await fetchActiveLiveGame(supabase, groupId, toUserParticipantKey(currentUserId));
-    if (!remote || remote.id !== current.id || sessionClosedRef.current || liveGameRef.current?.id !== current.id) return;
+    if (!isLiveScopeCurrent() || !groupId || !currentUserId || !current || needsCreateRef.current || syncRunningRef.current) return;
+    const remote = await fetchActiveLiveGame(bindLiveClient().client, groupId, toUserParticipantKey(currentUserId));
+    if (!isLiveScopeCurrent() || !remote || remote.id !== current.id || sessionClosedRef.current || liveGameRef.current?.id !== current.id) return;
     serverRecordRef.current = remote;
     setOptimisticRecord(replayQueuedMutations(remote, mutationQueueRef.current));
     await saveJournal();
-  }, [currentUserId, groupId, saveJournal, setOptimisticRecord]);
+  }, [bindLiveClient, currentUserId, groupId, isLiveScopeCurrent, saveJournal, setOptimisticRecord]);
 
   // A single failed boot lookup (network change, timeout, expired session)
   // used to leave the setup screen while the server still considered this
   // player busy in an active game: resume was unavailable and a new game was
   // rejected. Retry the authoritative lookup while no local game is loaded.
   const resumeRemoteGame = useCallback(async () => {
-    if (bootstrappingRef.current || !groupId || !currentUserId || liveGameRef.current) return;
+    if (!isLiveScopeCurrent() || bootstrappingRef.current || !groupId || !currentUserId || liveGameRef.current) return;
     // Never resurrect a game that is being finalized or discarded, or one
     // that already produced a recap: the server may still report it active
     // until the queued terminal operation is flushed.
     if (sessionClosedRef.current || pendingFinalizationRef.current || pendingCancelRef.current || completedGame) return;
     const remote = await withLiveGameTimeout(
-      fetchActiveLiveGame(supabase, groupId, toUserParticipantKey(currentUserId)),
+      fetchActiveLiveGame(bindLiveClient().client, groupId, toUserParticipantKey(currentUserId)),
     );
-    if (!remote || liveGameRef.current || sessionClosedRef.current || completedGame) return;
+    if (!isLiveScopeCurrent() || !remote || liveGameRef.current || sessionClosedRef.current || completedGame) return;
     sessionClosedRef.current = false;
     serverRecordRef.current = remote;
     mutationQueueRef.current = [];
@@ -760,8 +637,8 @@ export default function LiveGameScreen() {
     setSyncStatus('synced');
     setOptimisticRecord(remote);
     await saveJournal();
-    void syncJournal();
-  }, [completedGame, currentUserId, groupId, saveJournal, setOptimisticRecord, syncJournal]);
+    if (isLiveScopeCurrent()) void syncJournal();
+  }, [bindLiveClient, completedGame, currentUserId, groupId, isLiveScopeCurrent, saveJournal, setOptimisticRecord, syncJournal]);
 
   useEffect(() => {
     if (booting || liveGame || completedGame) return undefined;
@@ -774,7 +651,7 @@ export default function LiveGameScreen() {
   useEffect(() => {
     if (!liveGame?.id || needsCreateRef.current) return undefined;
     return subscribeToLiveGame(supabase, liveGame.id, (remote) => {
-      if (sessionClosedRef.current) return;
+      if (!isLiveScopeCurrent() || sessionClosedRef.current) return;
       // A channel removal is asynchronous: ignore an event delivered for a
       // previous game after the local session already moved on.
       if (liveGameRef.current?.id !== liveGame.id) return;
@@ -790,7 +667,7 @@ export default function LiveGameScreen() {
         setUndoDepth(0);
         setRedoDepth(0);
         setOptimisticRecord(null);
-        void clearLiveGameOfflineSession(groupId);
+        void clearLiveGameOfflineSession(groupId, currentUserId);
         if (remote.status === 'ended') {
           setCompletedGame(remote);
           setCompletedDurationSeconds(getGameDurationSeconds(remote.started_at, remote.ended_at ?? new Date().toISOString()));
@@ -807,6 +684,7 @@ export default function LiveGameScreen() {
       setOptimisticRecord(replayQueuedMutations(remote, mutationQueueRef.current));
       void saveJournal();
     }, (status) => {
+      if (!isLiveScopeCurrent()) return;
       if (status === 'SUBSCRIBED') {
         setSyncStatus(mutationQueueRef.current.length ? 'pending' : 'synced');
         void refreshAuthoritativeState().catch(() => undefined).finally(() => syncJournal());
@@ -814,41 +692,7 @@ export default function LiveGameScreen() {
         setSyncStatus('offline');
       }
     });
-  }, [copy, groupId, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
-
-  useEffect(() => {
-    if (!groupId || !user || loading || setupHydratingRef.current || setupHydratedRef.current === `${user.id}:${groupId}`) return;
-    setupHydratingRef.current = true;
-    setSetupRestoreError(false);
-    void loadLiveGameSetup(groupId, user.id).then(async (saved) => {
-      if (!saved) { setupHydratedRef.current = `${user.id}:${groupId}`; setSetupReadyKey(`${user.id}:${groupId}`); return; }
-      const savedDeckIds = saved.seats.filter(seat => seat.participantKey?.startsWith('user:') && seat.deckId).map(seat => seat.deckId!);
-      let restoredDecks: MemberDeck[] = [];
-      if (savedDeckIds.length) {
-        restoredDecks = await restoreSetupDecks(supabase, groupId, savedDeckIds);
-        setOccasionalDecks(current => [...current.filter(deck => !restoredDecks.some(restored => restored.id === deck.id)), ...restoredDecks]);
-      }
-      const participantMap = new Map(setupParticipants.map((participant) => [participant.key, participant]));
-      const validatedSeats = saved.seats.map((seat) => {
-        if (!seat.participantKey) return { participantKey: null, deckId: null };
-        const participant = participantMap.get(seat.participantKey);
-        if (!participant) return { participantKey: null, deckId: null };
-        const validDeck = participant.decks.some((deck) => deck.id === seat.deckId)
-          || restoredDecks.some(deck => deck.id === seat.deckId && `user:${deck.user_id}` === seat.participantKey);
-        const fallbackDeck = participant.preferredDeckId;
-        return {
-          participantKey: seat.participantKey,
-          deckId: validDeck ? seat.deckId : fallbackDeck,
-        };
-      });
-      setPlayerCount(saved.playerCount);
-      setLayoutVariant(saved.layoutVariant);
-      applyStartingLife(saved.startingLife);
-      applySeatSetups(validatedSeats);
-      setupHydratedRef.current = `${user.id}:${groupId}`;
-      setSetupReadyKey(`${user.id}:${groupId}`);
-    }).catch(() => { setSetupRestoreError(true); }).finally(() => { setupHydratingRef.current = false; });
-  }, [applySeatSetups, applyStartingLife, groupId, loading, setupParticipants, setupRetry, user]);
+  }, [copy, currentUserId, groupId, isLiveScopeCurrent, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -880,7 +724,7 @@ export default function LiveGameScreen() {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       appStateSubscription.remove();
     };
-  }, [currentUserId, refreshAuthoritativeState, resumeRemoteGame, syncJournal]);
+  }, [currentUserId, refreshAuthoritativeState, resumeRemoteGame, setSetupRetry, syncJournal]);
 
   const liveGameId = liveGame?.id ?? null;
   const liveGamePlayerCount = liveGame?.state.players.length ?? 0;
@@ -1052,6 +896,7 @@ export default function LiveGameScreen() {
   };
 
   const handleStart = async () => {
+    if (!isLiveScopeCurrent()) return;
     if (setupReadyKey !== `${user?.id}:${groupId}`) return;
     if (!user) return;
     if (selectedKeys.length !== playerCount) {
@@ -1074,12 +919,15 @@ export default function LiveGameScreen() {
       return;
     }
 
+    const command = beginLiveCommand();
+    if (!command) return;
     setStarting(true);
     try {
       try {
         const busyKeys = await withLiveGameTimeout(
-          fetchBusyLiveGameParticipantKeys(supabase, groupId, selectedKeys),
+          fetchBusyLiveGameParticipantKeys(bindLiveClient().client, groupId, selectedKeys),
         );
+        if (!command.isCurrent()) return;
         if (busyKeys.length > 0) {
           showToast(copy('liveGamePlayersBusy'));
           return;
@@ -1087,6 +935,7 @@ export default function LiveGameScreen() {
       } catch {
         // Offline starts remain available; the durable outbox will retry later.
       }
+      if (!command.isCurrent()) return;
 
       const players = resolvedPlayers.map(({ key, meta }, slot) => createLiveGamePlayer({
         slot,
@@ -1141,14 +990,17 @@ export default function LiveGameScreen() {
         startingLife,
         seats: seatSetups,
       }).catch(() => undefined);
+      if (!command.isCurrent()) return;
       revealStartingPlayer(created.state.startingPlayerKey ?? null, selectedKeys);
       await saveJournal();
+      if (!command.isCurrent()) return;
       void syncJournal();
       showToast(copy('liveGameStarted'));
     } catch {
-      showToast(copy('liveGameStartFailed'));
+      if (command.isCurrent()) showToast(copy('liveGameStartFailed'));
     } finally {
-      setStarting(false);
+      if (command.isCurrent()) setStarting(false);
+      command.release();
     }
   };
 
@@ -1245,6 +1097,8 @@ export default function LiveGameScreen() {
 
   const handleDiscardGame = async () => {
     if (!liveGame || discardingGame || sessionClosedRef.current) return;
+    const command = beginLiveCommand();
+    if (!command) return;
 
     setDiscardingGame(true);
     sessionClosedRef.current = true;
@@ -1263,11 +1117,12 @@ export default function LiveGameScreen() {
         mutations: mutationQueueRef.current,
         finalization: null,
         cancel: true,
-      });
+      }, currentUserId);
       void pendingJournal
         .catch(() => undefined)
-        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id))
+        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
+      if (!command.isCurrent()) return;
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
       syncBatchStartedAtRef.current = null;
@@ -1283,18 +1138,23 @@ export default function LiveGameScreen() {
       showToast(copy('liveGameDiscarded'));
       router.replace(`/table/${groupId}`);
     } catch {
+      if (!command.isCurrent()) return;
       sessionClosedRef.current = false;
       pendingCancelRef.current = false;
       void saveJournal();
       showToast(copy('liveGameDiscardFailed'));
     } finally {
-      setDiscardingGame(false);
-      setShowDiscardConfirm(false);
-      setShowEndGame(false);
+      if (command.isCurrent()) {
+        setDiscardingGame(false);
+        setShowDiscardConfirm(false);
+        setShowEndGame(false);
+      }
+      command.release();
     }
   };
 
   const handleEndGame = async () => {
+    if (!isLiveScopeCurrent()) return;
     if (!user || !liveGame || endingGame || sessionClosedRef.current) return;
     if (!endIsDraw && !endWinnerKey) {
       showToast(copy('liveGameWinnerError'));
@@ -1313,6 +1173,8 @@ export default function LiveGameScreen() {
       return;
     }
 
+    const command = beginLiveCommand();
+    if (!command) return;
     setEndingGame(true);
     try {
       if (!endIsDraw && endWinCondition === 'last_standing' && activePlayers.length > 1 && endWinnerKey) {
@@ -1362,11 +1224,12 @@ export default function LiveGameScreen() {
         mutations: mutationQueueRef.current,
         finalization: pending,
         cancel: false,
-      });
+      }, currentUserId);
       void pendingJournal
         .catch(() => undefined)
-        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id))
+        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
+      if (!command.isCurrent()) return;
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
       syncBatchStartedAtRef.current = null;
@@ -1383,13 +1246,17 @@ export default function LiveGameScreen() {
       showToast(`${endIsDraw ? copy('liveGameSavedDraw') : copy('liveGameSaved')} · ${formatGameDuration(durationSeconds)}`);
       setShowRematch(true);
     } catch {
+      if (!command.isCurrent()) return;
       sessionClosedRef.current = false;
       pendingFinalizationRef.current = null;
       void saveJournal();
       showToast(copy('liveGameSaveFailed'));
     } finally {
-      setEndingGame(false);
-      setShowEndGame(false);
+      if (command.isCurrent()) {
+        setEndingGame(false);
+        setShowEndGame(false);
+      }
+      command.release();
     }
   };
 
@@ -1405,62 +1272,67 @@ export default function LiveGameScreen() {
     })));
     applyStartingLife(previous.starting_life);
     return previous;
-  }, [applySeatSetups, applyStartingLife, completedGame]);
+  }, [applySeatSetups, applyStartingLife, completedGame, setLayoutVariant, setPlayerCount]);
 
   const handleRematchSameDecks = useCallback(async () => {
-    if (!user) return;
-    const previous = preparePreviousPod();
-    if (!previous) return;
-    const keys = previous.state.players.map((player) => player.participantKey);
-    const players = previous.state.players.map((player, slot) => createLiveGamePlayer({
-      slot,
-      participantKey: player.participantKey,
-      deckId: player.deckId,
-      displayName: player.displayName,
-      commander: player.commander,
-      commanderImage: player.commanderImage,
-      startingLife: previous.starting_life,
-      allParticipantKeys: keys,
-    }));
-    const now = new Date().toISOString();
-    const startingPlayer = players[Math.floor(Math.random() * players.length)];
-    const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
-    const record: LiveGameRecord = {
-      id: Crypto.randomUUID(),
-      group_id: groupId,
-      created_by: user.id,
-      status: 'active',
-      starting_life: previous.starting_life,
-      state: {
-        version: 0,
-        players,
-        layoutVariant: previous.state.layoutVariant ?? 'classic',
-        startingPlayerKey: startingPlayer?.participantKey ?? null,
-        startingDirection,
-        events: [],
-        summary: createLiveGameSummary(),
-      },
-      match_id: null,
-      started_at: now,
-      ended_at: null,
-      created_at: now,
-      updated_at: now,
-    };
-    sessionClosedRef.current = false;
-    serverRecordRef.current = record;
-    mutationQueueRef.current = [];
-    syncBatchStartedAtRef.current = null;
-    setPendingSyncCount(0);
-    historyRef.current = createLiveGameHistory();
-    setUndoDepth(0);
-    setRedoDepth(0);
-    needsCreateRef.current = true;
-    setOptimisticRecord(record);
-    revealStartingPlayer(record.state.startingPlayerKey ?? null, keys);
-    setShowRematch(false);
-    await saveJournal();
-    void syncJournal();
-  }, [groupId, preparePreviousPod, revealStartingPlayer, saveJournal, setOptimisticRecord, syncJournal, user]);
+    if (!user || !isLiveScopeCurrent()) return;
+    const command = beginLiveCommand();
+    if (!command) return;
+    try {
+      const previous = preparePreviousPod();
+      if (!previous) return;
+      const keys = previous.state.players.map((player) => player.participantKey);
+      const players = previous.state.players.map((player, slot) => createLiveGamePlayer({
+        slot,
+        participantKey: player.participantKey,
+        deckId: player.deckId,
+        displayName: player.displayName,
+        commander: player.commander,
+        commanderImage: player.commanderImage,
+        startingLife: previous.starting_life,
+        allParticipantKeys: keys,
+      }));
+      const now = new Date().toISOString();
+      const startingPlayer = players[Math.floor(Math.random() * players.length)];
+      const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
+      const record: LiveGameRecord = {
+        id: Crypto.randomUUID(),
+        group_id: groupId,
+        created_by: user.id,
+        status: 'active',
+        starting_life: previous.starting_life,
+        state: {
+          version: 0,
+          players,
+          layoutVariant: previous.state.layoutVariant ?? 'classic',
+          startingPlayerKey: startingPlayer?.participantKey ?? null,
+          startingDirection,
+          events: [],
+          summary: createLiveGameSummary(),
+        },
+        match_id: null,
+        started_at: now,
+        ended_at: null,
+        created_at: now,
+        updated_at: now,
+      };
+      sessionClosedRef.current = false;
+      serverRecordRef.current = record;
+      mutationQueueRef.current = [];
+      syncBatchStartedAtRef.current = null;
+      setPendingSyncCount(0);
+      historyRef.current = createLiveGameHistory();
+      setUndoDepth(0);
+      setRedoDepth(0);
+      needsCreateRef.current = true;
+      setOptimisticRecord(record);
+      revealStartingPlayer(record.state.startingPlayerKey ?? null, keys);
+      setShowRematch(false);
+      await saveJournal();
+      if (!command.isCurrent()) return;
+      void syncJournal();
+    } finally { command.release(); }
+  }, [beginLiveCommand, groupId, isLiveScopeCurrent, preparePreviousPod, revealStartingPlayer, saveJournal, setOptimisticRecord, syncJournal, user]);
 
   const handleRematchReselect = useCallback(() => {
     preparePreviousPod();
@@ -1482,6 +1354,8 @@ export default function LiveGameScreen() {
     authenticationRequired, hasError: syncError !== null,
   });
   const presentationCopy = getLiveGameSyncCopy(presentationState,language);
+  const visibleSyncError = syncError === 'LIVE_GAME_OUTBOX_UNAVAILABLE'
+    ? getLiveGameSyncCopy('storage_unavailable', language).label : syncError;
   const activePlayers = (gameState?.players ?? []).filter((player: LiveGamePlayer) => !player.isEliminated);
   const endGameWarnings = gameState ? getLiveGameResultWarnings(gameState, {
     winnerKey: endIsDraw ? null : endWinnerKey || null,
@@ -1555,7 +1429,7 @@ export default function LiveGameScreen() {
           syncStatus={getLiveGameSyncIndicator(presentationState)}
           syncLabel={presentationCopy.label}
           pendingSyncCount={presentationPendingCount}
-          syncError={presentationCopy.hint || (!localPersistenceAvailable ? presentationCopy.label : syncError)}
+          syncError={presentationCopy.hint || (!localPersistenceAvailable ? presentationCopy.label : visibleSyncError)}
           onRetrySync={() => void syncJournal()}
           onEndGame={() => openEndGameModal(liveGame.state)}
           onAdjust={handleAdjust}
@@ -1874,7 +1748,7 @@ export default function LiveGameScreen() {
       <ScrollView contentContainerStyle={[scrollContentStyle, styles.content]}>
           {recoveryOutbox.length > 0 ? (
             <LiveGameRecoveryPanel count={recoveryOutbox.length} language={language} syncing={syncStatus === 'syncing'}
-              error={syncError} onSync={() => void syncJournal()} onDiscard={() => setShowClearRecoveryConfirm(true)} />
+              error={visibleSyncError} onSync={() => void syncJournal()} onDiscard={() => setShowClearRecoveryConfirm(true)} />
           ) : null}
           <PhyrexianPanel style={styles.setupPanel}>
             <Text style={styles.setupTitle}>{copy('liveGameSetupTitle')}</Text>
@@ -1941,7 +1815,7 @@ export default function LiveGameScreen() {
         icon="warning-outline"
         tone="danger"
         onClose={() => setShowClearRecoveryConfirm(false)}
-        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { void saveLiveGameOutbox([]); setRecoveryOutbox([]); setShowClearRecoveryConfirm(false); } }]}
+        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { void saveLiveGameOutbox([], currentUserId); setRecoveryOutbox([]); setShowClearRecoveryConfirm(false); } }]}
       />
       <Modal
         visible={showRematch}

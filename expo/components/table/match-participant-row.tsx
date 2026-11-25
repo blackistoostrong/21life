@@ -5,18 +5,12 @@ import { DeckImage } from '@/components/deck/deck-image';
 import { DeckCarousel, useDeckCarouselCardWidth } from '@/components/ui/deck-carousel';
 import { Input } from '@/components/ui/input';
 import { colors, spacing } from '@/constants/theme';
-import type { ArenaGuestDeck } from '@/lib/arena-participants';
-import type { ParticipantKey } from '@/lib/participant-keys';
 
-export type DeckOption = {
-  id: string;
-  name: string;
-  commander: string;
-  commander_image: string | null;
-  bracket: string | null;
-  source_type?: string | null;
-  is_favorite?: boolean;
-};
+import type { ParticipantKey } from '@/lib/participant-keys';
+import type { DeckOption } from '@/lib/arena-deck-option';
+
+export type { DeckOption } from '@/lib/arena-deck-option';
+export { toDeckOption } from '@/lib/arena-deck-option';
 
 type MatchParticipantRowProps = {
   participantKey: ParticipantKey;
@@ -228,17 +222,7 @@ export function MatchParticipantRow({
   );
 }
 
-export function toDeckOption(deck: DeckOption | ArenaGuestDeck): DeckOption {
-  return {
-    id: deck.id,
-    name: deck.name,
-    commander: deck.commander,
-    commander_image: deck.commander_image,
-    bracket: deck.bracket,
-    source_type: 'source_type' in deck ? deck.source_type : 'guest',
-    is_favorite: 'is_favorite' in deck ? Boolean(deck.is_favorite) : false,
-  };
-}
+
 
 const styles = StyleSheet.create({
   row: {

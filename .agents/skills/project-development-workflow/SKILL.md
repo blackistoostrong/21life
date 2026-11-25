@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live9.3.0: `expo/hooks/use-live-game-command-scope.ts` owns account/group command leases; `expo/lib/live-game-command-client.ts` freezes each command's JWT; `expo/lib/live-game-outbox-replay.ts` owns archived replay. `expo/hooks/use-native-live-setup.ts` owns setup draft, participant/deck projection and scoped restoration; `expo/lib/arena-deck-option.ts` is the pure deck projection (component re-export retained). The play screen still owns active-game orchestration and rendering; point6 remains open.
+
 - `app/`: Next.js 16 App Router pages, layouts, and API routes for the web application.
 - `components/`: shared web UI and feature components.
 - Profile deck workflows: `hooks/use-profile-{catalog,catalog-actions,deck-collection,deck-refresh,deck-link,deck-persistence,manual-deck,url-import,archidekt-import,commander-editor}.ts` own scoped reads, commands and drafts; `components/profile/` composes typed presentation, including the shared commander art picker. See `docs/DEV26_ARCHITECTURE.md`.
@@ -97,6 +99,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 - `docs/`: current release-readiness, legal, provenance, and operating documentation.
 
 ## Persistent checklist
+
+Native offline storage: `expo/lib/live-game-offline.ts` owns v3 account/group journal and per-account outbox keys, actor/version envelopes, shadow copies, durable tombstones and per-account I/O serialization. Every native caller passes the captured actor. Legacy creator-only migration retains v2 originals and prevents replay after scoped clear. Storage isolation is verified separately from in-flight sync and UI lifecycle, which remain open.
 
 History/share ownership: `arena-history-panel.tsx` presents pagination and rows through typed callbacks; `use-arena-sharing.ts` owns existing browser share/invitation actions, and `use-arena-session-export.ts` owns day groups, complete-export draft and scoped opening/acknowledgement lifecycle. PM priority20Nov is a testable9.3.0 candidate: finish the current block, freeze further refactor, run consolidated critical checks; original plan remains open in the single checklist.
 

@@ -1,5 +1,27 @@
 # DEV26 — Architettura e responsabilità
 
+## ACK archivio nativo — 25 novembre
+
+Il replay non salva più una copia completa dell'outbox letta prima di una richiesta di rete. `acknowledgeLiveGameOutboxItem`, nell'owner storage, rilegge l'archivio dentro la coda per account e confronta ID/snapshot dell'elemento inviato. Sostituisce/rimuove solo quella voce. Archivio revisionato o rimosso: nessuna scrittura, replay fermato e stato corrente restituito; altre partite aggiunte mentre il server risponde restano intatte. Il read/compare/write è serializzato insieme ad archiviazione/clear, senza tenere il lock durante la rete. Non promette transazioni fra processi OS distinti o rollback server: i comandi remoti già accettati restano idempotenti al retry.
+
+Due regressioni sullo storage reale con adapter AsyncStorage in memoria perdevano i dati prima della correzione; quattro casi finali coprono aggiunta, revisione stesso ID, clear volontario e due replay concorrenti. QualityExpo614+3skip/139floor PASS, nessuna soglia precedente ridotta. Verifica finale con Dev/logout e bundle ancora separata.
+
+## Setup nativo — 25 novembre
+
+`useNativeLiveSetup` possiede draft (posti, vite, layout, deck selezionati), proiezione del catalogo, preload e ripristino persistito. Non riceve una collezione di setter dalla pagina: crea lo stato e ne governa il reset per account/gruppo. L'estrazione77ca8717 conserva24statement da095eb14e; il fix successivo lega storage e lookup a un job dell'epoch, valida contro il catalogo corrente, cancella il trasporto al cambio scope/unmount e applica deadline8s. Il rinnovo JWT conserva il draft. La proiezione pura `arena-deck-option` mantiene il re-export del componente per i consumer esistenti.
+
+Pagina nativa2111righe non vuote, setup201 e replay53: il target dimensionale della pagina rimane aperto. Prova ROSSA sul blocco precedente: B rimane fermo dietro la lettura A (1read invece di2). Matrice finale28browser React reali desktop/mobile PASS, quality610nativi e853web (3/7skip rispettivamente; SQL opzionali non configurate),139/148floor invariati e71script. Il fixture setup risiede in Expo per essere compilato con gli alias nativi; il driver Playwright lo carica col bundler reale. Nessuna esclusione TS/Knip o nuova dipendenza. Non equivale a un collaudo su dispositivo o all'esecuzione del renderer React Native completo.
+
+## Lifecycle sync nativo — 25 novembre
+
+Comandi start/end/discard/rematch: lo stesso owner espone uno slot sincrono per l'epoch, rilasciato per identità. Un finally vecchio non libera il comando di un nuovo account. I consumer controllano la lease dopo lookup/setup/journal/archivio e prima di feedback, navigazione e nuovo sync. Il busy lookup usa il client con JWT catturato. Le scritture account-specifiche già partite possono completare, ma non modificano lo stato del nuovo owner. Verifica aggiuntiva: sei regressioni su handler produttivi estratti dal parser TypeScript falliscono sul commit precedente; otto casi finali e16 browser React verdi. QualityExpo608+3skip,139floor. Questo completa il blocco di guard asincrone dei quattro comandi, non il refactor dimensionale o il collaudo fisico della pagina.
+
+`useLiveGameCommandScope` possiede l'epoch account/gruppo e il cleanup al commit React. Il rinnovo della sessione dello stesso account aggiorna il token disponibile senza sostituire l'epoch. `createLiveGameCommandClient` lega ogni comando a un bearer catturato usando l'opzione pubblica accessToken dell'SDK installato: una nuova sessione sul client globale non cambia l'identità di un comando già partito. Nessuna sessione viene persistita o rinnovata da questi client; i servizi non usano il loro modulo Auth.
+
+`live-game-outbox-replay` possiede il replay dell'archivio account-specifico: creazione, batch, finalizzazione/cancellazione e ACK persistiti. Ogni await è seguito da un controllo di appartenenza prima di aggiornare UI, proseguire o confermare l'elemento. Le notifiche usano il bearer del comando. Una richiesta già accettata dal server non è annullata: un ACK arrivato dopo cambio scope lascia il comando nel journal per il replay idempotente successivo.
+
+La pagina conserva bootstrap, sync e Realtime, ora protetti dall'epoch e dall'ID partita. Il cambio account/gruppo azzera subito refs/UI locali e distacca i job vecchi; il loro finally non libera slot dei job nuovi. Le scritture locali già accodate restano legate all'account originario. Restano separatamente aperti i comandi di avvio/chiusura/scarto/rematch e la riduzione dimensionale della pagina. Prove: 13 test servizio/client e6 casi browser sul vero hook React/SDK; quality600 nativi e857 web, nessun vecchio floor ridotto. Nessuna certificazione dispositivo o chiusura globale del punto6.
+
 Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring delle schermate parziale**, non attestazione di completamento del punto6.
 
 ## Stato corrente — 20 novembre
