@@ -36,6 +36,12 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 
 ## Modello per i prossimi fallimenti
 
+## 2026-11-25 — SDK57 nel ramo journal PR262
+
+- Merge origin/maintenance/dev26-expo-sdk-patches9dfe3807 in fix/dev26-native-outbox-preservation1047baef: exit1 soltanto PROJECT_CHECKLIST, append concorrenti. PR262 OPEN/head1047baef verificati; nessun build/merge remoto dipendente avviato.
+- Recupero: preservate entrambe le sezioni del registro unico; sorgenti SDK e journal non in conflitto. Verificare zero unmerged/marker e nuovi check prima dell'integrazione Dev.
+- Prevenzione: confrontare le aggiunte alla checklist quando si incorporano dipendenze tra PR; non sostituire il file intero con ours/theirs.
+
 ## 2026-11-20 — PR241 integrazione Dev bloccata dal toolchain dei test condivisi
 
 - PM richiede merge Dev e APK9.3.0 Dev. PR241 OPEN/MERGEABLE ma BLOCKED sud83e81a3; nessun tentativo di merge/buildAPK effettuato.
