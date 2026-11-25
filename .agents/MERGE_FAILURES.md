@@ -36,6 +36,11 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 
 ## Modello per i prossimi fallimenti
 
+## 2026-11-25 — SDK57 nel ramo logout PR267
+
+- Merge origin/maintenance/dev26-expo-sdk-patches9dfe3807 in fix/dev26-logout62f903fc: exit1 soltanto PROJECT_CHECKLIST per append concorrenti. PR267 OPEN/head62f903fc verificati; nessun build dipendente avviato.
+- Recupero: conservare tutte le aggiunte a registro; nessun conflitto applicativo. Richiedere zero marker/unmerged e nuovi gate verdi prima del merge remoto; nessun ours/theirs del registro intero.
+
 ## 2026-11-20 — PR241 integrazione Dev bloccata dal toolchain dei test condivisi
 
 - PM richiede merge Dev e APK9.3.0 Dev. PR241 OPEN/MERGEABLE ma BLOCKED sud83e81a3; nessun tentativo di merge/buildAPK effettuato.
