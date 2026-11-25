@@ -146,7 +146,7 @@ export default function LiveGameScreen() {
   const router = useRouter();
   const { user, session } = useAuth();
   const currentUserId = user?.id;
-  const { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient } =
+  const { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient, beginCommand: beginLiveCommand } =
     useLiveGameCommandScope(currentUserId, groupId, session);
   const { copy, language } = useLanguage();
   const { featureFlags } = useRuntimeConfig();
@@ -469,6 +469,7 @@ export default function LiveGameScreen() {
     setShowEndGame(false); setShowRematch(false); setCompletedGame(null);
     setShowDiscardConfirm(false); setShowExitChoice(false); setShowClearRecoveryConfirm(false);
     setEndWinnerKey(''); setEndIsDraw(false); setEndWinCondition(null);
+    setStarting(false); setEndingGame(false); setDiscardingGame(false);
     setPendingEliminate(null); setDamagePulse({}); setRandomHighlight(null); setStartingHighlight(null);
     rouletteTimersRef.current.forEach(clearTimeout); rouletteTimersRef.current = [];
   }, [liveScopeEpoch, setOptimisticRecord]);
@@ -512,15 +513,15 @@ export default function LiveGameScreen() {
   useEffect(() => {
     let active = true;
     void loadLiveGameOutbox(currentUserId).then(outbox => {
-      if (active) setRecoveryOutbox(outbox);
+      if (active && isLiveScopeCurrent()) setRecoveryOutbox(outbox);
     }).catch(() => {
-      if (active) {
+      if (active && isLiveScopeCurrent()) {
         setLocalPersistenceAvailable(false);
         setSyncError('LIVE_GAME_OUTBOX_UNAVAILABLE');
       }
     });
     return () => { active = false; };
-  }, [currentUserId]);
+  }, [currentUserId, isLiveScopeCurrent]);
 
   const syncJournal = useCallback(() => {
     // Bootstrap owns journal/outbox replacement; reconnect must not sync the
@@ -568,6 +569,7 @@ export default function LiveGameScreen() {
 
         if (active() && pendingCancelRef.current) {
           await cancelLiveGame(commandClient, serverRecord.id);
+          if (!active()) return;
           pendingCancelRef.current = false;
           await clearLiveGameOfflineSession(groupId, currentUserId);
         }
@@ -632,6 +634,7 @@ export default function LiveGameScreen() {
 
   useEffect(() => {
     return NetInfo.addEventListener((state) => {
+      if (!isLiveScopeCurrent()) return;
       const online = state.isConnected === true && state.isInternetReachable !== false;
       setNetworkOnline(online);
       if (!online) {
@@ -644,7 +647,7 @@ export default function LiveGameScreen() {
       }
       void syncJournal();
     });
-  }, [syncJournal]);
+  }, [isLiveScopeCurrent, syncJournal]);
 
   // Depend on the stable user id, not the session object: Supabase replaces
   // `user` on every token refresh and the old dependency re-ran this bootstrap
@@ -1069,6 +1072,7 @@ export default function LiveGameScreen() {
   };
 
   const handleStart = async () => {
+    if (!isLiveScopeCurrent()) return;
     if (setupReadyKey !== `${user?.id}:${groupId}`) return;
     if (!user) return;
     if (selectedKeys.length !== playerCount) {
@@ -1091,12 +1095,15 @@ export default function LiveGameScreen() {
       return;
     }
 
+    const command = beginLiveCommand();
+    if (!command) return;
     setStarting(true);
     try {
       try {
         const busyKeys = await withLiveGameTimeout(
-          fetchBusyLiveGameParticipantKeys(supabase, groupId, selectedKeys),
+          fetchBusyLiveGameParticipantKeys(bindLiveClient().client, groupId, selectedKeys),
         );
+        if (!command.isCurrent()) return;
         if (busyKeys.length > 0) {
           showToast(copy('liveGamePlayersBusy'));
           return;
@@ -1104,6 +1111,7 @@ export default function LiveGameScreen() {
       } catch {
         // Offline starts remain available; the durable outbox will retry later.
       }
+      if (!command.isCurrent()) return;
 
       const players = resolvedPlayers.map(({ key, meta }, slot) => createLiveGamePlayer({
         slot,
@@ -1158,14 +1166,17 @@ export default function LiveGameScreen() {
         startingLife,
         seats: seatSetups,
       }).catch(() => undefined);
+      if (!command.isCurrent()) return;
       revealStartingPlayer(created.state.startingPlayerKey ?? null, selectedKeys);
       await saveJournal();
+      if (!command.isCurrent()) return;
       void syncJournal();
       showToast(copy('liveGameStarted'));
     } catch {
-      showToast(copy('liveGameStartFailed'));
+      if (command.isCurrent()) showToast(copy('liveGameStartFailed'));
     } finally {
-      setStarting(false);
+      if (command.isCurrent()) setStarting(false);
+      command.release();
     }
   };
 
@@ -1262,6 +1273,8 @@ export default function LiveGameScreen() {
 
   const handleDiscardGame = async () => {
     if (!liveGame || discardingGame || sessionClosedRef.current) return;
+    const command = beginLiveCommand();
+    if (!command) return;
 
     setDiscardingGame(true);
     sessionClosedRef.current = true;
@@ -1285,6 +1298,7 @@ export default function LiveGameScreen() {
         .catch(() => undefined)
         .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
+      if (!command.isCurrent()) return;
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
       syncBatchStartedAtRef.current = null;
@@ -1300,18 +1314,23 @@ export default function LiveGameScreen() {
       showToast(copy('liveGameDiscarded'));
       router.replace(`/table/${groupId}`);
     } catch {
+      if (!command.isCurrent()) return;
       sessionClosedRef.current = false;
       pendingCancelRef.current = false;
       void saveJournal();
       showToast(copy('liveGameDiscardFailed'));
     } finally {
-      setDiscardingGame(false);
-      setShowDiscardConfirm(false);
-      setShowEndGame(false);
+      if (command.isCurrent()) {
+        setDiscardingGame(false);
+        setShowDiscardConfirm(false);
+        setShowEndGame(false);
+      }
+      command.release();
     }
   };
 
   const handleEndGame = async () => {
+    if (!isLiveScopeCurrent()) return;
     if (!user || !liveGame || endingGame || sessionClosedRef.current) return;
     if (!endIsDraw && !endWinnerKey) {
       showToast(copy('liveGameWinnerError'));
@@ -1330,6 +1349,8 @@ export default function LiveGameScreen() {
       return;
     }
 
+    const command = beginLiveCommand();
+    if (!command) return;
     setEndingGame(true);
     try {
       if (!endIsDraw && endWinCondition === 'last_standing' && activePlayers.length > 1 && endWinnerKey) {
@@ -1384,6 +1405,7 @@ export default function LiveGameScreen() {
         .catch(() => undefined)
         .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
+      if (!command.isCurrent()) return;
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
       syncBatchStartedAtRef.current = null;
@@ -1400,13 +1422,17 @@ export default function LiveGameScreen() {
       showToast(`${endIsDraw ? copy('liveGameSavedDraw') : copy('liveGameSaved')} · ${formatGameDuration(durationSeconds)}`);
       setShowRematch(true);
     } catch {
+      if (!command.isCurrent()) return;
       sessionClosedRef.current = false;
       pendingFinalizationRef.current = null;
       void saveJournal();
       showToast(copy('liveGameSaveFailed'));
     } finally {
-      setEndingGame(false);
-      setShowEndGame(false);
+      if (command.isCurrent()) {
+        setEndingGame(false);
+        setShowEndGame(false);
+      }
+      command.release();
     }
   };
 
@@ -1425,59 +1451,64 @@ export default function LiveGameScreen() {
   }, [applySeatSetups, applyStartingLife, completedGame]);
 
   const handleRematchSameDecks = useCallback(async () => {
-    if (!user) return;
-    const previous = preparePreviousPod();
-    if (!previous) return;
-    const keys = previous.state.players.map((player) => player.participantKey);
-    const players = previous.state.players.map((player, slot) => createLiveGamePlayer({
-      slot,
-      participantKey: player.participantKey,
-      deckId: player.deckId,
-      displayName: player.displayName,
-      commander: player.commander,
-      commanderImage: player.commanderImage,
-      startingLife: previous.starting_life,
-      allParticipantKeys: keys,
-    }));
-    const now = new Date().toISOString();
-    const startingPlayer = players[Math.floor(Math.random() * players.length)];
-    const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
-    const record: LiveGameRecord = {
-      id: Crypto.randomUUID(),
-      group_id: groupId,
-      created_by: user.id,
-      status: 'active',
-      starting_life: previous.starting_life,
-      state: {
-        version: 0,
-        players,
-        layoutVariant: previous.state.layoutVariant ?? 'classic',
-        startingPlayerKey: startingPlayer?.participantKey ?? null,
-        startingDirection,
-        events: [],
-        summary: createLiveGameSummary(),
-      },
-      match_id: null,
-      started_at: now,
-      ended_at: null,
-      created_at: now,
-      updated_at: now,
-    };
-    sessionClosedRef.current = false;
-    serverRecordRef.current = record;
-    mutationQueueRef.current = [];
-    syncBatchStartedAtRef.current = null;
-    setPendingSyncCount(0);
-    historyRef.current = createLiveGameHistory();
-    setUndoDepth(0);
-    setRedoDepth(0);
-    needsCreateRef.current = true;
-    setOptimisticRecord(record);
-    revealStartingPlayer(record.state.startingPlayerKey ?? null, keys);
-    setShowRematch(false);
-    await saveJournal();
-    void syncJournal();
-  }, [groupId, preparePreviousPod, revealStartingPlayer, saveJournal, setOptimisticRecord, syncJournal, user]);
+    if (!user || !isLiveScopeCurrent()) return;
+    const command = beginLiveCommand();
+    if (!command) return;
+    try {
+      const previous = preparePreviousPod();
+      if (!previous) return;
+      const keys = previous.state.players.map((player) => player.participantKey);
+      const players = previous.state.players.map((player, slot) => createLiveGamePlayer({
+        slot,
+        participantKey: player.participantKey,
+        deckId: player.deckId,
+        displayName: player.displayName,
+        commander: player.commander,
+        commanderImage: player.commanderImage,
+        startingLife: previous.starting_life,
+        allParticipantKeys: keys,
+      }));
+      const now = new Date().toISOString();
+      const startingPlayer = players[Math.floor(Math.random() * players.length)];
+      const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
+      const record: LiveGameRecord = {
+        id: Crypto.randomUUID(),
+        group_id: groupId,
+        created_by: user.id,
+        status: 'active',
+        starting_life: previous.starting_life,
+        state: {
+          version: 0,
+          players,
+          layoutVariant: previous.state.layoutVariant ?? 'classic',
+          startingPlayerKey: startingPlayer?.participantKey ?? null,
+          startingDirection,
+          events: [],
+          summary: createLiveGameSummary(),
+        },
+        match_id: null,
+        started_at: now,
+        ended_at: null,
+        created_at: now,
+        updated_at: now,
+      };
+      sessionClosedRef.current = false;
+      serverRecordRef.current = record;
+      mutationQueueRef.current = [];
+      syncBatchStartedAtRef.current = null;
+      setPendingSyncCount(0);
+      historyRef.current = createLiveGameHistory();
+      setUndoDepth(0);
+      setRedoDepth(0);
+      needsCreateRef.current = true;
+      setOptimisticRecord(record);
+      revealStartingPlayer(record.state.startingPlayerKey ?? null, keys);
+      setShowRematch(false);
+      await saveJournal();
+      if (!command.isCurrent()) return;
+      void syncJournal();
+    } finally { command.release(); }
+  }, [beginLiveCommand, groupId, isLiveScopeCurrent, preparePreviousPod, revealStartingPlayer, saveJournal, setOptimisticRecord, syncJournal, user]);
 
   const handleRematchReselect = useCallback(() => {
     preparePreviousPod();

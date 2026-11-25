@@ -3,7 +3,8 @@ import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 type Harness={render:(actor?:string,group?:string,token?:string)=>void;capture:()=>number;active:(index:number)=>boolean;
-  sameEpoch:(index:number)=>boolean;send:(index:number)=>Promise<void>;unmount:()=>void};
+  sameEpoch:(index:number)=>boolean;send:(index:number)=>Promise<void>;unmount:()=>void;
+  begin:()=>number;commandActive:(index:number)=>boolean;release:(index:number)=>void};
 declare global{interface Window{liveScopeHarness:Harness}}
 let bundle:string;
 test.beforeAll(async()=>{
@@ -39,6 +40,24 @@ test('native live scope discards old account openings including A to B to A',asy
   await page.evaluate(()=>window.liveScopeHarness.render());
   await expect(page.getByTestId('scope-owner')).toHaveText('a:g1:token-a');
   expect(await page.evaluate(index=>window.liveScopeHarness.active(index),old)).toBe(false);
+});
+
+test('native live commands exclude duplicate submissions and late releases cannot unlock another account',async({page})=>{
+  await open(page);
+  const first=await page.evaluate(()=>window.liveScopeHarness.begin());
+  expect(first).toBeGreaterThanOrEqual(0);
+  expect(await page.evaluate(()=>window.liveScopeHarness.begin())).toBe(-1);
+  await page.evaluate(()=>window.liveScopeHarness.render('b','g1','token-b'));
+  await expect(page.getByTestId('scope-owner')).toHaveText('b:g1:token-b');
+  const second=await page.evaluate(()=>window.liveScopeHarness.begin());
+  expect(second).toBeGreaterThan(first);
+  expect(await page.evaluate(index=>window.liveScopeHarness.commandActive(index),first)).toBe(false);
+  await page.evaluate(index=>window.liveScopeHarness.release(index),first);
+  expect(await page.evaluate(()=>window.liveScopeHarness.begin())).toBe(-1);
+  expect(await page.evaluate(index=>window.liveScopeHarness.commandActive(index),second)).toBe(true);
+  await page.evaluate(index=>window.liveScopeHarness.release(index),second);
+  expect(await page.evaluate(index=>window.liveScopeHarness.commandActive(index),second)).toBe(false);
+  expect(await page.evaluate(()=>window.liveScopeHarness.begin())).toBeGreaterThan(second);
 });
 test('native live scope renews tokens without resetting ownership and freezes each SDK command identity',async({page})=>{
   await open(page);const auth:string[]=[];
