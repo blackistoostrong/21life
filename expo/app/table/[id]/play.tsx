@@ -466,15 +466,15 @@ export default function LiveGameScreen() {
     publishPendingSyncCount();
     journalWriteRef.current = queueLiveGameJournalWrite(journalWriteRef.current, async () => {
         if (sessionClosedRef.current) return;
-        await saveLiveGameOfflineSession(groupId, snapshot);
+        await saveLiveGameOfflineSession(groupId, snapshot, currentUserId);
       }, saved => {
         if (!sessionClosedRef.current) setLocalPersistenceAvailable(saved);
       });
     return journalWriteRef.current;
-  }, [groupId, publishPendingSyncCount]);
+  }, [currentUserId, groupId, publishPendingSyncCount]);
 
   const flushOutbox = useCallback(async () => {
-    const outbox = await loadLiveGameOutbox();
+    const outbox = await loadLiveGameOutbox(currentUserId);
     setRecoveryOutbox(outbox);
     while (outbox.length > 0) {
       const item = outbox[0];
@@ -483,14 +483,14 @@ export default function LiveGameScreen() {
         serverRecord = await ensureLiveGameCreated(supabase, serverRecord);
         item.serverRecord = serverRecord;
         item.needsCreate = false;
-        await saveLiveGameOutbox(outbox);
+        await saveLiveGameOutbox(outbox, currentUserId);
       }
       while (item.mutations.length > 0) {
         const batch = item.mutations.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
         serverRecord = await applyQueuedLiveGameMutations(supabase, serverRecord, batch);
         item.serverRecord = serverRecord;
         item.mutations = item.mutations.slice(batch.length);
-        await saveLiveGameOutbox(outbox);
+        await saveLiveGameOutbox(outbox, currentUserId);
       }
       if (item.finalization) {
         const matchId = await finalizePendingLiveGame(
@@ -504,14 +504,14 @@ export default function LiveGameScreen() {
         await cancelLiveGame(supabase, serverRecord.id);
       }
       outbox.shift();
-      await saveLiveGameOutbox(outbox);
+      await saveLiveGameOutbox(outbox, currentUserId);
       setRecoveryOutbox([...outbox]);
     }
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     let active = true;
-    void loadLiveGameOutbox().then(outbox => {
+    void loadLiveGameOutbox(currentUserId).then(outbox => {
       if (active) setRecoveryOutbox(outbox);
     }).catch(() => {
       if (active) {
@@ -520,7 +520,7 @@ export default function LiveGameScreen() {
       }
     });
     return () => { active = false; };
-  }, []);
+  }, [currentUserId]);
 
   const syncJournal = useCallback(() => {
     // Bootstrap owns journal/outbox replacement; reconnect must not sync the
@@ -565,7 +565,7 @@ export default function LiveGameScreen() {
         if (pendingCancelRef.current) {
           await cancelLiveGame(supabase, serverRecord.id);
           pendingCancelRef.current = false;
-          await clearLiveGameOfflineSession(groupId);
+          await clearLiveGameOfflineSession(groupId, currentUserId);
         }
       } catch (error) {
         failed = true;
@@ -650,7 +650,7 @@ export default function LiveGameScreen() {
     let mounted = true;
     void (async () => {
       let cached = await withLiveGameTimeout(
-        loadLiveGameOfflineSession(groupId),
+        loadLiveGameOfflineSession(groupId, currentUserId),
         3_000,
       ).catch(() => null);
       if (!mounted) return;
@@ -658,7 +658,7 @@ export default function LiveGameScreen() {
       if (cached && !cached.record.state.players.some(
         (player) => player.participantKey === participantKey,
       )) {
-        await clearLiveGameOfflineSession(groupId);
+        await clearLiveGameOfflineSession(groupId, currentUserId);
         cached = null;
       }
       if (cached) {
@@ -685,7 +685,7 @@ export default function LiveGameScreen() {
         if (remote && (!cached || !cached.needsCreate || remote.id === cached.record.id)) {
           if (cached && remote.id !== cached.record.id) {
             const replacement = await prepareLiveGameReplacement(
-              groupId, cached, remote, journalWriteRef.current,
+              groupId, cached, remote, journalWriteRef.current, currentUserId,
             );
             if (!mounted) return;
             // Terminal flags and undo history belong to the archived game.
@@ -706,7 +706,7 @@ export default function LiveGameScreen() {
           setOptimisticRecord(replayQueuedMutations(remote, queue));
           await saveJournal();
         } else if (!remote && cached && !cached.needsCreate) {
-          await clearLiveGameOfflineSession(groupId);
+          await clearLiveGameOfflineSession(groupId, currentUserId);
           serverRecordRef.current = null;
           mutationQueueRef.current = [];
           syncBatchStartedAtRef.current = null;
@@ -799,7 +799,7 @@ export default function LiveGameScreen() {
         setUndoDepth(0);
         setRedoDepth(0);
         setOptimisticRecord(null);
-        void clearLiveGameOfflineSession(groupId);
+        void clearLiveGameOfflineSession(groupId, currentUserId);
         if (remote.status === 'ended') {
           setCompletedGame(remote);
           setCompletedDurationSeconds(getGameDurationSeconds(remote.started_at, remote.ended_at ?? new Date().toISOString()));
@@ -823,7 +823,7 @@ export default function LiveGameScreen() {
         setSyncStatus('offline');
       }
     });
-  }, [copy, groupId, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
+  }, [copy, currentUserId, groupId, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
 
   useEffect(() => {
     if (!groupId || !user || loading || setupHydratingRef.current || setupHydratedRef.current === `${user.id}:${groupId}`) return;
@@ -1272,10 +1272,10 @@ export default function LiveGameScreen() {
         mutations: mutationQueueRef.current,
         finalization: null,
         cancel: true,
-      });
+      }, currentUserId);
       void pendingJournal
         .catch(() => undefined)
-        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id))
+        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
@@ -1371,10 +1371,10 @@ export default function LiveGameScreen() {
         mutations: mutationQueueRef.current,
         finalization: pending,
         cancel: false,
-      });
+      }, currentUserId);
       void pendingJournal
         .catch(() => undefined)
-        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id))
+        .finally(() => clearLiveGameOfflineSessionIfMatches(groupId, liveGame.id, currentUserId))
         .catch(() => undefined);
       serverRecordRef.current = null;
       mutationQueueRef.current = [];
@@ -1952,7 +1952,7 @@ export default function LiveGameScreen() {
         icon="warning-outline"
         tone="danger"
         onClose={() => setShowClearRecoveryConfirm(false)}
-        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { void saveLiveGameOutbox([]); setRecoveryOutbox([]); setShowClearRecoveryConfirm(false); } }]}
+        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { void saveLiveGameOutbox([], currentUserId); setRecoveryOutbox([]); setShowClearRecoveryConfirm(false); } }]}
       />
       <Modal
         visible={showRematch}

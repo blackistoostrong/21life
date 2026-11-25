@@ -75,96 +75,120 @@ function parseOfflineSession(raw: string | null): LiveGameOfflineSession | null 
   };
 }
 
-export async function loadLiveGameOfflineSession(
-  groupId: string,
-): Promise<LiveGameOfflineSession | null> {
-  const sessions: LiveGameOfflineSession[] = [];
-  for (const key of [storageKey(groupId), backupStorageKey(groupId)]) {
-    try {
-      const session = parseOfflineSession(await AsyncStorage.getItem(key));
-      if (session) sessions.push(session);
-    } catch {
-      // Try the shadow copy after a partial/corrupted device write.
-    }
-  }
-  return sessions.sort((left, right) => (
-    (Date.parse(right.savedAt) || 0) - (Date.parse(left.savedAt) || 0)
-  ))[0] ?? null;
-}
 
-export async function saveLiveGameOfflineSession(
-  groupId: string,
-  session: Omit<LiveGameOfflineSession, 'savedAt'>,
-): Promise<void> {
-  const serialized = JSON.stringify({
-    ...session,
-    savedAt: new Date().toISOString(),
-  } satisfies LiveGameOfflineSession);
-  await AsyncStorage.multiSet([
-    [backupStorageKey(groupId), serialized],
-    [storageKey(groupId), serialized],
-  ]);
+type Account = string | null | undefined;
+const storageWork = new Map<string, Promise<void>>();
+function serialize<T>(accountId: Account, work: () => Promise<T>): Promise<T> {
+  if (!accountId?.trim()) return Promise.reject(new Error('LIVE_GAME_STORAGE_ACCOUNT_REQUIRED'));
+  const previous = storageWork.get(accountId) ?? Promise.resolve();
+  const result = previous.then(work, work);
+  const settled = result.then(() => undefined, () => undefined);
+  storageWork.set(accountId, settled);
+  void settled.then(() => { if (storageWork.get(accountId) === settled) storageWork.delete(accountId); });
+  return result;
 }
-
-export async function clearLiveGameOfflineSession(groupId: string): Promise<void> {
-  await Promise.all([
-    AsyncStorage.removeItem(storageKey(groupId)),
-    AsyncStorage.removeItem(backupStorageKey(groupId)),
-  ]);
+function actor(accountId: Account): string {
+  // Public operations validate identity before entering the account queue.
+  return encodeURIComponent(String(accountId));
 }
-
-export async function clearLiveGameOfflineSessionIfMatches(
-  groupId: string,
-  liveGameId: string,
-): Promise<void> {
-  const current = await loadLiveGameOfflineSession(groupId);
-  if (current?.record.id === liveGameId) {
-    await clearLiveGameOfflineSession(groupId);
-  }
+function keys(groupId: string, accountId: Account) {
+  const main = 'phyrexian-arena:live-game:v3:' + actor(accountId) + ':' + encodeURIComponent(groupId);
+  return { main, backup: main + ':backup', migrated: main + ':legacy-migrated' };
 }
-
-export async function loadLiveGameOutbox(): Promise<ArchivedLiveGameOperation[]> {
+function outboxKey(accountId: Account) { return 'phyrexian-arena:live-game:v3:outbox:' + actor(accountId); }
+function parseOutbox(raw: string): ArchivedLiveGameOperation[] {
   try {
-    const raw = await AsyncStorage.getItem(OUTBOX_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error('Invalid outbox');
     return parsed;
-  } catch {
-    // An unreadable archive is not an empty archive: callers must not replace
-    // its bytes or clear the active journal on this failure.
-    throw new Error('LIVE_GAME_OUTBOX_UNAVAILABLE');
+  } catch { throw new Error('LIVE_GAME_OUTBOX_UNAVAILABLE'); }
+}
+async function readSession(groupId: string, accountId: Account): Promise<LiveGameOfflineSession | null> {
+  const owned = keys(groupId, accountId);
+  const sessions: LiveGameOfflineSession[] = [];
+  for (const key of [owned.main, owned.backup]) {
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) continue;
+      const envelope = JSON.parse(raw);
+      if (envelope?.accountId !== accountId || envelope?.schemaVersion !== 3) continue;
+      const parsed = parseOfflineSession(raw);
+      if (parsed?.record.group_id === groupId) sessions.push(parsed);
+    } catch { /* The shadow copy may still contain the last acknowledged write. */ }
   }
+  if (sessions.length) return sessions.sort((a,b) => (Date.parse(b.savedAt)||0)-(Date.parse(a.savedAt)||0))[0];
+  if (await AsyncStorage.getItem(owned.migrated)) return null;
+  const legacy: LiveGameOfflineSession[] = [];
+  for (const key of [storageKey(groupId), backupStorageKey(groupId)]) {
+    try {
+      const parsed = parseOfflineSession(await AsyncStorage.getItem(key));
+      if (parsed?.record.group_id === groupId && parsed.record.created_by === accountId) legacy.push(parsed);
+    } catch { /* Preserve unknown legacy bytes; never assign them to another account. */ }
+  }
+  const recovered = legacy.sort((a,b) => (Date.parse(b.savedAt)||0)-(Date.parse(a.savedAt)||0))[0];
+  if (!recovered) return null;
+  const raw = JSON.stringify({ ...recovered, accountId, schemaVersion: 3 });
+  await AsyncStorage.multiSet([[owned.backup,raw],[owned.main,raw],[owned.migrated,'1']]);
+  return recovered;
+}
+async function readOutbox(accountId: Account): Promise<ArchivedLiveGameOperation[]> {
+  const key = outboxKey(accountId);
+  const current = await AsyncStorage.getItem(key);
+  if (current !== null) return parseOutbox(current);
+  const legacyRaw = await AsyncStorage.getItem(OUTBOX_KEY);
+  if (legacyRaw === null) return [];
+  const legacy = parseOutbox(legacyRaw);
+  const recovered = legacy.filter(item => item?.serverRecord?.created_by === accountId);
+  // Keep the legacy archive intact. A durable empty scoped list also prevents
+  // already processed legacy entries from resurrecting on the next opening.
+  await AsyncStorage.setItem(key, JSON.stringify(recovered));
+  return recovered;
+}
+export function loadLiveGameOfflineSession(groupId: string, accountId: Account): Promise<LiveGameOfflineSession | null> {
+  return serialize(accountId, () => readSession(groupId,accountId));
+}
+export function saveLiveGameOfflineSession(groupId: string, session: Omit<LiveGameOfflineSession,'savedAt'>, accountId: Account): Promise<void> {
+  return serialize(accountId, async () => {
+    const owned=keys(groupId,accountId);
+    const raw=JSON.stringify({...session,savedAt:new Date().toISOString(),accountId,schemaVersion:3});
+    await AsyncStorage.multiSet([[owned.backup,raw],[owned.main,raw],[owned.migrated,'1']]);
+  });
+}
+async function clearSession(groupId: string, accountId: Account): Promise<void> {
+  const owned=keys(groupId,accountId);
+  await AsyncStorage.multiSet([[owned.main,'null'],[owned.backup,'null'],[owned.migrated,'1']]);
+}
+export function clearLiveGameOfflineSession(groupId: string, accountId: Account): Promise<void> {
+  return serialize(accountId, () => clearSession(groupId,accountId));
+}
+export function clearLiveGameOfflineSessionIfMatches(groupId: string, liveGameId: string, accountId: Account): Promise<void> {
+  return serialize(accountId, async()=>{
+    const current=await readSession(groupId,accountId);
+    if(current?.record.id===liveGameId)await clearSession(groupId,accountId);
+  });
+}
+export function loadLiveGameOutbox(accountId: Account): Promise<ArchivedLiveGameOperation[]> {
+  return serialize(accountId, () => readOutbox(accountId));
+}
+export function saveLiveGameOutbox(items: ArchivedLiveGameOperation[], accountId: Account): Promise<void> {
+  return serialize(accountId, () => AsyncStorage.setItem(outboxKey(accountId),JSON.stringify(items)));
+}
+export function archiveAndClearLiveGameSession(groupId: string,item: ArchivedLiveGameOperation,accountId: Account): Promise<void> {
+  return serialize(accountId, async()=>{
+    const owned=keys(groupId,accountId);
+    const current=await readOutbox(accountId);
+    const next=[...current.filter(entry=>entry.id!==item.id),item];
+    await AsyncStorage.multiSet([[outboxKey(accountId),JSON.stringify(next)],
+      [owned.main,'null'],[owned.backup,'null'],[owned.migrated,'1']]);
+  });
 }
 
-export async function saveLiveGameOutbox(items: ArchivedLiveGameOperation[]): Promise<void> {
-  await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
-}
-
-export async function archiveAndClearLiveGameSession(
-  groupId: string,
-  item: ArchivedLiveGameOperation,
-): Promise<void> {
-  const current = await loadLiveGameOutbox();
-  const nextOutbox = [
-    ...current.filter((entry) => entry.id !== item.id),
-    item,
-  ];
-  await AsyncStorage.multiSet([
-    [OUTBOX_KEY, JSON.stringify(nextOutbox)],
-    [storageKey(groupId), 'null'],
-    [backupStorageKey(groupId), 'null'],
-  ]);
-}
-
-/** Prepare a different game's session only after the old work is durable.
- * Rejection leaves the caller's live references untouched. Waiting for queued
- * journal writes prevents a late write from restoring the superseded session.
- */
 export async function prepareLiveGameReplacement(
   groupId: string,
   previous: LiveGameOfflineSession,
   remote: LiveGameRecord,
   pendingJournalWrite: Promise<void>,
+  accountId: string | null | undefined,
 ): Promise<Omit<LiveGameOfflineSession, 'savedAt'>> {
   await pendingJournalWrite.catch(() => undefined);
   if (previous.mutations.length || previous.pendingFinalization || previous.pendingCancel) {
@@ -175,7 +199,7 @@ export async function prepareLiveGameReplacement(
       mutations: previous.mutations,
       finalization: previous.pendingFinalization,
       cancel: previous.pendingCancel,
-    });
+    }, accountId);
   }
   return {
     record: remote,
