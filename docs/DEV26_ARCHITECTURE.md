@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## ACK archivio nativo — 25 novembre
+
+Il replay non salva più una copia completa dell'outbox letta prima di una richiesta di rete. `acknowledgeLiveGameOutboxItem`, nell'owner storage, rilegge l'archivio dentro la coda per account e confronta ID/snapshot dell'elemento inviato. Sostituisce/rimuove solo quella voce. Archivio revisionato o rimosso: nessuna scrittura, replay fermato e stato corrente restituito; altre partite aggiunte mentre il server risponde restano intatte. Il read/compare/write è serializzato insieme ad archiviazione/clear, senza tenere il lock durante la rete. Non promette transazioni fra processi OS distinti o rollback server: i comandi remoti già accettati restano idempotenti al retry.
+
+Due regressioni sullo storage reale con adapter AsyncStorage in memoria perdevano i dati prima della correzione; quattro casi finali coprono aggiunta, revisione stesso ID, clear volontario e due replay concorrenti. QualityExpo614+3skip/139floor PASS, nessuna soglia precedente ridotta. Verifica finale con Dev/logout e bundle ancora separata.
+
 ## Setup nativo — 25 novembre
 
 `useNativeLiveSetup` possiede draft (posti, vite, layout, deck selezionati), proiezione del catalogo, preload e ripristino persistito. Non riceve una collezione di setter dalla pagina: crea lo stato e ne governa il reset per account/gruppo. L'estrazione77ca8717 conserva24statement da095eb14e; il fix successivo lega storage e lookup a un job dell'epoch, valida contro il catalogo corrente, cancella il trasporto al cambio scope/unmount e applica deadline8s. Il rinnovo JWT conserva il draft. La proiezione pura `arena-deck-option` mantiene il re-export del componente per i consumer esistenti.

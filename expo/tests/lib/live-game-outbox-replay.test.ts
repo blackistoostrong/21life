@@ -2,8 +2,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ArchivedLiveGameOperation } from '@/lib/live-game-offline';
 import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
-const m=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),create:vi.fn(),apply:vi.fn(),finalize:vi.fn(),cancel:vi.fn(),notify:vi.fn()}));
-vi.mock('@/lib/live-game-offline',()=>({loadLiveGameOutbox:m.load,saveLiveGameOutbox:m.save}));
+const m=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),ack:vi.fn(),create:vi.fn(),apply:vi.fn(),finalize:vi.fn(),cancel:vi.fn(),notify:vi.fn()}));
+vi.mock('@/lib/live-game-offline',()=>({loadLiveGameOutbox:m.load,acknowledgeLiveGameOutboxItem:m.ack}));
 vi.mock('@/lib/live-game-service',()=>({ensureLiveGameCreated:m.create,applyQueuedLiveGameMutations:m.apply,
   finalizePendingLiveGame:m.finalize,cancelLiveGame:m.cancel}));
 vi.mock('@/lib/api',()=>({apiPost:m.notify}));
@@ -15,6 +15,9 @@ const item=():ArchivedLiveGameOperation=>({id:'game-a',serverRecord:{id:'game-a'
 beforeEach(()=>{
   vi.resetAllMocks();m.load.mockImplementation(async()=>[item()]);
   m.save.mockResolvedValue(undefined);m.create.mockImplementation(async(_client,record)=>record);
+  m.ack.mockImplementation(async(_id,_expected,next,actor)=>{
+    const items=next?[next]:[];await m.save(items,actor);return{applied:true,items};
+  });
   m.cancel.mockResolvedValue(undefined);
 });
 it('does not read storage for an expired account scope',async()=>{

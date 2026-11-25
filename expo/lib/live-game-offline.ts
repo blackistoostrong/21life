@@ -173,6 +173,20 @@ export function loadLiveGameOutbox(accountId: Account): Promise<ArchivedLiveGame
 export function saveLiveGameOutbox(items: ArchivedLiveGameOperation[], accountId: Account): Promise<void> {
   return serialize(accountId, () => AsyncStorage.setItem(outboxKey(accountId),JSON.stringify(items)));
 }
+/** Compare the dispatched snapshot inside the same account storage queue.
+ * A replay must never replace an archive appended/revised while its SDK call waited. */
+export function acknowledgeLiveGameOutboxItem(id: string, expected: string,
+  next: ArchivedLiveGameOperation | null, accountId: Account) {
+  return serialize(accountId, async () => {
+    const current = await readOutbox(accountId);
+    const index = current.findIndex(item => item.id === id);
+    if (index < 0 || JSON.stringify(current[index]) !== expected) return { applied: false, items: current };
+    const items = next ? current.map((item, position) => position === index ? next : item)
+      : current.filter((_item, position) => position !== index);
+    await AsyncStorage.setItem(outboxKey(accountId), JSON.stringify(items));
+    return { applied: true, items };
+  });
+}
 export function archiveAndClearLiveGameSession(groupId: string,item: ArchivedLiveGameOperation,accountId: Account): Promise<void> {
   return serialize(accountId, async()=>{
     const owned=keys(groupId,accountId);
