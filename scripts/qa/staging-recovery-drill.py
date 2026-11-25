@@ -68,7 +68,7 @@ SELECT jsonb_object_agg(table_schema || '.' || table_name,
   ((xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I',
     table_schema, table_name), false, true, '')))[1]::text)::bigint)
 FROM information_schema.tables
-WHERE table_schema IN ('public', 'auth', 'storage') AND table_type='BASE TABLE';
+WHERE table_schema IN ('public', 'auth', 'storage', 'app_private') AND table_type='BASE TABLE';
 """
     try:
         if shutil.disk_usage(root).free < 2 * 1024**3:
@@ -226,8 +226,16 @@ WHERE table_schema IN ('public', 'auth', 'storage') AND table_type='BASE TABLE';
         command(['docker', 'exec', '-i', restored_db, 'pg_restore', '-U', 'supabase_admin', '-d', 'recovery',
                  '--no-owner', '--no-privileges', '--exit-on-error'], data=(downloaded / 'database.dump').read_bytes())
         sql(restored_db, (downloaded / 'recovery-privileges.sql').read_text(), 'recovery')
-        actual_security = json.loads(sql(restored_db, "SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM\n(SELECT n.nspname||'.'||c.relname AS name, pg_get_userbyid(c.relowner) AS owner,\n ARRAY(SELECT a::text FROM unnest(coalesce(c.relacl,'{}'::aclitem[])) a ORDER BY a::text) AS acl\n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p','v','m','S')) r;", 'recovery'))
-        assert actual_security == inventory['tableSecurity'], 'Table owners/ACL mismatch'
+        actual_security = json.loads(sql(restored_db, "SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM\n(SELECT n.nspname||'.'||c.relname AS name, pg_get_userbyid(c.relowner) AS owner,\n ARRAY(SELECT a::text FROM unnest(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::\"char\" ELSE 'r'::\"char\" END,c.relowner))) a ORDER BY a::text) AS acl\n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n WHERE n.nspname IN ('public','auth','storage','app_private') AND c.relkind IN ('r','p','v','m','S')) r;", 'recovery'))
+        if actual_security != inventory['tableSecurity']:
+            (root / 'failure-table-security.json').write_text(json.dumps({
+                'expected': inventory['tableSecurity'], 'actual': actual_security}))
+            expected_by_name = {row['name']: row for row in inventory['tableSecurity']}
+            actual_by_name = {row['name']: row for row in actual_security}
+            report['table_security_mismatches'] = sorted(name for name in
+                expected_by_name.keys() | actual_by_name.keys()
+                if expected_by_name.get(name) != actual_by_name.get(name))
+            raise AssertionError('Table owners/ACL mismatch')
         assert json.loads(sql(restored_db, "SELECT coalesce(jsonb_agg(row_to_json(r) ORDER BY r.name),'[]'::jsonb) FROM (SELECT n.nspname AS name,pg_get_userbyid(n.nspowner) AS owner,ARRAY(SELECT a::text FROM unnest(coalesce(n.nspacl,'{}'::aclitem[])) a ORDER BY a::text) AS acl FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema') r;", 'recovery')) == inventory['schemaSecurity'], 'Schema owners/ACL mismatch'
         actual_counts = json.loads(sql(restored_db, counts_query, 'recovery'))
         assert actual_counts == expected_counts, 'Restored table row counts differ from exported DB snapshot.'
