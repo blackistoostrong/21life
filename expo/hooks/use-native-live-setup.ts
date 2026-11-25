@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { useArena } from '@/hooks/use-arena';
 import { restoreSetupDecks } from '@/components/live-game/restore-setup-decks';
 import type { SetupParticipant } from '@/components/live-game/live-game-configurator';
-import { toDeckOption } from '@/components/table/match-participant-row';
+import { toDeckOption } from '@/lib/arena-deck-option';
 import { getLastDeckSelectionForParticipant } from '@/lib/arena-participants';
 import { getPreferredDeckId } from '@/lib/arena-deck-selection';
 import { toGuestParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
