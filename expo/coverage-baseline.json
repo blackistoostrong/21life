@@ -820,5 +820,17 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "lib/live-game-command-client.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "lib/live-game-outbox-replay.ts": {
+    "lines": 100,
+    "branches": 89.28,
+    "functions": 100,
+    "statements": 93.18
   }
 }

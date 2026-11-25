@@ -1,5 +1,10 @@
 # Registro dei merge falliti
 
+## 2026-11-25 — PR262 secondo tentativo REST
+- PUT merge con SHA atteso f84b3297 restituisce HTTP502; orchestrazione interrotta immediatamente. Readback REST senza cache: OPEN, merged=false; ref remoto Dev ancora d24a578f. Tutti i check f84b3297 verdi prima della richiesta. Nessun merge attestato, nessun build/deploy dipendente.
+- GraphQL PR267 mostrava il vecchio head62f903fc, mentre REST no-cache e ref remoto concordano su301cc8ff: usare REST e ref per distinguere cache da push perso. Nessun force-push/reopen o bypass. Sospesi ulteriori tentativi identici di merge finché manca evidenza nuova sul servizio.
+- Prevenzione: dopo 5xx verificare separatamente merged e ref; merge_commit_sha da solo può indicare il merge di prova, non un merge avvenuto.
+
 Prima di ogni nuova build leggere questo registro e la
 [checklist pre-build](RELEASE_PREBUILD_CHECKLIST.md). A ogni merge fallito o con
 esito incerto aggiungere una voce prima di proseguire. Distinguere fatti verificati,
@@ -35,6 +40,12 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
   di qualsiasi compilazione, push del tag o deploy.
 
 ## Modello per i prossimi fallimenti
+
+## 2026-11-25 — Risposte GitHub incoerenti durante integrazione mobile
+
+- Push logout62f903fc→6ed05bb6: primo tentativo Internal Server Error, nessun comando dipendente eseguito; lettura remota confermava62f903fc. Secondo push riuscito, ls-remote conferma6ed05bb6, ma API PR267 continua a riportare62f903fc/check precedenti. Nessuna assunzione di gate verdi sul nuovo SHA e nessun APK/deploy da questo stato.
+- Merge PR262 con headf84b3297/check tutti verdi: gh restituisce502BadGateway prima dei comandi dipendenti, pertanto esito remoto inizialmente incerto. Verificare state+mergeCommit+refDev prima di qualsiasi checkout/build riferito al merge; non ritentare alla cieca.
+- Prevenzione: dopo errore5xx confrontare Git ref reale e metadati PR, preservare log e verificare l'esito prima delle azioni dipendenti. Il ref locale del lavoro sync rimane f84b3297 con modifiche isolate, nessuna build di rilascio basata su merge presunto.
 
 ## 2026-11-25 — SDK57 nel ramo journal PR262
 

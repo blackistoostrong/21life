@@ -1,5 +1,13 @@
 # DEV26 — Architettura e responsabilità
 
+## Lifecycle sync nativo — 25 novembre
+
+`useLiveGameCommandScope` possiede l'epoch account/gruppo e il cleanup al commit React. Il rinnovo della sessione dello stesso account aggiorna il token disponibile senza sostituire l'epoch. `createLiveGameCommandClient` lega ogni comando a un bearer catturato usando l'opzione pubblica accessToken dell'SDK installato: una nuova sessione sul client globale non cambia l'identità di un comando già partito. Nessuna sessione viene persistita o rinnovata da questi client; i servizi non usano il loro modulo Auth.
+
+`live-game-outbox-replay` possiede il replay dell'archivio account-specifico: creazione, batch, finalizzazione/cancellazione e ACK persistiti. Ogni await è seguito da un controllo di appartenenza prima di aggiornare UI, proseguire o confermare l'elemento. Le notifiche usano il bearer del comando. Una richiesta già accettata dal server non è annullata: un ACK arrivato dopo cambio scope lascia il comando nel journal per il replay idempotente successivo.
+
+La pagina conserva bootstrap, sync e Realtime, ora protetti dall'epoch e dall'ID partita. Il cambio account/gruppo azzera subito refs/UI locali e distacca i job vecchi; il loro finally non libera slot dei job nuovi. Le scritture locali già accodate restano legate all'account originario. Restano separatamente aperti i comandi di avvio/chiusura/scarto/rematch e la riduzione dimensionale della pagina. Prove: 13 test servizio/client e6 casi browser sul vero hook React/SDK; quality600 nativi e857 web, nessun vecchio floor ridotto. Nessuna certificazione dispositivo o chiusura globale del punto6.
+
 Versione candidata 9.3.0; base Dev bac40b9c. Documento di lavoro: **refactoring delle schermate parziale**, non attestazione di completamento del punto6.
 
 ## Stato corrente — 20 novembre

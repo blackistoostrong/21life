@@ -37,6 +37,9 @@ export const featureOwners = {
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
+    'expo/hooks/use-live-game-command-scope.ts',
+    'expo/lib/live-game-command-client.ts',
+    'expo/lib/live-game-outbox-replay.ts',
     'expo/hooks/use-arena-match-form-command.ts',
     'expo/hooks/use-arena-match-write.ts',
     'packages/data/arena-match-write.ts',
