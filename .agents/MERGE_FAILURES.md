@@ -36,6 +36,11 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 
 ## Modello per i prossimi fallimenti
 
+## 2026-11-25 — Metadati PR267 non aggiornati dopo errore push GitHub
+
+- Primo push6ed05bb6 rifiutato Internal Server Error; ref letto ancora62f903fc. Retry riuscito e ls-remote conferma6ed05bb6, ma PR267 resta OPEN/head62f903fc/check vecchi; nessun merge/build dipendente effettuato.
+- Recupero: checkpoint documentale sul ramo per generare un nuovo evento push; verificare ref reale, head PR e check coerenti prima del merge. Nessuna modifica a protezioni o forzatura dei gate.
+
 ## 2026-11-25 — SDK57 nel ramo logout PR267
 
 - Merge origin/maintenance/dev26-expo-sdk-patches9dfe3807 in fix/dev26-logout62f903fc: exit1 soltanto PROJECT_CHECKLIST per append concorrenti. PR267 OPEN/head62f903fc verificati; nessun build dipendente avviato.

@@ -4,6 +4,8 @@
 
 ### Priorità PM 20 novembre — candidato9.3.0 testabile
 
+- [ ] Riallineamento logout25Nov: SDK57 incorporato nel merge locale6ed05bb6, ref remoto6ed05bb6 confermato con ls-remote dopo errore GitHub5xx e retry riuscito; metadati PR267 rimasti su62f903fc/check vecchi. Nessun merge/APK da stato presunto. Doctor e check completi della dipendenza SDK risultano verdi e PR268 MERGED suDev d24a578f. Questo checkpoint genera un nuovo evento push verificabile per recuperare i metadati PR; richiedere head/check corretti prima di integrare il logout.
+
 - [x] Priorità logout PM25Nov: ROSSO reale unit sul service, revoca rimane pendente mentre richiesta OS permessi non risolve; VERDE dopo rimozione attesa running, mantenendo cancel generation e revoca server sessione prima dell'Auth signOut. DELETE push limitata5s; risposta POST tardiva ripulita senza riattivare registrazione, errore revoca conserva sessione come prima. Settings mostra Uscita/Signing out e disabilita tap ripetuti; errore SDK Auth restituito ora propagato al messaggio di uscita fallita, nessun falso successo.14test push mirati PASS e typecheck finale; qualityExpo combinata con journal588+3skip/137floor PASS. Nessuna modifica server/RLS/SDK/versione/nuovaAPK. Fix su branch dedicato fix/dev26-logout daDev5856a932; collaudo dispositivo e integrazione ancora richiesti, non dichiarati risolti tutti i casi di lentezza. Journal isolato a2d0e7c2/1047baef pushato separatamente PR262, rootKnip corretto senza aggiungere AsyncStorage root.
 
 - [x] 25Nov PR261 backup integrata Dev b1aa442a dopo web/Expo/CodeQL/analyze verdi; stato MERGED e albero identico a055653e4 verificati. Nessuna migrazione/schedule/produzione modificata.
