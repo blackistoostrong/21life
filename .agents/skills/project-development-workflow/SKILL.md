@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live9.3.0: `expo/hooks/use-live-game-command-scope.ts` owns account/group command leases; `expo/lib/live-game-command-client.ts` freezes each command's JWT; `expo/lib/live-game-outbox-replay.ts` owns archived replay. `expo/hooks/use-native-live-setup.ts` owns setup draft, participant/deck projection and scoped restoration; `expo/lib/arena-deck-option.ts` is the pure deck projection (component re-export retained). The play screen still owns active-game orchestration and rendering; point6 remains open.
+
 - `app/`: Next.js 16 App Router pages, layouts, and API routes for the web application.
 - `components/`: shared web UI and feature components.
 - Profile deck workflows: `hooks/use-profile-{catalog,catalog-actions,deck-collection,deck-refresh,deck-link,deck-persistence,manual-deck,url-import,archidekt-import,commander-editor}.ts` own scoped reads, commands and drafts; `components/profile/` composes typed presentation, including the shared commander art picker. See `docs/DEV26_ARCHITECTURE.md`.

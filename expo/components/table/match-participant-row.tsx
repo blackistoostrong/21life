@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input';
 import { colors, spacing } from '@/constants/theme';
 
 import type { ParticipantKey } from '@/lib/participant-keys';
+import type { DeckOption } from '@/lib/arena-deck-option';
 
 export type { DeckOption } from '@/lib/arena-deck-option';
 export { toDeckOption } from '@/lib/arena-deck-option';
-import type { DeckOption } from '@/lib/arena-deck-option';
 
 type MatchParticipantRowProps = {
   participantKey: ParticipantKey;

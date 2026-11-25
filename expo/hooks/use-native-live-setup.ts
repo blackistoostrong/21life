@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { useLiveGameCommandScope } from './use-live-game-command-scope';
 import type { useArena } from '@/hooks/use-arena';
 import { restoreSetupDecks } from '@/components/live-game/restore-setup-decks';
 import type { SetupParticipant } from '@/components/live-game/live-game-configurator';
@@ -11,13 +12,15 @@ import { prefetchCommanderNames, prefetchDeckImageUrls } from '@/lib/deck-image-
 import { createDefaultLiveGameSetup, clearLiveGameSeats, loadLiveGameSetup, type LiveGameSeatSetup } from '@/lib/live-game-setup';
 import type { TableLayoutVariant } from '@/lib/live-game-table-layout';
 import type { MemberDeck } from '@/lib/types/arena';
-import { supabase } from '@/lib/supabase';
 
 type LifePreset = '20' | '25' | '30' | '40' | '60' | 'custom';
 const LIFE_PRESETS: LifePreset[] = ['20', '25', '30', '40', '60'];
 type Catalog = Pick<ReturnType<typeof useArena>, 'members' | 'guests' | 'decks' | 'matches' | 'loading'>;
 /** Owns the native live setup draft, catalog projection and persisted restoration. */
-export function useNativeLiveSetup(groupId: string, user: { id: string } | null, {members, guests, decks, matches, loading}: Catalog) {
+export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
+  {members, guests, decks, matches, loading}: Catalog,
+  {epoch, isCurrent, bindClient}: Pick<ReturnType<typeof useLiveGameCommandScope>, 'epoch' | 'isCurrent' | 'bindClient'>) {
+  const userId = user?.id;
   const [selectedKeys, setSelectedKeys] = useState<ParticipantKey[]>([]);
   const [participantDecks, setParticipantDecks] = useState<Record<string, string>>({});
   const [playerCount, setPlayerCount] = useState(4);
@@ -30,7 +33,7 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
   const [setupReadyKey, setSetupReadyKey] = useState<string | null>(null);
   const [setupRestoreError, setSetupRestoreError] = useState(false);
   const [setupRetry, setSetupRetry] = useState(0);
-  const setupHydratingRef = useRef(false);
+  const setupHydratingRef = useRef<{ controller: AbortController } | null>(null);
   const setupHydratedRef = useRef<string | null>(null);
   const startingLife = useMemo(() => {
     if (lifePreset === 'custom') {
@@ -85,6 +88,8 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
       };
     }),
   ], [getDeckOptions, guests, matches, members]);
+  const latestParticipants = useRef(setupParticipants);
+  useLayoutEffect(() => { latestParticipants.current = setupParticipants; }, [setupParticipants]);
   const applySeatSetups = useCallback((nextSeats: LiveGameSeatSetup[]) => {
     setSeatSetups(nextSeats);
     const assigned = nextSeats.filter(
@@ -128,6 +133,24 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
   const resetSetup = useCallback(() => {
     applySeatSetups(clearLiveGameSeats(seatSetups));
   }, [applySeatSetups, seatSetups]);
+  useLayoutEffect(() => {
+    setupHydratingRef.current?.controller.abort();
+    setupHydratingRef.current = null;
+    setupHydratedRef.current = null;
+    setSetupReadyKey(null);
+    setSetupRestoreError(false);
+    setOccasionalDecks([]);
+    const defaults = createDefaultLiveGameSetup();
+    setPlayerCount(defaults.playerCount);
+    setLayoutVariant(defaults.layoutVariant);
+    applyStartingLife(defaults.startingLife);
+    applySeatSetups(defaults.seats);
+    return () => {
+      const job = setupHydratingRef.current;
+      setupHydratingRef.current = null;
+      job?.controller.abort();
+    };
+  }, [epoch, applySeatSetups, applyStartingLife]);
   useEffect(() => {
     const selectedDecks = seatSetups.flatMap((seat) => {
       if (!seat.participantKey || !seat.deckId) return [];
@@ -139,18 +162,22 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
     void prefetchCommanderNames(selectedDecks.map((deck) => deck.commander), { background: true });
   }, [getDeckOptions, seatSetups]);
   useEffect(() => {
-    if (!groupId || !user || loading || setupHydratingRef.current || setupHydratedRef.current === `${user.id}:${groupId}`) return;
-    setupHydratingRef.current = true;
+    if (!groupId || !userId || loading || !isCurrent() || setupHydratingRef.current || setupHydratedRef.current === `${userId}:${groupId}`) return;
+    const job = { controller: new AbortController() };
+    setupHydratingRef.current = job;
+    const active = () => isCurrent() && setupHydratingRef.current === job;
     setSetupRestoreError(false);
-    void loadLiveGameSetup(groupId, user.id).then(async (saved) => {
-      if (!saved) { setupHydratedRef.current = `${user.id}:${groupId}`; setSetupReadyKey(`${user.id}:${groupId}`); return; }
+    void loadLiveGameSetup(groupId, userId).then(async (saved) => {
+      if (!active()) return;
+      if (!saved) { setupHydratedRef.current = `${userId}:${groupId}`; setSetupReadyKey(`${userId}:${groupId}`); return; }
       const savedDeckIds = saved.seats.filter(seat => seat.participantKey?.startsWith('user:') && seat.deckId).map(seat => seat.deckId!);
       let restoredDecks: MemberDeck[] = [];
       if (savedDeckIds.length) {
-        restoredDecks = await restoreSetupDecks(supabase, groupId, savedDeckIds);
+        restoredDecks = await restoreSetupDecks(bindClient().client, groupId, savedDeckIds, job.controller.signal);
+        if (!active()) return;
         setOccasionalDecks(current => [...current.filter(deck => !restoredDecks.some(restored => restored.id === deck.id)), ...restoredDecks]);
       }
-      const participantMap = new Map(setupParticipants.map((participant) => [participant.key, participant]));
+      const participantMap = new Map(latestParticipants.current.map((participant) => [participant.key, participant]));
       const validatedSeats = saved.seats.map((seat) => {
         if (!seat.participantKey) return { participantKey: null, deckId: null };
         const participant = participantMap.get(seat.participantKey);
@@ -167,9 +194,9 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
       setLayoutVariant(saved.layoutVariant);
       applyStartingLife(saved.startingLife);
       applySeatSetups(validatedSeats);
-      setupHydratedRef.current = `${user.id}:${groupId}`;
-      setSetupReadyKey(`${user.id}:${groupId}`);
-    }).catch(() => { setSetupRestoreError(true); }).finally(() => { setupHydratingRef.current = false; });
-  }, [applySeatSetups, applyStartingLife, groupId, loading, setupParticipants, setupRetry, user]);
- return { selectedKeys, setSelectedKeys, participantDecks, setParticipantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setSeatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup };
+      setupHydratedRef.current = `${userId}:${groupId}`;
+      setSetupReadyKey(`${userId}:${groupId}`);
+    }).catch(() => { if (active()) setSetupRestoreError(true); }).finally(() => { if (active()) setupHydratingRef.current = null; });
+  }, [applySeatSetups, applyStartingLife, bindClient, groupId, isCurrent, loading, setupParticipants, setupRetry, userId]);
+ return { selectedKeys, participantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup };
 }

@@ -5,7 +5,7 @@ import { expect, it, vi } from 'vitest';
 
 // Execute the shipped handlers, extracted by the installed TS parser. Only I/O
 // and UI ports are replaced; this is not a second implementation of commands.
-const source = readFileSync(new URL('../../app/table/[id]/play.tsx', import.meta.url), 'utf8');
+const source = readFileSync('app/table/[id]/play.tsx', 'utf8');
 function handler(name: string, ports: Record<string, unknown>) {
   const ast = ts.createSourceFile('play.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let expression: ts.Expression | undefined;

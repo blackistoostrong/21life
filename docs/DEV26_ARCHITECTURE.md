@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Setup nativo — 25 novembre
+
+`useNativeLiveSetup` possiede draft (posti, vite, layout, deck selezionati), proiezione del catalogo, preload e ripristino persistito. Non riceve una collezione di setter dalla pagina: crea lo stato e ne governa il reset per account/gruppo. L'estrazione77ca8717 conserva24statement da095eb14e; il fix successivo lega storage e lookup a un job dell'epoch, valida contro il catalogo corrente, cancella il trasporto al cambio scope/unmount e applica deadline8s. Il rinnovo JWT conserva il draft. La proiezione pura `arena-deck-option` mantiene il re-export del componente per i consumer esistenti.
+
+Pagina nativa2111righe non vuote, setup201 e replay53: il target dimensionale della pagina rimane aperto. Prova ROSSA sul blocco precedente: B rimane fermo dietro la lettura A (1read invece di2). Matrice finale28browser React reali desktop/mobile PASS, quality610nativi e853web (3/7skip rispettivamente; SQL opzionali non configurate),139/148floor invariati e71script. Il fixture setup risiede in Expo per essere compilato con gli alias nativi; il driver Playwright lo carica col bundler reale. Nessuna esclusione TS/Knip o nuova dipendenza. Non equivale a un collaudo su dispositivo o all'esecuzione del renderer React Native completo.
+
 ## Lifecycle sync nativo — 25 novembre
 
 Comandi start/end/discard/rematch: lo stesso owner espone uno slot sincrono per l'epoch, rilasciato per identità. Un finally vecchio non libera il comando di un nuovo account. I consumer controllano la lease dopo lookup/setup/journal/archivio e prima di feedback, navigazione e nuovo sync. Il busy lookup usa il client con JWT catturato. Le scritture account-specifiche già partite possono completare, ma non modificano lo stato del nuovo owner. Verifica aggiuntiva: sei regressioni su handler produttivi estratti dal parser TypeScript falliscono sul commit precedente; otto casi finali e16 browser React verdi. QualityExpo608+3skip,139floor. Questo completa il blocco di guard asincrone dei quattro comandi, non il refactor dimensionale o il collaudo fisico della pagina.

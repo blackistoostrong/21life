@@ -59,7 +59,6 @@ import {
 } from '@/lib/live-game';
 import { buildRouletteSequence } from '@/lib/live-game-roulette';
 import {
-  createDefaultLiveGameSetup,
   saveLiveGameSetup,
 } from '@/lib/live-game-setup';
 import { formatGameDuration, getGameDurationSeconds } from '@/lib/live-game-duration';
@@ -143,7 +142,8 @@ export default function LiveGameScreen() {
 
   const { members, guests, decks, matches, loading, group, refreshMemberDecks } = useArena(groupId, user?.id);
 
-  const { selectedKeys, setSelectedKeys, participantDecks, setParticipantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setSeatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup } = useNativeLiveSetup(groupId, user, { members, guests, decks, matches, loading });
+  const { selectedKeys, participantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup } = useNativeLiveSetup(groupId, user, { members, guests, decks, matches, loading },
+    { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient });
 
   const [liveGame, setLiveGame] = useState<LiveGameRecord | null>(null);
   const [booting, setBooting] = useState(true);
@@ -324,15 +324,13 @@ export default function LiveGameScreen() {
     setBooting(true);
     setRecoveryOutbox([]);
     setUndoDepth(0); setRedoDepth(0); setPendingSyncCount(0);
-    setSelectedKeys([]); setParticipantDecks({});
-    setSeatSetups(createDefaultLiveGameSetup().seats);
     setShowEndGame(false); setShowRematch(false); setCompletedGame(null);
     setShowDiscardConfirm(false); setShowExitChoice(false); setShowClearRecoveryConfirm(false);
     setEndWinnerKey(''); setEndIsDraw(false); setEndWinCondition(null);
     setStarting(false); setEndingGame(false); setDiscardingGame(false);
     setPendingEliminate(null); setDamagePulse({}); setRandomHighlight(null); setStartingHighlight(null);
     rouletteTimersRef.current.forEach(clearTimeout); rouletteTimersRef.current = [];
-  }, [liveScopeEpoch, setOptimisticRecord, setParticipantDecks, setSeatSetups, setSelectedKeys]);
+  }, [liveScopeEpoch, setOptimisticRecord]);
 
   useEffect(() => () => {
     clearLiveGameRuntimePlayers();
