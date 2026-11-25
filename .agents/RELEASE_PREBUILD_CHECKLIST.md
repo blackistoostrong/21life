@@ -1,5 +1,7 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] Riallineamento branch mobile concorrenti: controllare conflitti e marker sia PROJECT_CHECKLIST sia MERGE_FAILURES; preservare entrambe le aggiunte. Ricertificare combinazione logout/journal/lifecycle sullo SHA finale, senza attribuire al merge i risultati dei singoli rami.
+
 - [ ] JobExpo CI con test condivisi root: `npm ci` sia root sia Expo; il PASS locale con entrambi i node_modules non certifica un runner con il solo Expo. Verificare check remoti prima del merge e APK dal commit finale di Dev.
 
 - [ ] Se cambiano backup/restore: le query sul sorgente devono essere server-side READ ONLY; SQL di ripristino soltanto emesso nel pacchetto ed eseguito sul clone. Eseguire la regressione backup-source-readonly e verificare che la prova reale rifiuti una mutazione. Incidente Dev documentato in docs/DEV26_BACKUP_INCIDENT.md.

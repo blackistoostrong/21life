@@ -1,5 +1,10 @@
 # Registro dei merge falliti
 
+## 2026-11-25 — integrazione logout nel lifecycle live PR269
+- Merge locale origin/Dev a9251a21 in68dcf6ad interrotto con conflitti esclusivamente nei registri MERGE_FAILURES e PROJECT_CHECKLIST. PR269 OPEN/head9590c93f verificato; PR267 già MERGED con albero identico al candidato verificato. Nessun build dipendente avviato.
+- Recupero: conservate entrambe le aggiunte in ciascun registro; nessun conflitto applicativo. Verificare indice senza file unmerged e marker, poi nuova quality web/Expo, prove React e bundle sullo SHA combinato prima dell'integrazione Dev.
+- Prevenzione: dopo merge con registri concorrenti controllare entrambi i file, non solo PROJECT_CHECKLIST; preservare evidenze delle due tranche e ricertificare il codice combinato.
+
 ## 2026-11-25 — PR262 secondo tentativo REST
 - PUT merge con SHA atteso f84b3297 restituisce HTTP502; orchestrazione interrotta immediatamente. Readback REST senza cache: OPEN, merged=false; ref remoto Dev ancora d24a578f. Tutti i check f84b3297 verdi prima della richiesta. Nessun merge attestato, nessun build/deploy dipendente.
 - GraphQL PR267 mostrava il vecchio head62f903fc, mentre REST no-cache e ref remoto concordano su301cc8ff: usare REST e ref per distinguere cache da push perso. Nessun force-push/reopen o bypass. Sospesi ulteriori tentativi identici di merge finché manca evidenza nuova sul servizio.
@@ -52,6 +57,16 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 - Merge origin/maintenance/dev26-expo-sdk-patches9dfe3807 in fix/dev26-native-outbox-preservation1047baef: exit1 soltanto PROJECT_CHECKLIST, append concorrenti. PR262 OPEN/head1047baef verificati; nessun build/merge remoto dipendente avviato.
 - Recupero: preservate entrambe le sezioni del registro unico; sorgenti SDK e journal non in conflitto. Verificare zero unmerged/marker e nuovi check prima dell'integrazione Dev.
 - Prevenzione: confrontare le aggiunte alla checklist quando si incorporano dipendenze tra PR; non sostituire il file intero con ours/theirs.
+
+## 2026-11-25 — Metadati PR267 non aggiornati dopo errore push GitHub
+
+- Primo push6ed05bb6 rifiutato Internal Server Error; ref letto ancora62f903fc. Retry riuscito e ls-remote conferma6ed05bb6, ma PR267 resta OPEN/head62f903fc/check vecchi; nessun merge/build dipendente effettuato.
+- Recupero: checkpoint documentale sul ramo per generare un nuovo evento push; verificare ref reale, head PR e check coerenti prima del merge. Nessuna modifica a protezioni o forzatura dei gate.
+
+## 2026-11-25 — SDK57 nel ramo logout PR267
+
+- Merge origin/maintenance/dev26-expo-sdk-patches9dfe3807 in fix/dev26-logout62f903fc: exit1 soltanto PROJECT_CHECKLIST per append concorrenti. PR267 OPEN/head62f903fc verificati; nessun build dipendente avviato.
+- Recupero: conservare tutte le aggiunte a registro; nessun conflitto applicativo. Richiedere zero marker/unmerged e nuovi gate verdi prima del merge remoto; nessun ours/theirs del registro intero.
 
 ## 2026-11-20 — PR241 integrazione Dev bloccata dal toolchain dei test condivisi
 
