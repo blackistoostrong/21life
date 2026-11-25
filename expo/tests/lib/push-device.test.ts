@@ -55,6 +55,23 @@ beforeEach(() => {
   m.del.mockResolvedValue({ status: 200 });
 });
 describe("native registration lifecycle", () => {
+  it("does not wait for a cancelled OS permission request during logout", async () => {
+    let release!: (value: { granted: boolean; canAskAgain: boolean }) => void;
+    m.getPermissions.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const service = await import("@/lib/push-device");
+    const registration = service.registerCurrentDevice("u", "it");
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    let finished = false;
+    const logout = service.revokeCurrentDevice().then(() => { finished = true; });
+    try {
+      await vi.waitFor(() => expect(finished).toBe(true), { timeout: 200 });
+    } finally {
+      release({ granted: true, canAskAgain: true });
+      await registration;
+      await logout;
+    }
+    expect(m.post).not.toHaveBeenCalled();
+  });
   it("revokes candidate after lost POST response", async () => {
     m.post.mockResolvedValue({ status: 0 });
     const service = await import("@/lib/push-device");
@@ -66,6 +83,25 @@ describe("native registration lifecycle", () => {
       { token: "ExponentPushToken[test]" },
       expect.anything(),
     );
+  });
+  it("revokes an already dispatched registration before its response arrives", async () => {
+    let finish!: (value: { status: number }) => void;
+    m.post.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const service = await import("@/lib/push-device");
+    const registration = service.registerCurrentDevice("u", "it");
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    try {
+      await service.revokeCurrentDevice();
+      expect(m.del).toHaveBeenCalledWith("/api/push-tokens", { token: "ExponentPushToken[test]" },
+        expect.objectContaining({ timeoutMs: 5_000 }));
+      expect(m.store.size).toBe(0);
+    } finally {
+      finish({ status: 200 });
+      await registration;
+    }
+    expect(service.getPushState()).toBe("idle");
+    expect(m.del).toHaveBeenCalledWith("/api/push-tokens",
+      { token: "ExponentPushToken[test]", revokeSession: false }, expect.anything());
   });
   it("revokes persisted token after cold start without registration", async () => {
     m.store.set(

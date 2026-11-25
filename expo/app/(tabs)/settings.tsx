@@ -42,6 +42,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { profile, updateDisplayName, refresh: refreshProfile } = useProfile(user?.id);
   const { showToast } = useToast();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showEditNameModal, setShowEditNameModal] = useState(false);
@@ -358,7 +359,15 @@ export default function SettingsScreen() {
         onPress={() => void handleExportAccount()}
         style={styles.logout}
       />
-      <Button label={copy('logout')} variant="ghost" onPress={() => void signOut().catch(() => showAppAlert(copy('error'), language==='it' ? 'Impossibile scollegare le notifiche. Controlla la connessione e riprova.' : 'Could not disconnect notifications. Check your connection and try again.'))} style={styles.logout} />
+      <Button label={loggingOut ? (language === 'it' ? 'Uscita…' : 'Signing out…') : copy('logout')}
+        disabled={loggingOut} variant="ghost" onPress={() => {
+          if (loggingOut) return;
+          setLoggingOut(true);
+          void signOut().catch(() => showAppAlert(copy('error'), language === 'it'
+            ? 'Impossibile uscire. Controlla la connessione e riprova.'
+            : 'Could not sign out. Check your connection and try again.'))
+            .finally(() => setLoggingOut(false));
+        }} style={styles.logout} />
       <Button
         label={copy('deleteAccount')}
         variant="destructive"

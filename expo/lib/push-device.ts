@@ -149,7 +149,9 @@ export async function revokeCurrentDevice() {
     return;
   suspended = true;
   cancelPushRegistration();
-  await running;
+  // Permission dialogs and OS token acquisition cannot be aborted and may never
+  // settle. Generation cancellation prevents a later save; a POST already sent
+  // is covered by the server session revocation below.
   const { data } = await supabase.auth.getSession();
   const session = data.session;
   const stored = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
@@ -165,6 +167,7 @@ export async function revokeCurrentDevice() {
     {
       authenticated: false,
       headers: { Authorization: `Bearer ${accessToken}` },
+      timeoutMs: 5_000,
     },
   );
   if (result.status !== 200) {
