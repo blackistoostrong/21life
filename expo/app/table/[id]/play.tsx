@@ -1,23 +1,22 @@
+import { useNativeLiveSetup } from '@/hooks/use-native-live-setup';
 import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
 import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
-import { restoreSetupDecks } from '@/components/live-game/restore-setup-decks';
 import { useFocusEffect , useLocalSearchParams, useRouter } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
 
 import * as Crypto from 'expo-crypto';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { DeckImage } from '@/components/deck/deck-image';
-import { LiveGameConfigurator, type SetupParticipant } from '@/components/live-game/live-game-configurator';
+import { LiveGameConfigurator } from '@/components/live-game/live-game-configurator';
 import { TableArena } from '@/components/live-game/table-arena';
 import { LiveGameRecapView } from '@/components/live-game/live-game-recap';
 import { LiveGameRecoveryPanel } from '@/components/live-game/recovery-panel';
 import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
-import { toDeckOption } from '@/components/table/match-participant-row';
 import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Modal } from '@/components/ui/modal';
@@ -41,8 +40,6 @@ import { apiPost } from '@/lib/api';
 import { ArenaSyncError, syncAndRefreshArenaMember } from '@/lib/arena-archidekt-sync';
 import { queueLiveGameJournalWrite } from '@/lib/live-game-journal-writer';
 import { countLiveGamePendingOperations, getLiveGameSyncState, getLiveGameSyncIndicator, getLiveGameSyncCopy, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
-import { getLastDeckSelectionForParticipant } from '@/lib/arena-participants';
-import { getPreferredDeckId } from '@/lib/arena-deck-selection';
 import {
   applyLiveGameMutation,
   createLiveGamePlayer,
@@ -61,13 +58,9 @@ import {
   type WinCondition,
 } from '@/lib/live-game';
 import { buildRouletteSequence } from '@/lib/live-game-roulette';
-import type { TableLayoutVariant } from '@/lib/live-game-table-layout';
 import {
   createDefaultLiveGameSetup,
-  clearLiveGameSeats,
-  loadLiveGameSetup,
   saveLiveGameSetup,
-  type LiveGameSeatSetup,
 } from '@/lib/live-game-setup';
 import { formatGameDuration, getGameDurationSeconds } from '@/lib/live-game-duration';
 import { withLiveGameTimeout } from '@/lib/live-game-async';
@@ -105,14 +98,9 @@ import {
   applyLiveGameOrientationLock,
   clearLiveGameOrientationLock,
 } from '@/lib/live-game-orientation';
-import { parseParticipantKey, toGuestParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+import { parseParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { prefetchCommanderNames, prefetchDeckImageUrls } from '@/lib/deck-image-cache';
 import { supabase } from '@/lib/supabase';
-import type { MemberDeck } from '@/lib/types/arena';
-
-type LifePreset = '20' | '25' | '30' | '40' | '60' | 'custom';
-const LIFE_PRESETS: LifePreset[] = ['20', '25', '30', '40', '60'];
 const WIN_CONDITIONS: {
   value: WinCondition;
   icon: keyof typeof Ionicons.glyphMap;
@@ -155,17 +143,10 @@ export default function LiveGameScreen() {
 
   const { members, guests, decks, matches, loading, group, refreshMemberDecks } = useArena(groupId, user?.id);
 
+  const { selectedKeys, setSelectedKeys, participantDecks, setParticipantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setSeatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup } = useNativeLiveSetup(groupId, user, { members, guests, decks, matches, loading });
+
   const [liveGame, setLiveGame] = useState<LiveGameRecord | null>(null);
   const [booting, setBooting] = useState(true);
-  const [selectedKeys, setSelectedKeys] = useState<ParticipantKey[]>([]);
-  const [participantDecks, setParticipantDecks] = useState<Record<string, string>>({});
-  const [playerCount, setPlayerCount] = useState(4);
-  const [layoutVariant, setLayoutVariant] = useState<TableLayoutVariant>('classic');
-  const [seatSetups, setSeatSetups] = useState<LiveGameSeatSetup[]>(
-    createDefaultLiveGameSetup().seats,
-  );
-  const [lifePreset, setLifePreset] = useState<LifePreset>('40');
-  const [customLife, setCustomLife] = useState('40');
   const [starting, setStarting] = useState(false);
   const [archidektSyncRequest, setArchidektSyncRequest] = useState<{
     userId: string;
@@ -224,11 +205,6 @@ export default function LiveGameScreen() {
       needsCreate: needsCreateRef.current, finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
   },[]);
   const telemetrySessionRef = useRef(Crypto.randomUUID());
-  const [setupReadyKey, setSetupReadyKey] = useState<string | null>(null);
-  const [setupRestoreError, setSetupRestoreError] = useState(false);
-  const [setupRetry, setSetupRetry] = useState(0);
-  const setupHydratingRef = useRef(false);
-  const setupHydratedRef = useRef<string | null>(null);
 
   const openEndGameModal = useCallback((state: LiveGameState) => {
     const suggested = getSuggestedWinner(state);
@@ -262,107 +238,6 @@ export default function LiveGameScreen() {
       openEndGameModal(liveGame.state);
     }
   }, [liveGame, openEndGameModal]);
-
-  const startingLife = useMemo(() => {
-    if (lifePreset === 'custom') {
-      const parsed = Number.parseInt(customLife, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 40;
-    }
-    return Number.parseInt(lifePreset, 10);
-  }, [customLife, lifePreset]);
-
-  const [occasionalDecks, setOccasionalDecks] = useState<MemberDeck[]>([]);
-  const decksByUser = useMemo(() => {
-    const map = new Map<string, MemberDeck[]>();
-    [...decks, ...occasionalDecks].forEach((deck) => {
-      const current = map.get(deck.user_id) || [];
-      current.push(deck);
-      map.set(deck.user_id, current);
-    });
-    return map;
-  }, [decks, occasionalDecks]);
-
-  const getDeckOptions = useCallback((key: ParticipantKey) => {
-    if (key.startsWith('guest:')) {
-      const guestId = key.slice(6);
-      const guestDecks = guests.find((guest) => guest.id === guestId)?.arena_guest_decks || [];
-      return guestDecks.map(toDeckOption);
-    }
-    return (decksByUser.get(key.slice(5)) || []).map(toDeckOption);
-  }, [decksByUser, guests]);
-
-  const setupParticipants = useMemo<SetupParticipant[]>(() => [
-    ...members.map((member) => {
-      const key = toUserParticipantKey(member.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: getProfileDisplayName(member),
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-    ...guests.map((guest) => {
-      const key = toGuestParticipantKey(guest.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: guest.display_name,
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-  ], [getDeckOptions, guests, matches, members]);
-
-  const applySeatSetups = useCallback((nextSeats: LiveGameSeatSetup[]) => {
-    setSeatSetups(nextSeats);
-    const assigned = nextSeats.filter(
-      (seat): seat is { participantKey: ParticipantKey; deckId: string | null } => Boolean(seat.participantKey),
-    );
-    setSelectedKeys(assigned.map((seat) => seat.participantKey));
-    setParticipantDecks(Object.fromEntries(
-      assigned.filter((seat) => seat.deckId).map((seat) => [seat.participantKey, seat.deckId!]),
-    ));
-  }, []);
-
-  const applyStartingLife = useCallback((value: number) => {
-    const preset = String(value) as LifePreset;
-    if (LIFE_PRESETS.includes(preset)) {
-      setLifePreset(preset);
-      setCustomLife(String(value));
-    } else {
-      setLifePreset('custom');
-      setCustomLife(String(value));
-    }
-  }, []);
-
-  const handlePlayerCountChange = useCallback((count: number) => {
-    setPlayerCount(count);
-    applySeatSetups(Array.from({ length: count }, (_, index) => (
-      seatSetups[index] ?? { participantKey: null, deckId: null }
-    )));
-  }, [applySeatSetups, seatSetups]);
-
-  const handleAssignSeat = useCallback((
-    index: number,
-    participantKey: ParticipantKey | null,
-    deckId: string | null,
-  ) => {
-    const next = seatSetups.map((seat, seatIndex) => {
-      if (seatIndex === index) return { participantKey, deckId };
-      if (participantKey && seat.participantKey === participantKey) {
-        return { participantKey: null, deckId: null };
-      }
-      return seat;
-    });
-    applySeatSetups(next);
-  }, [applySeatSetups, seatSetups]);
 
   const handleSelectSetupParticipant = useCallback((participantKey: ParticipantKey) => {
     const generation = ++archidektSyncGeneration.current;
@@ -421,21 +296,6 @@ export default function LiveGameScreen() {
     });
   }, [archidektSyncRequest, copy, handleSelectSetupParticipant, language, refreshMemberDecks]);
 
-  const resetSetup = useCallback(() => {
-    applySeatSetups(clearLiveGameSeats(seatSetups));
-  }, [applySeatSetups, seatSetups]);
-
-  useEffect(() => {
-    const selectedDecks = seatSetups.flatMap((seat) => {
-      if (!seat.participantKey || !seat.deckId) return [];
-      const deck = getDeckOptions(seat.participantKey).find((option) => option.id === seat.deckId);
-      return deck ? [deck] : [];
-    });
-    if (selectedDecks.length === 0) return;
-    void prefetchDeckImageUrls(selectedDecks.map((deck) => deck.commander_image), { background: true });
-    void prefetchCommanderNames(selectedDecks.map((deck) => deck.commander), { background: true });
-  }, [getDeckOptions, seatSetups]);
-
   const setOptimisticRecord = useCallback((record: LiveGameRecord | null) => {
     if (liveGameRef.current?.id !== record?.id) {
       syncPromiseRef.current = null;
@@ -472,7 +332,7 @@ export default function LiveGameScreen() {
     setStarting(false); setEndingGame(false); setDiscardingGame(false);
     setPendingEliminate(null); setDamagePulse({}); setRandomHighlight(null); setStartingHighlight(null);
     rouletteTimersRef.current.forEach(clearTimeout); rouletteTimersRef.current = [];
-  }, [liveScopeEpoch, setOptimisticRecord]);
+  }, [liveScopeEpoch, setOptimisticRecord, setParticipantDecks, setSeatSetups, setSelectedKeys]);
 
   useEffect(() => () => {
     clearLiveGameRuntimePlayers();
@@ -837,40 +697,6 @@ export default function LiveGameScreen() {
   }, [copy, currentUserId, groupId, isLiveScopeCurrent, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
 
   useEffect(() => {
-    if (!groupId || !user || loading || setupHydratingRef.current || setupHydratedRef.current === `${user.id}:${groupId}`) return;
-    setupHydratingRef.current = true;
-    setSetupRestoreError(false);
-    void loadLiveGameSetup(groupId, user.id).then(async (saved) => {
-      if (!saved) { setupHydratedRef.current = `${user.id}:${groupId}`; setSetupReadyKey(`${user.id}:${groupId}`); return; }
-      const savedDeckIds = saved.seats.filter(seat => seat.participantKey?.startsWith('user:') && seat.deckId).map(seat => seat.deckId!);
-      let restoredDecks: MemberDeck[] = [];
-      if (savedDeckIds.length) {
-        restoredDecks = await restoreSetupDecks(supabase, groupId, savedDeckIds);
-        setOccasionalDecks(current => [...current.filter(deck => !restoredDecks.some(restored => restored.id === deck.id)), ...restoredDecks]);
-      }
-      const participantMap = new Map(setupParticipants.map((participant) => [participant.key, participant]));
-      const validatedSeats = saved.seats.map((seat) => {
-        if (!seat.participantKey) return { participantKey: null, deckId: null };
-        const participant = participantMap.get(seat.participantKey);
-        if (!participant) return { participantKey: null, deckId: null };
-        const validDeck = participant.decks.some((deck) => deck.id === seat.deckId)
-          || restoredDecks.some(deck => deck.id === seat.deckId && `user:${deck.user_id}` === seat.participantKey);
-        const fallbackDeck = participant.preferredDeckId;
-        return {
-          participantKey: seat.participantKey,
-          deckId: validDeck ? seat.deckId : fallbackDeck,
-        };
-      });
-      setPlayerCount(saved.playerCount);
-      setLayoutVariant(saved.layoutVariant);
-      applyStartingLife(saved.startingLife);
-      applySeatSetups(validatedSeats);
-      setupHydratedRef.current = `${user.id}:${groupId}`;
-      setSetupReadyKey(`${user.id}:${groupId}`);
-    }).catch(() => { setSetupRestoreError(true); }).finally(() => { setupHydratingRef.current = false; });
-  }, [applySeatSetups, applyStartingLife, groupId, loading, setupParticipants, setupRetry, user]);
-
-  useEffect(() => {
     const interval = setInterval(() => {
       void NetInfo.fetch().then((state) => {
         if (state.isConnected === true && state.isInternetReachable !== false) {
@@ -900,7 +726,7 @@ export default function LiveGameScreen() {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       appStateSubscription.remove();
     };
-  }, [currentUserId, refreshAuthoritativeState, resumeRemoteGame, syncJournal]);
+  }, [currentUserId, refreshAuthoritativeState, resumeRemoteGame, setSetupRetry, syncJournal]);
 
   const liveGameId = liveGame?.id ?? null;
   const liveGamePlayerCount = liveGame?.state.players.length ?? 0;
@@ -1448,7 +1274,7 @@ export default function LiveGameScreen() {
     })));
     applyStartingLife(previous.starting_life);
     return previous;
-  }, [applySeatSetups, applyStartingLife, completedGame]);
+  }, [applySeatSetups, applyStartingLife, completedGame, setLayoutVariant, setPlayerCount]);
 
   const handleRematchSameDecks = useCallback(async () => {
     if (!user || !isLiveScopeCurrent()) return;
