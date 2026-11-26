@@ -1,5 +1,7 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] Build locale Windows: prima di spostare .next, identificare e fermare esclusivamente il preview del checkout, poi verificare che il processo sia terminato. process.kill invia l'arresto ma non ne attende il completamento;26Nov renameEPERM ha fermato correttamente la compilazione prima del build. Non cancellare ricorsivamente cache o fermare processi non identificati.
+
 - [ ] Collaudi Dev remoti: preflight Auth health e REST JSON con querylimit0 prima delle fixture;502 prima del test non è una regressione applicativa. Dopo cold boot verificare gateway Dev e allocazioni overlay; non riavviare VM/Docker condivisi per correggere un singolo container Dev. Incidente26Nov documentato in SUPABASE_OPERATIONS.
 
 - [ ] Riallineamento branch mobile concorrenti: controllare conflitti e marker sia PROJECT_CHECKLIST sia MERGE_FAILURES; preservare entrambe le aggiunte. Ricertificare combinazione logout/journal/lifecycle sullo SHA finale, senza attribuire al merge i risultati dei singoli rami.

@@ -3,6 +3,8 @@
 import { createLiveGameRound } from '@/lib/live-game-round';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {useCommandScope} from '@/hooks/use-command-scope';
+import {createWebLiveCommandClient} from '@/lib/web-live-command-client';
 import { useRouter } from 'next/navigation';
 import type { WebTrackerParticipant } from '@/lib/types/web-tracker';
 import { useWebTrackerSetup } from '@/hooks/use-web-tracker-setup';
@@ -107,7 +109,7 @@ import {
   LIVE_GAME_SYNC_BATCH_SIZE,
   getLiveGameSyncDelay,
 } from '@/lib/live-game-sync-policy';
-import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import {withRequestDeadline} from '@/packages/data/request-deadline';
 
 
 export type { WebTrackerDeck, WebTrackerParticipant } from '@/lib/types/web-tracker';
@@ -178,6 +180,7 @@ export function WebLiveGame({
   userId: string;
   participants: WebTrackerParticipant[];
 }) {
+  const {begin:beginLiveJob,committed:isLiveCurrent,cancel:cancelLiveJob}=useCommandScope<'sync'|'refresh'|'bootstrap'|'command'|'telemetry'>(`${userId}:${groupId}`,true);
   const setup = useWebTrackerSetup(groupId, userId, catalogParticipants);
   const { participants, occasionalCreationBusy, playerCount, layoutVariant, startingLife, seats,
     restoreSetup, persistSetup } = setup;
@@ -298,21 +301,29 @@ export function WebLiveGame({
       window.clearTimeout(syncTimerRef.current);
       syncTimerRef.current = null;
     }
-    if (syncingRef.current || !recordRef.current || !serverRef.current || !navigator.onLine) return false;
+    if (!isLiveCurrent() || syncingRef.current || !recordRef.current || !serverRef.current || !navigator.onLine) return false;
+    const job=beginLiveJob('sync');
+    if(!job)return false;
     syncingRef.current = true;
     setSyncing(true);
     setSyncError(null);
     let failed = false;
+    let commandClient: Awaited<ReturnType<typeof createWebLiveCommandClient>>|null=null;
     try {
+      commandClient=await createWebLiveCommandClient(userId,job.signal);
+      if(!job.active())return false;
+      const {client,accessToken}=commandClient;
       let server = serverRef.current;
       if (needsCreateRef.current) {
-        server = await ensureLiveGameCreated(supabase, recordRef.current);
+        server = await ensureLiveGameCreated(client, recordRef.current);
+        if(!job.active())return false;
         serverRef.current = server;
         needsCreateRef.current = false;
       }
       while (queueRef.current.length > 0) {
         const batch = queueRef.current.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
-        server = await applyQueuedLiveGameMutations(supabase, server, batch);
+        server = await applyQueuedLiveGameMutations(client, server, batch);
+        if(!job.active())return false;
         serverRef.current = server;
         queueRef.current = queueRef.current.slice(batch.length);
         if (queueRef.current.length === 0) syncBatchStartedAtRef.current = null;
@@ -323,22 +334,25 @@ export function WebLiveGame({
       if (pendingFinalizationRef.current) {
         const completed = recordRef.current;
         const finalization = pendingFinalizationRef.current;
-        const matchId = await finalizeLiveGameAsMatch(supabase, {
+        const matchId = await finalizeLiveGameAsMatch(client, {
           liveGameId: server.id,
           ...finalization,
         });
-        void authenticatedFetch('/api/notifications/match-completed', {
+        if(!job.active())return false;
+        void withRequestDeadline({abortSignal:signal=>fetch('/api/notifications/match-completed', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          signal,
           body: JSON.stringify({ matchId }),
-        });
+        })},5000,job.signal).catch(()=>undefined);
         pendingFinalizationRef.current = null;
         clearJournal(server.id);
         if (completed) showCompletedGame(completed, finalization.endedAt);
         return true;
       }
       if (pendingCancelRef.current) {
-        await cancelLiveGame(supabase, server.id);
+        await cancelLiveGame(client, server.id);
+        if(!job.active())return false;
         pendingCancelRef.current = false;
         clearJournal(server.id);
         clearCancelledGame();
@@ -347,6 +361,7 @@ export function WebLiveGame({
       persist(recordRef.current);
       return true;
     } catch (error) {
+      if(!job.active())return false;
       failed = true;
       setAuthenticationRequired(isLiveGameAuthenticationError(error));
       persist(recordRef.current);
@@ -354,18 +369,21 @@ export function WebLiveGame({
       console.error('Web live-game sync failed', error);
       return false;
     } finally {
+      if(job.active()){
       syncingRef.current = false;
       setSyncing(false);
       if (!failed) setAuthenticationRequired(false);
-      void persistLiveGameTelemetry(supabase, {
+      if(commandClient)void persistLiveGameTelemetry(commandClient.client, {
         userId,
         liveGameId: recordRef.current?.id ?? null,
         sessionId: telemetrySessionRef.current,
         platform: 'web',
         force: failed,
       }).catch(() => undefined);
+      }
+      job.finish();
     }
-  }, [clearCancelledGame, clearJournal, persist, setOptimisticRecord, showCompletedGame, userId]);
+  }, [beginLiveJob, isLiveCurrent, clearCancelledGame, clearJournal, persist, setOptimisticRecord, showCompletedGame, userId]);
 
   const scheduleFlush = useCallback(() => {
     if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
@@ -385,16 +403,19 @@ export function WebLiveGame({
   const refreshAuthoritativeState = useCallback(async () => {
     const current = recordRef.current;
     if (!current || needsCreateRef.current || syncingRef.current) return;
-    const remote = await fetchActiveLiveGame(
-      supabase,
-      groupId,
-      `user:${userId}` as ParticipantKey,
-    );
+    const job=beginLiveJob('refresh');
+    if(!job)return;
+    try{
+    const {client}=await createWebLiveCommandClient(userId,job.signal);
+    if(!job.active())return;
+    const remote = await fetchActiveLiveGame(client,groupId,`user:${userId}` as ParticipantKey,job.signal);
+    if(!job.active())return;
     if (!remote || remote.id !== current.id || recordRef.current?.id !== current.id) return;
     serverRef.current = remote;
     setOptimisticRecord(replay(remote, queueRef.current));
     persist(recordRef.current);
-  }, [groupId, persist, setOptimisticRecord, userId]);
+    }finally{job.finish();}
+  }, [beginLiveJob,groupId, persist, setOptimisticRecord, userId]);
 
   useEffect(() => {
     if (queueRef.current.length > 0) scheduleFlush();
@@ -406,19 +427,25 @@ export function WebLiveGame({
     };
   }, [scheduleFlush]);
 
+  const sendBackgroundTelemetry=useCallback(()=>{
+    const job=beginLiveJob('telemetry');
+    if(!job)return;
+    void createWebLiveCommandClient(userId,job.signal).then(({client})=>{
+      if(!job.active())return;
+      return persistLiveGameTelemetry(client,{
+        userId,liveGameId:recordRef.current?.id??null,
+        sessionId:telemetrySessionRef.current,platform:'web',force:true,
+      });
+    }).catch(()=>undefined).finally(()=>job.finish());
+  },[beginLiveJob,userId]);
+
   useEffect(() => {
     const flushBeforeBackground = () => {
       if (document.visibilityState === 'hidden') {
         if (queueRef.current.length > 0) void flush();
-        void persistLiveGameTelemetry(supabase, {
-          userId,
-          liveGameId: recordRef.current?.id ?? null,
-          sessionId: telemetrySessionRef.current,
-          platform: 'web',
-          force: true,
-        }).catch(() => undefined);
+        sendBackgroundTelemetry();
       } else {
-        void refreshAuthoritativeState().catch(() => undefined).finally(() => flush());
+        void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(isLiveCurrent())void flush();});
       }
     };
     const flushBeforeExit = () => {
@@ -430,13 +457,13 @@ export function WebLiveGame({
       document.removeEventListener('visibilitychange', flushBeforeBackground);
       window.removeEventListener('pagehide', flushBeforeExit);
     };
-  }, [flush, refreshAuthoritativeState, userId]);
+  }, [flush,isLiveCurrent, refreshAuthoritativeState,sendBackgroundTelemetry]);
 
   useEffect(() => {
     setOnline(navigator.onLine);
     const onOnline = () => {
       setOnline(true);
-      void refreshAuthoritativeState().catch(() => undefined).finally(() => flush());
+      void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(isLiveCurrent())void flush();});
     };
     const onOffline = () => setOnline(false);
     window.addEventListener('online', onOnline);
@@ -445,9 +472,11 @@ export function WebLiveGame({
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, [flush, refreshAuthoritativeState]);
+  }, [flush,isLiveCurrent, refreshAuthoritativeState]);
 
   useEffect(() => {
+    const job=beginLiveJob('bootstrap');
+    if(!job)return;
     let mounted = true;
     void (async () => {
       const participantKey = `user:${userId}` as ParticipantKey;
@@ -470,12 +499,15 @@ export function WebLiveGame({
         setOptimisticRecord(cached.record);
       }
       try {
+        const {client}=await createWebLiveCommandClient(userId,job.signal);
+        if(!job.active())return;
         if (cached && (cached.pendingFinalization || cached.pendingCancel) && navigator.onLine) {
           const terminalOperationRecovered = await flush();
+          if(!job.active())return;
           if (terminalOperationRecovered) return;
         }
-        const remote = await fetchActiveLiveGame(supabase, groupId, participantKey);
-        if (!mounted) return;
+        const remote = await fetchActiveLiveGame(client, groupId, participantKey,job.signal);
+        if (!mounted||!job.active()) return;
         if (remote) {
           if (cached && cached.record.id !== remote.id && webJournalHasPendingOperations(cached)) {
             setRecoveryIssue('pending_game');
@@ -511,11 +543,12 @@ export function WebLiveGame({
       } catch {
         // The crash-safe local journal remains playable offline.
       } finally {
-        if (mounted) setBooting(false);
+        if (mounted&&job.active())setBooting(false);
+        job.finish();
       }
     })();
-    return () => { mounted = false; };
-  }, [clearJournal, flush, groupId, persist, setOptimisticRecord, userId]);
+    return () => { mounted = false; cancelLiveJob('bootstrap'); };
+  }, [beginLiveJob,cancelLiveJob,clearJournal, flush, groupId, persist, setOptimisticRecord, userId]);
 
   const activeRecordId = record?.id;
   useEffect(() => {
@@ -527,7 +560,9 @@ export function WebLiveGame({
   }, [activeRecordId]);
   useEffect(() => {
     if (!activeRecordId || needsCreateRef.current) return;
-    return subscribeToLiveGame(supabase, activeRecordId, (remote) => {
+    let active=true;
+    const stop=subscribeToLiveGame(supabase, activeRecordId, (remote) => {
+      if(!active||!isLiveCurrent())return;
       // Ignore events from a channel whose removal is still in flight.
       if (recordRef.current?.id !== activeRecordId) return;
       if (remote.status !== 'active') {
@@ -557,11 +592,12 @@ export function WebLiveGame({
       setOptimisticRecord(replay(remote, queueRef.current));
       persist(recordRef.current);
     }, (status) => {
-      if (status === 'SUBSCRIBED') {
-        void refreshAuthoritativeState().catch(() => undefined).finally(() => flush());
+      if (active&&isLiveCurrent()&&status === 'SUBSCRIBED') {
+        void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(isLiveCurrent())void flush();});
       }
     });
-  }, [activeRecordId, clearJournal, copy, flush, groupId, persist, refreshAuthoritativeState, router, setOptimisticRecord, toast]);
+    return ()=>{active=false;stop();};
+  }, [activeRecordId, clearJournal, copy, flush, groupId,isLiveCurrent, persist, refreshAuthoritativeState, router, setOptimisticRecord, toast]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -590,12 +626,17 @@ export function WebLiveGame({
       toast({ title: copy({ it: 'Completa tutti i posti', en: 'Complete every seat' }), variant: 'destructive' });
       return;
     }
+    const job=beginLiveJob('command');
+    if(!job)return;
     enterTrackerLandscape();
     setStarting(true);
     try {
       const keys = selected.map((seat) => seat.participantKey!) as ParticipantKey[];
       if (navigator.onLine) {
-        const busy = await fetchBusyLiveGameParticipantKeys(supabase, groupId, keys);
+        const {client}=await createWebLiveCommandClient(userId,job.signal);
+        if(!job.active())return;
+        const busy = await fetchBusyLiveGameParticipantKeys(client, groupId, keys);
+        if(!job.active())return;
         if (busy.length) throw new Error(copy({ it: 'Uno dei giocatori è già in una partita attiva.', en: 'A player is already in another active game.' }));
       }
       const created = createLiveGameRound({
@@ -632,10 +673,12 @@ export function WebLiveGame({
       runRoulette(keys, created.state.startingPlayerKey!);
       void flush();
     } catch (error) {
+      if(!job.active())return;
       restoreDefaultTrackerDisplay();
       toast({ title: copy({ it: 'Partita non avviata', en: 'Game not started' }), description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
     } finally {
-      setStarting(false);
+      if(job.active())setStarting(false);
+      job.finish();
     }
   };
 
@@ -837,6 +880,9 @@ export function WebLiveGame({
       toast({ title: copy({ it: 'Seleziona vincitore e condizione di vittoria.', en: 'Select a winner and win condition.' }), variant: 'destructive' });
       return;
     }
+    const job=beginLiveJob('command');
+    if(!job)return;
+    try{
     if (!isDraw && result.winCondition === 'last_standing' && result.winnerKey) {
       enqueue({ type: 'last_standing', winnerKey: result.winnerKey });
     }
@@ -861,22 +907,27 @@ export function WebLiveGame({
     persist(finalRecord);
     setEnding(true);
     const saved = await flush();
-    setEnding(false);
+    if(!job.active())return;
     if (saved) {
       toast({ title: copy({ it: `Partita salvata · ${duration}`, en: `Game saved · ${duration}` }) });
     } else {
       toast({ title: copy({ it: 'Salvataggio in attesa di connessione', en: 'Waiting for connection to save' }), variant: 'destructive' });
     }
+    }finally{if(job.active())setEnding(false);job.finish();}
   };
 
   const cancelGame = async () => {
     if (!record) return;
+    const job=beginLiveJob('command');
+    if(!job)return;
+    try{
     pendingCancelRef.current = true;
     persist(record);
     const cancelled = await flush();
-    if (cancelled) {
+    if (job.active()&&cancelled) {
       router.replace(`/table/${groupId}`);
     }
+    }finally{job.finish();}
   };
 
   if (booting) {
