@@ -65,6 +65,9 @@ for (const filePath of clientFiles) {
 
 const profileComposition = readFileSync(join(root, 'app/profile/page.tsx'), 'utf8');
 const liveCatalogComposition = readFileSync(join(root, 'app/table/[id]/play/page.tsx'), 'utf8');
+const liveComposition = readFileSync(join(root, 'components/live-game/web-live-game.tsx'), 'utf8');
+assert.doesNotMatch(liveComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch|live-game-service|live-game-offline|web-live-command-client|web-live-session-journal)/, 'Web tracker must delegate private transports and journal ownership to feature controllers');
+assert.doesNotMatch(liveComposition, /\b(?:fetch|authenticatedFetch)\s*\(/, 'Web tracker must not issue network requests directly');
 assert.doesNotMatch(liveCatalogComposition, /@supabase\/|@\/lib\/(?:supabase|authenticated-fetch|web-live-catalog-read)/, 'Live route must delegate private reads to its catalog owner');
 assert.doesNotMatch(liveCatalogComposition, /\b(?:fetch|authenticatedFetch)\s*\(/, 'Live route must not issue network requests directly');
 const arenaComposition = readFileSync(join(root, 'app/table/[id]/page.tsx'), 'utf8');

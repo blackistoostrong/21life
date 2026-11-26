@@ -1,10 +1,9 @@
 'use client';
 
-import { createLiveGameRound } from '@/lib/live-game-round';
+import {useWebLiveRoundCommands} from '@/hooks/use-web-live-round-commands';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {useWebLiveSession} from '@/hooks/use-web-live-session';
-import {createWebLiveCommandClient} from '@/lib/web-live-command-client';
 import { useRouter } from 'next/navigation';
 import type { WebTrackerParticipant } from '@/lib/types/web-tracker';
 import { useWebTrackerSetup } from '@/hooks/use-web-tracker-setup';
@@ -51,7 +50,6 @@ import {
   getDefaultWinCondition,
   getLiveGameResultWarnings,
   getSuggestedWinner,
-  isValidLiveGameResult,
   pickRandomPlayer,
   type DamageMode,
   type GroupDamageScope,
@@ -67,14 +65,11 @@ import {
   getSquareTableLayouts,
   getViewportTableOrientation,
   mapPlayersToSeats,
-  type TableLayoutVariant,
 } from '@/lib/live-game-table-layout';
 import { buildRouletteSequence } from '@/lib/live-game-roulette';
-import { fetchBusyLiveGameParticipantKeys } from '@/lib/live-game-service';
 import { WebJournalWarning } from '@/components/live-game/web-journal-warning';
 import { WebSyncBadge } from '@/components/live-game/web-sync-badge';
 import { getLiveGameSyncState } from '@/lib/live-game-sync-presentation';
-import type { WebLiveGameSeatSetup } from '@/lib/live-game-setup';
 import type { ParticipantKey } from '@/lib/participant-keys';
 import { LifeReadout } from '@/components/ui/recent-life-delta';
 import { useScreenWakeLock } from '@/hooks/use-screen-wake-lock';
@@ -111,12 +106,6 @@ const WIN_CONDITIONS: Array<{
   { value: 'other', label: { it: 'Altro', en: 'Other' }, icon: MoreHorizontal },
 ];
 
-function secureRandom() {
-  const value = new Uint32Array(1);
-  crypto.getRandomValues(value);
-  return value[0]! / 0x1_0000_0000;
-}
-
 function formatDuration(startedAt: string | null, endedAt?: string) {
   if (!startedAt) return '00:00';
   const endTime = endedAt ? new Date(endedAt).getTime() : Date.now();
@@ -142,15 +131,12 @@ export function WebLiveGame({
   participants: WebTrackerParticipant[];
 }) {
   const setup = useWebTrackerSetup(groupId, userId, catalogParticipants);
-  const { participants, occasionalCreationBusy, playerCount, layoutVariant, startingLife, seats,
-    restoreSetup, persistSetup } = setup;
+  const {restoreSetup}=setup;
   const router = useRouter();
   const { copy } = useLanguage();
   const { toast } = useToast();
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
   const [duration, setDuration] = useState('00:00');
-
-  const [starting, setStarting] = useState(false);
   const [damageDraft, setDamageDraft] = useState<DamageDraft | null>(null);
   const [damageAmount, setDamageAmount] = useState('0');
   const [damagePanelKey, setDamagePanelKey] = useState<ParticipantKey | null>(null);
@@ -164,7 +150,6 @@ export function WebLiveGame({
   const [winnerKey, setWinnerKey] = useState<ParticipantKey | ''>('');
   const [isDraw, setIsDraw] = useState(false);
   const [winCondition, setWinCondition] = useState<WinCondition | null>(null);
-  const [ending, setEnding] = useState(false);
   const { featureFlags } = useRuntimeConfig();
   const [completedRecord, setCompletedRecord] = useState<LiveGameRecord | null>(null);
   const [completedDuration, setCompletedDuration] = useState('00:00');
@@ -188,11 +173,11 @@ export function WebLiveGame({
   const showRemoteCompletedGame=useCallback((remote:LiveGameRecord,currentDuration:string)=>{
     setCompletedRecord(remote);setCompletedDuration(currentDuration);
   },[]);
-  const {journal,record,undoDepth,redoDepth,pendingSyncCount,localSaveError,booting,online,syncing,syncError,
-    recoveryIssue,authenticationRequired,recoveredJournal,flush,scheduleFlush,beginRoundCommand,dismissRecovery}=useWebLiveSession(groupId,userId,{
+  const session=useWebLiveSession(groupId,userId,{
       onCompleted:showCompletedGame,onRemoteCompleted:showRemoteCompletedGame,onCancelled:clearCancelledGame,readDuration:readLiveDuration,
-    });
-  const persist=journal.persist;
+  });
+  const {journal,record,undoDepth,redoDepth,pendingSyncCount,localSaveError,booting,online,syncing,syncError,
+    recoveryIssue,authenticationRequired,recoveredJournal,flush,scheduleFlush,dismissRecovery}=session;
 useScreenWakeLock(Boolean(record));
 const syncPresentationStatus = getLiveGameSyncState({ pendingOperations: pendingSyncCount, online, syncing,
     localPersistenceAvailable: localSaveError === null, authenticationRequired, hasError: syncError !== null });
@@ -219,68 +204,6 @@ const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTr
     const timer = window.setInterval(() => setDuration(formatDuration(record.started_at)), 1000);
     return () => window.clearInterval(timer);
   }, [record?.started_at]);
-
-  const startGame = async (override?: {
-    playerCount: number;
-    layoutVariant: TableLayoutVariant;
-    startingLife: number;
-    seats: WebLiveGameSeatSetup[];
-  }) => {
-    const nextPlayerCount = override?.playerCount ?? playerCount;
-    const nextLayoutVariant = override?.layoutVariant ?? layoutVariant;
-    const nextStartingLife = override?.startingLife ?? startingLife;
-    if (occasionalCreationBusy) return;
-    const nextSeats = override?.seats ?? seats;
-    const selected = nextSeats.filter((seat) => seat.participantKey && seat.deckId);
-    if (selected.length !== nextPlayerCount || new Set(selected.map((seat) => seat.participantKey)).size !== nextPlayerCount) {
-      toast({ title: copy({ it: 'Completa tutti i posti', en: 'Complete every seat' }), variant: 'destructive' });
-      return;
-    }
-    const job=beginRoundCommand();
-    if(!job)return;
-    enterTrackerLandscape();
-    setStarting(true);
-    try {
-      const keys = selected.map((seat) => seat.participantKey!) as ParticipantKey[];
-      if (navigator.onLine) {
-        const {client}=await createWebLiveCommandClient(userId,job.signal);
-        if(!job.active())return;
-        const busy = await fetchBusyLiveGameParticipantKeys(client, groupId, keys);
-        if(!job.active())return;
-        if (busy.length) throw new Error(copy({ it: 'Uno dei giocatori è già in una partita attiva.', en: 'A player is already in another active game.' }));
-      }
-      const created = createLiveGameRound({
-        id: crypto.randomUUID(), groupId, actorId: userId, startedAt: new Date().toISOString(),
-        startingLife: nextStartingLife, layoutVariant: nextLayoutVariant, random: secureRandom,
-        seats: selected.map(seat => {
-          const participant = participants.find(entry => entry.key === seat.participantKey)!;
-          const deck = participant.decks.find(entry => entry.id === seat.deckId)!;
-          return {participantKey: participant.key, deckId: deck.id, displayName: participant.displayName,
-            commander: deck.commander, commanderImage: deck.commanderImage};
-        }),
-      });
-      if(!journal.start(created))throw new Error(copy({it:'La partita precedente ha ancora operazioni da sincronizzare.',en:'The previous game still has pending operations to sync.'}));
-      setCompletedRecord(null);
-      try {
-        persistSetup({
-          playerCount: nextPlayerCount,
-          layoutVariant: nextLayoutVariant,
-          startingLife: nextStartingLife,
-          seats: nextSeats,
-        });
-      } catch { journal.markUnavailable(); }
-      persist();
-      runRoulette(keys, created.state.startingPlayerKey!);
-      void flush();
-    } catch (error) {
-      if(!job.active())return;
-      restoreDefaultTrackerDisplay();
-      toast({ title: copy({ it: 'Partita non avviata', en: 'Game not started' }), description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
-    } finally {
-      if(job.active())setStarting(false);
-      job.finish();
-    }
-  };
 
   const enqueue = useCallback((mutation:LiveGameMutation,inverse?:LiveGameMutation,historyMode:'record'|'skip'='record')=>{
     if(journal.enqueue(mutation,inverse,historyMode))scheduleFlush();
@@ -429,64 +352,11 @@ const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTr
     }
   }, [openEnd, record]);
 
-  const finishGame = async () => {
-    if (!record) return;
-    const result = {
-      winnerKey: isDraw ? null : winnerKey || null,
-      isDraw,
-      winCondition: isDraw ? null : winCondition,
-    };
-    if (!isValidLiveGameResult(record.state, result)) {
-      toast({ title: copy({ it: 'Seleziona vincitore e condizione di vittoria.', en: 'Select a winner and win condition.' }), variant: 'destructive' });
-      return;
-    }
-    const job=beginRoundCommand();
-    if(!job)return;
-    try{
-    if (!isDraw && result.winCondition === 'last_standing' && result.winnerKey) {
-      enqueue({ type: 'last_standing', winnerKey: result.winnerKey });
-    }
-    const finalRecord = journal.getSnapshot().record ?? record;
-    const players = finalRecord.state.players.map((player) => {
-      const participant = participants.find((entry) => entry.key === player.participantKey)!;
-      return {
-        participantKey: player.participantKey,
-        deckId: player.deckId,
-        isGuest: participant.isGuest,
-        userId: participant.userId,
-        guestId: participant.guestId,
-      };
-    });
-    journal.requestFinalization({
-      winnerKey: result.winnerKey,
-      isDraw,
-      winCondition: result.winCondition,
-      endedAt: new Date().toISOString(),
-      players,
-    });
-    setEnding(true);
-    const saved = await flush();
-    if(!job.active())return;
-    if (saved) {
-      toast({ title: copy({ it: `Partita salvata · ${duration}`, en: `Game saved · ${duration}` }) });
-    } else {
-      toast({ title: copy({ it: 'Salvataggio in attesa di connessione', en: 'Waiting for connection to save' }), variant: 'destructive' });
-    }
-    }finally{if(job.active())setEnding(false);job.finish();}
-  };
-
-  const cancelGame = async () => {
-    if (!record) return;
-    const job=beginRoundCommand();
-    if(!job)return;
-    try{
-    journal.requestCancellation();
-    const cancelled = await flush();
-    if (job.active()&&cancelled) {
-      router.replace(`/table/${groupId}`);
-    }
-    }finally{job.finish();}
-  };
+  const onRoundCreated=useCallback(()=>setCompletedRecord(null),[]);
+  const {starting,ending,startGame,finishGame,cancelGame}=useWebLiveRoundCommands(groupId,userId,{
+    setup,session,selection:{isDraw,winnerKey,winCondition,duration},
+    presentation:{enterTrackerLandscape,restoreDefaultTrackerDisplay,runRoulette,onRoundCreated},enqueue,
+  });
 
   if (booting) {
     return <div className="grid min-h-dvh place-items-center bg-black text-emerald-200"><Loader2 className="h-9 w-9 animate-spin" /></div>;

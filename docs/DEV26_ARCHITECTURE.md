@@ -1,5 +1,22 @@
 # DEV26 — Architettura e responsabilità
 
+## Proprietari runtime live web — 26 novembre, collaudo finale in corso
+
+Il renderer è sceso a658righe non vuote e compone i controller senza SDK, richieste o accesso diretto al journal persistente. Restano UI, dialoghi, drag/danno, roulette e timer di presentazione. Un gate top-level impedisce la reintroduzione di trasporti/storage privati; il grafo verifica confini e cicli.
+
+| Proprietario | Responsabilità | Dimensione non vuota |
+| --- | --- | ---: |
+| `lib/web-live-session-journal.ts` | Snapshot unico; queue, undo/redo, intenti terminali, ACK e persistenza account/gruppo tramite adapter esistente |161|
+| `hooks/use-web-live-journal.ts` | Durata del proprietario e osservazione React con useSyncExternalStore, senza stato/ref paralleli |13|
+| `hooks/use-web-live-session.ts` | Bootstrap, sync/recovery, Realtime, timer sync, listener rete/background e telemetria |347|
+| `hooks/use-web-live-round-commands.ts` | Start/rematch, validazione partecipanti, risultato e annullamento tramite slot dello stesso scope |197|
+
+Gli altri controller ricevono snapshot e azioni tipizzate, mai refs del journal. I port di presentazione sono callback specifici; il controller non importa il renderer. Nessun singleton privato, nuovo package, nuovo formato storage o SQL. Lo snapshot mantiene identità finché non cambia e non notifica una persistenza senza cambiamenti di stato. Il gate dei trasporti è distinto dall'accesso alla sola preferenza onboarding, ancora locale al renderer.
+
+Le transizioni di stato e la persistenza sono coperte da7contratti con adapter storage effettivo: undo/redo e ID operazioni, append durante ACK, writer scaduto, bytes corrotti, notifiche/cleanup, finalizzazione ripristinata e round pendente non sostituibile.6browser React reali in development/StrictMode PASS su A→B→A, gruppo, unmount e aggiornamenti della vista. Il codice del motore viene chiamato direttamente, senza replicarlo nei test.
+
+Estrazione runtime da3c2d6a55:28statement confrontati con AST canonico, adattando soltanto getter durata, callback remoti e azioni pubbliche di slot/dismissal. Estrazione round da8ba43885:5statement e RNG sicuro confrontati, sostituendo il solo setter completamento con callback tipizzato. L'owner journal è una riscrittura della gestione privata, non dichiarata estrazione AST identica: aggiunge ACK su prefisso e impedisce start/resume sopra un round pendente. Qualityroot868+7skip/75script/149floor PASS sul codice applicativo; build e collaudi autenticati dell'intera tranche ancora richiesti. Il target nativo e il punto6 complessivo restano aperti.
+
 ## Durata comandi live web — 26 novembre, verifica in corso
 
 Verificato su5860d4f4: buildweb56route,3.25/18MiB;6browser nuovi e18regressioni consolidate PASS (desktop/mobile,4giocatori/2client, offline/risposta persa/recap/fullscreen e cambio reale account).2match per2flussi, cleanup confermati. Qualityroot861+7skip/75script/149floor e4testSDK PASS. Resta aperta la separazione dei proprietari del journal/controller; questa tranche protegge le operazioni prima del loro spostamento. Catalogo precedente integrato Devbcb7e5a0 viaPR274, albero identico a21be5836.
