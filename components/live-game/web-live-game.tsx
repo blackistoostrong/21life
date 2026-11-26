@@ -3,6 +3,7 @@
 import { createLiveGameRound } from '@/lib/live-game-round';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {useWebLiveJournal} from '@/hooks/use-web-live-journal';
 import {useCommandScope} from '@/hooks/use-command-scope';
 import {createWebLiveCommandClient} from '@/lib/web-live-command-client';
 import { useRouter } from 'next/navigation';
@@ -49,7 +50,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import {
-  applyLiveGameMutation,
   getDefaultWinCondition,
   getLiveGameResultWarnings,
   getSuggestedWinner,
@@ -59,7 +59,6 @@ import {
   type GroupDamageScope,
   type LiveGameMutation,
   type LiveGameRecord,
-  type QueuedLiveGameMutation,
   type WinCondition,
 } from '@/lib/live-game';
 import { rollTableRandom, type TableRandomKind } from '@/lib/table-randomizer';
@@ -82,23 +81,10 @@ import {
   finalizeLiveGameAsMatch,
   subscribeToLiveGame,
 } from '@/lib/live-game-service';
-import {
-  clearWebLiveGameJournal,
-  loadWebLiveGameJournal,
-  saveWebLiveGameJournal,
-  type PendingLiveGameFinalization,
-} from '@/lib/live-game-offline';
-import {
-  createLiveGameHistory,
-  recordLiveGameHistory,
-  redoLiveGameHistory,
-  undoLiveGameHistory,
-  type LiveGameHistory,
-} from '@/lib/live-game-history';
-import { persistLiveGameTelemetry, recordLiveGameQueueDepth } from '@/lib/live-game-telemetry';
+import { persistLiveGameTelemetry } from '@/lib/live-game-telemetry';
 import { WebJournalWarning } from '@/components/live-game/web-journal-warning';
 import { WebSyncBadge } from '@/components/live-game/web-sync-badge';
-import { countLiveGamePendingOperations, getLiveGameSyncState, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
+import { getLiveGameSyncState, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
 import type { WebJournalError } from '@/lib/live-game-offline';
 import { webJournalHasPendingOperations } from '@/lib/live-game-journal-contract';
 import type { WebLiveGameSeatSetup } from '@/lib/live-game-setup';
@@ -149,13 +135,6 @@ function secureRandom() {
   return value[0]! / 0x1_0000_0000;
 }
 
-function replay(record: LiveGameRecord, queue: QueuedLiveGameMutation[]) {
-  return queue.reduce(
-    (current, item) => ({ ...current, state: applyLiveGameMutation(current.state, item.mutation) }),
-    record,
-  );
-}
-
 function formatDuration(startedAt: string | null, endedAt?: string) {
   if (!startedAt) return '00:00';
   const endTime = endedAt ? new Date(endedAt).getTime() : Date.now();
@@ -184,28 +163,21 @@ export function WebLiveGame({
   const setup = useWebTrackerSetup(groupId, userId, catalogParticipants);
   const { participants, occasionalCreationBusy, playerCount, layoutVariant, startingLife, seats,
     restoreSetup, persistSetup } = setup;
+  const {journal,snapshot:journalSnapshot}=useWebLiveJournal(groupId,userId);
+  const record=journalSnapshot.record;
+  const undoDepth=journalSnapshot.history.undo.length;
+  const redoDepth=journalSnapshot.history.redo.length;
+  const pendingSyncCount=journal.pendingCount();
+  const localSaveError=journalSnapshot.error;
   const router = useRouter();
   const { copy } = useLanguage();
   const { toast } = useToast();
   const [booting, setBooting] = useState(true);
-  const [record, setRecord] = useState<LiveGameRecord | null>(null);
-  const recordRef = useRef<LiveGameRecord | null>(null);
-  const serverRef = useRef<LiveGameRecord | null>(null);
-  const queueRef = useRef<QueuedLiveGameMutation[]>([]);
-  const needsCreateRef = useRef(false);
-  const pendingFinalizationRef = useRef<PendingLiveGameFinalization | null>(null);
-  const pendingCancelRef = useRef(false);
-  const historyRef = useRef<LiveGameHistory>(createLiveGameHistory());
-  const [undoDepth, setUndoDepth] = useState(0);
-  const [redoDepth, setRedoDepth] = useState(0);
   const syncingRef = useRef(false);
   const syncTimerRef = useRef<number | null>(null);
-  const syncBatchStartedAtRef = useRef<number | null>(null);
   const [online, setOnline] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [localSaveError, setLocalSaveError] = useState<WebJournalError | null>(null);
   const [recoveryIssue, setRecoveryIssue] = useState<WebJournalError | null>(null);
   const [authenticationRequired, setAuthenticationRequired] = useState(false);
   const [liveOnboardingOpen, setLiveOnboardingOpen] = useState(false);
@@ -239,69 +211,29 @@ export function WebLiveGame({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [exitChoiceOpen, setExitChoiceOpen] = useState(false);
   const previousActivePlayerCountRef = useRef<number | null>(null);
+  const getDisplayRecord=useCallback(()=>journal.getSnapshot().record,[journal]);
   const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTrackerDisplay } =
-    useWebTrackerDisplay(record, recordRef, copy, toast);
+    useWebTrackerDisplay(record,getDisplayRecord,copy,toast);
 
-  const setOptimisticRecord = useCallback((next: LiveGameRecord | null) => {
-    recordRef.current = next;
-    setRecord(next);
-  }, []);
-
-  const persist = useCallback((next = recordRef.current) => {
-    if (!next || !serverRef.current) return;
-    const result = saveWebLiveGameJournal(groupId, {
-      record: next,
-      serverRecord: serverRef.current,
-      needsCreate: needsCreateRef.current,
-      mutations: queueRef.current,
-      pendingFinalization: pendingFinalizationRef.current,
-      pendingCancel: pendingCancelRef.current,
-      history: historyRef.current,
-    }, userId);
-    setLocalSaveError(result.ok ? null : result.error);
-    setPendingSyncCount(countLiveGamePendingOperations({ mutations: queueRef.current.length, needsCreate: needsCreateRef.current,
-      finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
-  }, [groupId, userId]);
-
-  const clearJournal = useCallback((liveGameId: string) => {
-    const result = clearWebLiveGameJournal(groupId, userId, liveGameId);
-    setLocalSaveError(result.ok ? null : result.error);
-  }, [groupId, userId]);
+  const persist=journal.persist;
+  const clearJournal=journal.finish;
 
   const showCompletedGame = useCallback((completed: LiveGameRecord, endedAt: string) => {
     setCompletedDuration(formatDuration(completed.started_at, endedAt));
     setCompletedRecord(completed);
-    serverRef.current = null;
-    queueRef.current = [];
-    syncBatchStartedAtRef.current = null;
-    needsCreateRef.current = false;
-    historyRef.current = createLiveGameHistory();
-    setUndoDepth(0);
-    setRedoDepth(0);
-    setPendingSyncCount(0);
-    setOptimisticRecord(null);
     setEndOpen(false);
-  }, [setEndOpen, setOptimisticRecord]);
+  }, [setEndOpen]);
 
   const clearCancelledGame = useCallback(() => {
-    serverRef.current = null;
-    queueRef.current = [];
-    syncBatchStartedAtRef.current = null;
-    needsCreateRef.current = false;
-    historyRef.current = createLiveGameHistory();
-    setUndoDepth(0);
-    setRedoDepth(0);
-    setPendingSyncCount(0);
-    setOptimisticRecord(null);
     setConfirmCancel(false);
-  }, [setConfirmCancel, setOptimisticRecord]);
+  }, [setConfirmCancel]);
 
   const flush = useCallback(async () => {
     if (syncTimerRef.current !== null) {
       window.clearTimeout(syncTimerRef.current);
       syncTimerRef.current = null;
     }
-    if (!isLiveCurrent() || syncingRef.current || !recordRef.current || !serverRef.current || !navigator.onLine) return false;
+    if (!isLiveCurrent() || syncingRef.current || !journal.getSnapshot().record || !journal.getSnapshot().serverRecord || !navigator.onLine) return false;
     const job=beginLiveJob('sync');
     if(!job)return false;
     syncingRef.current = true;
@@ -313,27 +245,23 @@ export function WebLiveGame({
       commandClient=await createWebLiveCommandClient(userId,job.signal);
       if(!job.active())return false;
       const {client,accessToken}=commandClient;
-      let server = serverRef.current;
-      if (needsCreateRef.current) {
-        server = await ensureLiveGameCreated(client, recordRef.current);
+      let server = journal.getSnapshot().serverRecord;
+      const initial=journal.getSnapshot().record;
+      if(!server||!initial)return false;
+      if (journal.getSnapshot().needsCreate) {
+        server = await ensureLiveGameCreated(client,initial);
         if(!job.active())return false;
-        serverRef.current = server;
-        needsCreateRef.current = false;
+        if(!journal.acceptCreated(server))return false;
       }
-      while (queueRef.current.length > 0) {
-        const batch = queueRef.current.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
+      while (journal.getSnapshot().mutations.length > 0) {
+        const batch = journal.getSnapshot().mutations.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
         server = await applyQueuedLiveGameMutations(client, server, batch);
         if(!job.active())return false;
-        serverRef.current = server;
-        queueRef.current = queueRef.current.slice(batch.length);
-        if (queueRef.current.length === 0) syncBatchStartedAtRef.current = null;
-        setPendingSyncCount(queueRef.current.length);
-        setOptimisticRecord(replay(server, queueRef.current));
-        persist(recordRef.current);
+        if(!journal.acknowledgeBatch(server,batch))return false;
       }
-      if (pendingFinalizationRef.current) {
-        const completed = recordRef.current;
-        const finalization = pendingFinalizationRef.current;
+      const finalization = journal.getSnapshot().pendingFinalization;
+      if (finalization) {
+        const completed = journal.getSnapshot().record;
         const matchId = await finalizeLiveGameAsMatch(client, {
           liveGameId: server.id,
           ...finalization,
@@ -345,26 +273,24 @@ export function WebLiveGame({
           signal,
           body: JSON.stringify({ matchId }),
         })},5000,job.signal).catch(()=>undefined);
-        pendingFinalizationRef.current = null;
         clearJournal(server.id);
         if (completed) showCompletedGame(completed, finalization.endedAt);
         return true;
       }
-      if (pendingCancelRef.current) {
+      if (journal.getSnapshot().pendingCancel) {
         await cancelLiveGame(client, server.id);
         if(!job.active())return false;
-        pendingCancelRef.current = false;
         clearJournal(server.id);
         clearCancelledGame();
         return true;
       }
-      persist(recordRef.current);
+      persist();
       return true;
     } catch (error) {
       if(!job.active())return false;
       failed = true;
       setAuthenticationRequired(isLiveGameAuthenticationError(error));
-      persist(recordRef.current);
+      persist();
       setSyncError(error instanceof Error ? error.message : 'Sync failed');
       console.error('Web live-game sync failed', error);
       return false;
@@ -375,7 +301,7 @@ export function WebLiveGame({
       if (!failed) setAuthenticationRequired(false);
       if(commandClient)void persistLiveGameTelemetry(commandClient.client, {
         userId,
-        liveGameId: recordRef.current?.id ?? null,
+        liveGameId: journal.getSnapshot().record?.id ?? null,
         sessionId: telemetrySessionRef.current,
         platform: 'web',
         force: failed,
@@ -383,26 +309,23 @@ export function WebLiveGame({
       }
       job.finish();
     }
-  }, [beginLiveJob, isLiveCurrent, clearCancelledGame, clearJournal, persist, setOptimisticRecord, showCompletedGame, userId]);
+  }, [beginLiveJob, isLiveCurrent,journal, clearCancelledGame, clearJournal, persist, showCompletedGame, userId]);
 
   const scheduleFlush = useCallback(() => {
     if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
-    if (queueRef.current.length > 0 && syncBatchStartedAtRef.current === null) {
-      syncBatchStartedAtRef.current = Date.now();
-    }
     const delay = getLiveGameSyncDelay({
-      queueDepth: queueRef.current.length,
-      batchStartedAt: syncBatchStartedAtRef.current,
+      queueDepth: journal.getSnapshot().mutations.length,
+      batchStartedAt: journal.getSnapshot().batchStartedAt,
     });
     syncTimerRef.current = window.setTimeout(() => {
       syncTimerRef.current = null;
       void flush();
     }, delay);
-  }, [flush]);
+  }, [flush,journal]);
 
   const refreshAuthoritativeState = useCallback(async () => {
-    const current = recordRef.current;
-    if (!current || needsCreateRef.current || syncingRef.current) return;
+    const current = journal.getSnapshot().record;
+    if (!current || journal.getSnapshot().needsCreate || syncingRef.current) return;
     const job=beginLiveJob('refresh');
     if(!job)return;
     try{
@@ -410,22 +333,20 @@ export function WebLiveGame({
     if(!job.active())return;
     const remote = await fetchActiveLiveGame(client,groupId,`user:${userId}` as ParticipantKey,job.signal);
     if(!job.active())return;
-    if (!remote || remote.id !== current.id || recordRef.current?.id !== current.id) return;
-    serverRef.current = remote;
-    setOptimisticRecord(replay(remote, queueRef.current));
-    persist(recordRef.current);
+    if (!remote || remote.id !== current.id || journal.getSnapshot().record?.id !== current.id) return;
+    journal.applyRemote(remote);
     }finally{job.finish();}
-  }, [beginLiveJob,groupId, persist, setOptimisticRecord, userId]);
+  }, [beginLiveJob,groupId,journal,userId]);
 
   useEffect(() => {
-    if (queueRef.current.length > 0) scheduleFlush();
+    if (journal.getSnapshot().mutations.length > 0) scheduleFlush();
     return () => {
       if (syncTimerRef.current !== null) {
         window.clearTimeout(syncTimerRef.current);
         syncTimerRef.current = null;
       }
     };
-  }, [scheduleFlush]);
+  }, [scheduleFlush,journal]);
 
   const sendBackgroundTelemetry=useCallback(()=>{
     const job=beginLiveJob('telemetry');
@@ -433,23 +354,23 @@ export function WebLiveGame({
     void createWebLiveCommandClient(userId,job.signal).then(({client})=>{
       if(!job.active())return;
       return persistLiveGameTelemetry(client,{
-        userId,liveGameId:recordRef.current?.id??null,
+        userId,liveGameId:journal.getSnapshot().record?.id??null,
         sessionId:telemetrySessionRef.current,platform:'web',force:true,
       });
     }).catch(()=>undefined).finally(()=>job.finish());
-  },[beginLiveJob,userId]);
+  },[beginLiveJob,journal,userId]);
 
   useEffect(() => {
     const flushBeforeBackground = () => {
       if (document.visibilityState === 'hidden') {
-        if (queueRef.current.length > 0) void flush();
+        if (journal.getSnapshot().mutations.length > 0) void flush();
         sendBackgroundTelemetry();
       } else {
         void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(isLiveCurrent())void flush();});
       }
     };
     const flushBeforeExit = () => {
-      if (queueRef.current.length > 0) void flush();
+      if (journal.getSnapshot().mutations.length > 0) void flush();
     };
     document.addEventListener('visibilitychange', flushBeforeBackground);
     window.addEventListener('pagehide', flushBeforeExit);
@@ -457,7 +378,7 @@ export function WebLiveGame({
       document.removeEventListener('visibilitychange', flushBeforeBackground);
       window.removeEventListener('pagehide', flushBeforeExit);
     };
-  }, [flush,isLiveCurrent, refreshAuthoritativeState,sendBackgroundTelemetry]);
+  }, [flush,isLiveCurrent,journal, refreshAuthoritativeState,sendBackgroundTelemetry]);
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -480,23 +401,12 @@ export function WebLiveGame({
     let mounted = true;
     void (async () => {
       const participantKey = `user:${userId}` as ParticipantKey;
-      const loaded = loadWebLiveGameJournal(groupId, userId);
+      const loaded = journal.readSaved();
       const cached = loaded.journal;
       setRecoveryIssue(loaded.error);
       if (cached && (cached.record.created_by === userId || cached.record.state.players.some((player) => player.participantKey === participantKey))) {
         setRecoveredJournal(true);
-        serverRef.current = cached.serverRecord;
-        queueRef.current = cached.mutations;
-        syncBatchStartedAtRef.current = cached.mutations.length ? Date.now() : null;
-        needsCreateRef.current = cached.needsCreate;
-        pendingFinalizationRef.current = cached.pendingFinalization;
-        pendingCancelRef.current = cached.pendingCancel;
-        historyRef.current = cached.history;
-        setUndoDepth(cached.history.undo.length);
-        setRedoDepth(cached.history.redo.length);
-        setPendingSyncCount(countLiveGamePendingOperations({ mutations: cached.mutations.length, needsCreate: cached.needsCreate,
-          finalization: Boolean(cached.pendingFinalization), cancellation: cached.pendingCancel }));
-        setOptimisticRecord(cached.record);
+        journal.restore(cached);
       }
       try {
         const {client}=await createWebLiveCommandClient(userId,job.signal);
@@ -513,31 +423,13 @@ export function WebLiveGame({
             setRecoveryIssue('pending_game');
             return;
           }
-          if (cached?.record.id !== remote.id) {
-            pendingFinalizationRef.current = null;
-            pendingCancelRef.current = false;
-            historyRef.current = createLiveGameHistory();
-            setUndoDepth(0);
-            setRedoDepth(0);
-          }
-          const queue = cached?.record.id === remote.id ? queueRef.current : [];
-          serverRef.current = remote;
-          queueRef.current = queue;
-          syncBatchStartedAtRef.current = queue.length ? Date.now() : null;
-          setPendingSyncCount(queue.length);
-          needsCreateRef.current = false;
-          setOptimisticRecord(replay(remote, queue));
-          persist(recordRef.current);
+          if(!journal.resume(remote)){setRecoveryIssue('pending_game');return;}
           void flush();
         } else if (cached && !cached.needsCreate) {
           if (webJournalHasPendingOperations(cached)) { setRecoveryIssue('pending_game'); return; }
           clearJournal(cached.record.id);
-          serverRef.current = null;
-          queueRef.current = [];
-          syncBatchStartedAtRef.current = null;
-          setOptimisticRecord(null);
         } else if (cached?.needsCreate) {
-          persist(cached.record);
+          persist();
           void flush();
         }
       } catch {
@@ -548,7 +440,7 @@ export function WebLiveGame({
       }
     })();
     return () => { mounted = false; cancelLiveJob('bootstrap'); };
-  }, [beginLiveJob,cancelLiveJob,clearJournal, flush, groupId, persist, setOptimisticRecord, userId]);
+  }, [beginLiveJob,cancelLiveJob,journal,clearJournal, flush, groupId, persist, userId]);
 
   const activeRecordId = record?.id;
   useEffect(() => {
@@ -559,25 +451,19 @@ export function WebLiveGame({
     return () => window.clearTimeout(timer);
   }, [activeRecordId]);
   useEffect(() => {
-    if (!activeRecordId || needsCreateRef.current) return;
+    if (!activeRecordId || journal.getSnapshot().needsCreate) return;
     let active=true;
     const stop=subscribeToLiveGame(supabase, activeRecordId, (remote) => {
       if(!active||!isLiveCurrent())return;
       // Ignore events from a channel whose removal is still in flight.
-      if (recordRef.current?.id !== activeRecordId) return;
+      if (journal.getSnapshot().record?.id !== activeRecordId) return;
       if (remote.status !== 'active') {
-        if (pendingFinalizationRef.current || pendingCancelRef.current) return;
-        if (needsCreateRef.current || queueRef.current.length > 0) {
+        if (journal.getSnapshot().pendingFinalization || journal.getSnapshot().pendingCancel) return;
+        if (journal.getSnapshot().needsCreate || journal.getSnapshot().mutations.length > 0) {
           setRecoveryIssue('pending_game');
           return;
         }
-        serverRef.current = null;
-        queueRef.current = [];
-        syncBatchStartedAtRef.current = null;
-        pendingFinalizationRef.current = null;
-        pendingCancelRef.current = false;
         clearJournal(remote.id);
-        setOptimisticRecord(null);
         if (remote.status === 'ended') {
           setCompletedRecord(remote);
           setCompletedDuration(durationRef.current);
@@ -588,16 +474,14 @@ export function WebLiveGame({
         return;
       }
       if (syncingRef.current) return;
-      serverRef.current = remote;
-      setOptimisticRecord(replay(remote, queueRef.current));
-      persist(recordRef.current);
+      journal.applyRemote(remote);
     }, (status) => {
       if (active&&isLiveCurrent()&&status === 'SUBSCRIBED') {
         void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(isLiveCurrent())void flush();});
       }
     });
     return ()=>{active=false;stop();};
-  }, [activeRecordId, clearJournal, copy, flush, groupId,isLiveCurrent, persist, refreshAuthoritativeState, router, setOptimisticRecord, toast]);
+  }, [activeRecordId,journal, clearJournal, copy, flush, groupId,isLiveCurrent, persist, refreshAuthoritativeState, router, toast]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -649,18 +533,8 @@ export function WebLiveGame({
             commander: deck.commander, commanderImage: deck.commanderImage};
         }),
       });
-      serverRef.current = created;
-      queueRef.current = [];
-      syncBatchStartedAtRef.current = null;
-      setPendingSyncCount(0);
-      historyRef.current = createLiveGameHistory();
-      setUndoDepth(0);
-      setRedoDepth(0);
-      needsCreateRef.current = true;
-      pendingFinalizationRef.current = null;
-      pendingCancelRef.current = false;
+      if(!journal.start(created))throw new Error(copy({it:'La partita precedente ha ancora operazioni da sincronizzare.',en:'The previous game still has pending operations to sync.'}));
       setCompletedRecord(null);
-      setOptimisticRecord(created);
       try {
         persistSetup({
           playerCount: nextPlayerCount,
@@ -668,8 +542,8 @@ export function WebLiveGame({
           startingLife: nextStartingLife,
           seats: nextSeats,
         });
-      } catch { setLocalSaveError('unavailable'); }
-      persist(created);
+      } catch { journal.markUnavailable(); }
+      persist();
       runRoulette(keys, created.state.startingPlayerKey!);
       void flush();
     } catch (error) {
@@ -682,56 +556,16 @@ export function WebLiveGame({
     }
   };
 
-  const enqueue = useCallback((
-    mutation: LiveGameMutation,
-    inverse?: LiveGameMutation,
-    historyMode: 'record' | 'skip' = 'record',
-  ) => {
-    const current = recordRef.current;
-    if (!current) return;
-    const id = crypto.randomUUID();
-    const tracked: LiveGameMutation = {
-      ...mutation,
-      eventId: mutation.eventId ?? id,
-      occurredAt: mutation.occurredAt ?? new Date().toISOString(),
-    };
-    if (queueRef.current.length === 0) syncBatchStartedAtRef.current = Date.now();
-    queueRef.current = [...queueRef.current, { id, mutation: tracked }];
-    setPendingSyncCount(queueRef.current.length);
-    recordLiveGameQueueDepth(queueRef.current.length);
-    if (inverse && historyMode === 'record') {
-      historyRef.current = recordLiveGameHistory(historyRef.current, { forward: mutation, inverse });
-      setUndoDepth(historyRef.current.undo.length);
-      setRedoDepth(0);
-    }
-    const next = { ...current, state: applyLiveGameMutation(current.state, tracked) };
-    setOptimisticRecord(next);
-    persist(next);
-    scheduleFlush();
-  }, [persist, scheduleFlush, setOptimisticRecord]);
-
-  const undoLastMutation = () => {
-    const result = undoLiveGameHistory(historyRef.current);
-    if (!result) return;
-    historyRef.current = result.history;
-    setUndoDepth(result.history.undo.length);
-    setRedoDepth(result.history.redo.length);
-    enqueue(result.mutation, undefined, 'skip');
-  };
-
-  const redoLastMutation = () => {
-    const result = redoLiveGameHistory(historyRef.current);
-    if (!result) return;
-    historyRef.current = result.history;
-    setUndoDepth(result.history.undo.length);
-    setRedoDepth(result.history.redo.length);
-    enqueue(result.mutation, undefined, 'skip');
-  };
+  const enqueue = useCallback((mutation:LiveGameMutation,inverse?:LiveGameMutation,historyMode:'record'|'skip'='record')=>{
+    if(journal.enqueue(mutation,inverse,historyMode))scheduleFlush();
+  },[journal,scheduleFlush]);
+  const undoLastMutation=()=>{if(journal.undo())scheduleFlush();};
+  const redoLastMutation=()=>{if(journal.redo())scheduleFlush();};
 
   const runRoulette = (pool: ParticipantKey[], winner?: ParticipantKey) => {
     rouletteTimers.current.forEach(window.clearTimeout);
     rouletteTimers.current = [];
-    const picked = winner ?? pickRandomPlayer(recordRef.current!.state, pool)?.participantKey;
+    const picked = winner ?? pickRandomPlayer(journal.getSnapshot().record!.state, pool)?.participantKey;
     if (!picked) return;
     const sequence = buildRouletteSequence(pool, picked);
     sequence.forEach((key, index) => {
@@ -794,7 +628,7 @@ export function WebLiveGame({
   }, [dragging]);
 
   const applyDamageDraft = () => {
-    const currentRecord = recordRef.current;
+    const currentRecord = journal.getSnapshot().record;
     if (!damageDraft || !currentRecord) return;
     const amount = Math.max(0, Math.min(999, Number(damageAmount) || 0));
     if (amount === 0) return;
@@ -886,7 +720,7 @@ export function WebLiveGame({
     if (!isDraw && result.winCondition === 'last_standing' && result.winnerKey) {
       enqueue({ type: 'last_standing', winnerKey: result.winnerKey });
     }
-    const finalRecord = recordRef.current ?? record;
+    const finalRecord = journal.getSnapshot().record ?? record;
     const players = finalRecord.state.players.map((player) => {
       const participant = participants.find((entry) => entry.key === player.participantKey)!;
       return {
@@ -897,14 +731,13 @@ export function WebLiveGame({
         guestId: participant.guestId,
       };
     });
-    pendingFinalizationRef.current = {
+    journal.requestFinalization({
       winnerKey: result.winnerKey,
       isDraw,
       winCondition: result.winCondition,
       endedAt: new Date().toISOString(),
       players,
-    };
-    persist(finalRecord);
+    });
     setEnding(true);
     const saved = await flush();
     if(!job.active())return;
@@ -921,8 +754,7 @@ export function WebLiveGame({
     const job=beginLiveJob('command');
     if(!job)return;
     try{
-    pendingCancelRef.current = true;
-    persist(record);
+    journal.requestCancellation();
     const cancelled = await flush();
     if (job.active()&&cancelled) {
       router.replace(`/table/${groupId}`);
