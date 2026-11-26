@@ -79,6 +79,19 @@ test('web live catalog exposes a failed cold read and allows a successful retry'
 
 test('web live catalog keeps the setup draft without reloading on JWT renewal',async({page})=>{
  test.skip(!process.env.E2E_ACCESS_TOKEN,'Requires disposable Dev authentication.');
+ await page.addInitScript(()=>{
+  const probe=window as typeof window&{__liveAuthRenewals?:number};
+  const add=BroadcastChannel.prototype.addEventListener;
+  BroadcastChannel.prototype.addEventListener=function(type:string,listener:EventListenerOrEventListenerObject,options?:boolean|AddEventListenerOptions){
+   if(type!=='message'||typeof listener!=='function')return add.call(this,type,listener,options);
+   const channel=this;
+   return add.call(this,type,async event=>{
+    await listener.call(channel,event);
+    // Observe completion of the installed SDK handler, never its session data.
+    if((event as MessageEvent).data?.event==='TOKEN_REFRESHED')probe.__liveAuthRenewals=(probe.__liveAuthRenewals??0)+1;
+   },options);
+  };
+ });
  const groupId=process.env.E2E_GROUP_ID!;
  await fixtureLogin(page);
  await page.locator(`a[href="/table/${groupId}"]`).first().click();
@@ -93,6 +106,8 @@ test('web live catalog keeps the setup draft without reloading on JWT renewal',a
   return route.fallback();
  });
  await transitionFixtureSession(page);
+ await expect.poll(()=>page.evaluate(()=>(window as typeof window&{__liveAuthRenewals?:number}).__liveAuthRenewals??0)).toBeGreaterThan(0);
+ await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
  await expect(page.getByRole('button',{name:/^(Seat|Posto) 1/})).toBeVisible();
  expect(reads).toBe(0);
 });
