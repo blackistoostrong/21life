@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live composition: `expo/app/table/[id]/play.tsx`646nonempty composes setup/session/round owners and UI interactions. `use-native-live-round-commands.ts` owns start/end/discard/rematch and busy lifecycle, emitting typed presentation events. `native-live-round-result-dialog.tsx` is controlled UI, with unchanged JSX; `native-live-screen-styles.ts` retains the unchanged StyleSheet. Session430/journal251/round331/dialog212/styles330 remain separate responsibilities. Updated exports/integration and final device/image QA must be recorded before closing point6.
+
 - Native live runtime: `expo/hooks/use-native-live-session.ts` owns the journal opening, bootstrap, synchronization, Realtime, timer leases and private recovery outbox, composing `use-native-live-connectivity`. The screen consumes typed views/actions and a remote-completion presentation callback. Discard uses existing storage CAS and durable ACKs, preserves concurrently added/revised archives and excludes replay; old epochs cannot clear new timers. Native round commands and presentation extraction remain open.
 
 - Native live journal: `expo/lib/native-live-session-journal.ts` owns per-opening Zustand snapshots, history/queue, durable-write tracking and archival actions; `use-native-live-journal.ts` owns React observation and the focused player projection. The shared card renderer accepts only its current presentation lease. Storage alone serializes accepted writes by account; the writer must register them immediately, before later reads/clears. Native round extraction remains open.

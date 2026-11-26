@@ -63,6 +63,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'expo/components/live-game/native-live-round-result-dialog.tsx',
     'components/arena/arena-history-panel.tsx',
     'components/arena/arena-player-report.tsx',
     'components/arena/arena-member-roster.tsx',
@@ -93,6 +94,7 @@ export const featureOwners = {
   // Existing image container owns its own cache/network lifecycle. Composition
   // may delegate to it; this does not authorize data access in the guest panel.
   delegates: {
+    'expo/components/live-game/native-live-round-result-dialog.tsx': ['expo/components/deck/deck-image.tsx'],
     'components/arena/arena-history-panel.tsx': ['components/deck-image.tsx'],
     'components/arena/arena-member-roster.tsx': ['components/arena/direct-arena-invite.tsx'],
     'components/arena/arena-awards-panel.tsx': ['components/deck-image.tsx'],

@@ -1,5 +1,27 @@
 # DEV26 — Architettura e responsabilità
 
+## Candidato strutturale dei quattro target — 26 novembre
+
+Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo646righe non vuote. I controller possiedono risorse e comandi, i renderer compongono viste e interazioni. Il numero di righe è un vincolo di organizzazione, non la prova unica di qualità: gate, confronti AST e test dei proprietari verificano i confini. Integrazione/export aggiornati e collaudo visuale/dispositivo finale sono ancora necessari prima di dichiarare chiuso il punto6.
+
+| Proprietario nativo | Crea/aggiorna/rilascia | Righe non vuote |
+| --- | --- | ---: |
+| use-native-live-setup | Draft, ripristino e proiezione catalogo per account/gruppo | Feature già verificata |
+| native-live-session-journal | Snapshot, queue/history, intenti terminali, ACK e archivio del singolo opening | 251 |
+| use-native-live-journal | Osservazione Zustand e lease della proiezione carte in focus | 36 |
+| use-native-live-session | Bootstrap, sync single-flight, timer per epoch, subscription e outbox privato; cleanup dei callback prima della rimozione | 430 |
+| use-native-live-connectivity | Listener NetInfo/AppState, singolo polling/read pendente e cleanup piattaforma | Feature già verificata |
+| use-native-live-round-commands | Validazione e lease start/end/discard/rematch; stato busy, eventi tipizzati verso la UI | 331 |
+| native-live-round-result-dialog | Presentazione controllata; nessun client/query/journal, delega soltanto il container immagine esistente | 212 |
+| native-live-screen-styles | Dichiarazioni StyleSheet della schermata e del suo dialogo, senza logica | 330 |
+| play.tsx | Composizione, controlli del tavolo, orientamento/fullscreen e timer di presentazione | 646 |
+
+Il cambio account/gruppo sostituisce epoch, journal e risorse; JWT dello stesso actor mantiene il proprietario. Queue storage serializzata per account, nessuna seconda queue nascosta nel writer. I callback vecchi non possono adottare client nuovi, aggiornare il nuovo owner o cancellarne timer. Il controller round usa i modelli pubblici di setup/sessione, il catalogo e un callback di eventi di presentazione: nessun ref bag o context privato universale.
+
+Round d54a2e79:10statement AST conservati dopo conversione dichiarata dei setter UI in eventi. Il test dei precedenti8comandi esegue ora anche il callback UI del renderer. Il dialogo e l'oggetto StyleSheet conservano il proprio AST senza cambi di condizioni, testo, ordine o valori; i test immagini/dispositivi richiesti dal PM restano separati.
+
+Verifica di modificabilità: una regola del win rate cambia nel dominio analytics condiviso e nei relativi contratti; una voce del recap cambia nel proprietario recap della piattaforma; un errore sync nel controller sessione e nella presentazione condivisa degli stati; un campo setup nel controller setup e nella sua vista. Nessuno richiede due implementazioni della regola o l'aggiunta di I/O nelle route. La stessa mappa si applica ai proprietari web descritti sotto.
+
 ## Controller sessione nativa — 26 novembre
 
 `expo/hooks/use-native-live-session.ts`430righe possiede bootstrap, sincronizzazione, subscription, timer, stato rete/errori e outbox privato. Compone il journal per apertura e il controller piattaforma; la pagina1394righe riceve snapshot, conteggi e azioni. Il runtime non espone ref o array privati dei recuperi. Un singolo callback di presentazione comunica il completamento remoto; setup e comandi round restano distinti. L'estrazione7356b843 conserva34statement AST da1e842f7e dopo adattamenti dichiarati, prima dei fix successivi.
