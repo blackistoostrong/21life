@@ -276,7 +276,7 @@ export default function LiveGameScreen() {
   const saveJournal = useCallback(() => {
     const record = liveGameRef.current;
     const serverRecord = serverRecordRef.current;
-    if (!groupId || !record || !serverRecord) return Promise.resolve();
+    if (!isLiveScopeCurrent() || sessionClosedRef.current || !groupId || !record || !serverRecord) return Promise.resolve();
     const snapshot = {
       record,
       serverRecord,
@@ -287,10 +287,8 @@ export default function LiveGameScreen() {
       history: historyRef.current,
     };
     publishPendingSyncCount();
-    journalWriteRef.current = queueLiveGameJournalWrite(journalWriteRef.current, async () => {
-        if (isLiveScopeCurrent() && sessionClosedRef.current) return;
-        await saveLiveGameOfflineSession(groupId, snapshot, currentUserId);
-      }, saved => {
+    journalWriteRef.current = queueLiveGameJournalWrite(journalWriteRef.current,
+      () => saveLiveGameOfflineSession(groupId, snapshot, currentUserId), saved => {
         if (isLiveScopeCurrent() && !sessionClosedRef.current) setLocalPersistenceAvailable(saved);
       });
     return journalWriteRef.current;
