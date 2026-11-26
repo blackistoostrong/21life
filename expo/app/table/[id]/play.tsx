@@ -146,7 +146,8 @@ export default function LiveGameScreen() {
     { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient });
 
   const {archidektSyncRequest,handleSelectSetupParticipant,handleRetryArchidektSync} = useLiveSetupMemberSync({
-    groupId,currentUserId,members,refreshMemberDecks,copy,language});
+    groupId,currentUserId,members,refreshMemberDecks,copy,language,
+    scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient}});
 
   const [liveGame, setLiveGame] = useState<LiveGameRecord | null>(null);
   const [booting, setBooting] = useState(true);

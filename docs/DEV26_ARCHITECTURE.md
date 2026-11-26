@@ -1,5 +1,15 @@
 # DEV26 — Architettura e responsabilità
 
+## Setup: import membri — 26 novembre
+
+`useLiveSetupMemberSync` possiede avanzamento, richiesta corrente e retry del catalogo dopo import confermato. Estrazione4239bd45: quattro statement conservati da7aad1a33 con confronto AST, prima del fix. Il job vive nell'epoch account/gruppo; layout cleanup azzera UI e interrompe il trasporto. Slot sincrono per target esclude tap doppi, ogni finally rilascia soltanto il proprio job. I rinnovi JWT dello stesso account conservano la richiesta in corso.
+
+Il servizio Archidekt accetta opzionalmente un comando con bearer catturato e AbortSignal. Questo consumer possiede il proprio slot e non adotta una vecchia Promise nel pending globale; i chiamanti legacy conservano il coalescing precedente. Controllo di cancellazione prima del POST e prima del refresh; una richiesta già accettata sul server può completare, ma non popola il nuovo owner. Retry refresh-only conserva conteggi e riferimento dell'import parziale, senza ripetere il POST.
+
+Owner96/pagina1991righe non vuote. ROSSO su React reale: cambioA→B lascia progressA visibile.28browser consolidati PASS inclusi8nuovi (scope, token renewal, abort unmount, doppio tap, refresh retry); quality623native/857web con3/7skip,140/149floor immutati. Export e integrazione di questa tranche ancora da registrare; non certifica altri consumer Archidekt o il renderer React Native/dispositivo completo.
+
+Round condiviso precedente integrato Dev246a89e7: albero identico a7aad1a33, buildweb ed exportAndroid+iOS Dev stessoSHA PASS, budget3.24web/9.36nativeMiB.8browser autenticati con4giocatori/2client PASS, esattamente2match per2flussi finalizzati e cleanup Dev verificati. NessunaAPK nuova.
+
 ## Round condiviso — 25 novembre, verifica funzionale in corso
 
 `packages/domain/live-game-round.ts` possiede la costruzione di uno stato nuovo per avvio/rivincita. Riceve soltanto identità, timestamp, RNG, configurazione e metadati dei posti; ricrea i giocatori tramite il motore condiviso e non trasferisce counters, danni, eliminazioni o log dalla partita precedente. Tre copie produttive sono state rimosse. I moduli `lib/live-game-round` web/Expo offrono lo stesso contratto senza cambiare il barrel legacy: il test degli export installati rimane identico. Nessun clock/RNG ambientale nel dominio.

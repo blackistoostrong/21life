@@ -17,6 +17,10 @@ export class ArenaSyncError extends Error {
 }
 
 const pending = new Map<string, Promise<ArenaArchidektSyncResult>>();
+export type ArenaSyncCommand = { accessToken: string; signal: AbortSignal };
+function checkCommand(command?: ArenaSyncCommand) {
+  if (command?.signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+}
 
 export function classifyArenaSyncFailure(status: number): ArenaSyncFailure {
   if (status === 0) return 'uncertain';
@@ -29,10 +33,13 @@ export function classifyArenaSyncFailure(status: number): ArenaSyncFailure {
   return 'unknown';
 }
 
-async function requestSync(groupId: string, userId: string) {
+async function requestSync(groupId: string, userId: string, command?: ArenaSyncCommand) {
+  checkCommand(command);
   const response = await apiPost<ArenaArchidektSyncResult>(
-    '/api/arena-archidekt-sync', { groupId, userId }, { timeoutMs: 120_000 },
+    '/api/arena-archidekt-sync', { groupId, userId }, { timeoutMs: 120_000,
+      ...(command ? { authenticated: false, signal: command.signal, headers: { Authorization: `Bearer ${command.accessToken}` } } : {}) },
   );
+  checkCommand(command);
   if (response.status !== 200 || !response.data
     || !['inserted', 'updated', 'unchanged', 'skipped'].every((key) => {
       const value = response.data?.[key as keyof ArenaArchidektSyncResult];
@@ -47,7 +54,9 @@ async function requestSync(groupId: string, userId: string) {
   return requestId ? { ...response.data, requestId } : response.data;
 }
 
-export function syncArenaMemberArchidektDecks(groupId: string, userId: string, requesterId = '') {
+export function syncArenaMemberArchidektDecks(groupId: string, userId: string, requesterId = '', command?: ArenaSyncCommand) {
+  // Scoped callers own their pending slot; never adopt a cancelled earlier opening.
+  if (command) return requestSync(groupId, userId, command);
   const key = `${requesterId}:${groupId}:${userId}`;
   const existing = pending.get(key);
   if (existing) return existing;
@@ -58,8 +67,9 @@ export function syncArenaMemberArchidektDecks(groupId: string, userId: string, r
   return operation;
 }
 
-export async function syncAndRefreshArenaMember(groupId: string, userId: string, refresh: (userId: string) => Promise<boolean | void>, requesterId = '') {
-  const result = await syncArenaMemberArchidektDecks(groupId, userId, requesterId);
+export async function syncAndRefreshArenaMember(groupId: string, userId: string, refresh: (userId: string) => Promise<boolean | void>, requesterId = '', command?: ArenaSyncCommand) {
+  const result = await syncArenaMemberArchidektDecks(groupId, userId, requesterId, command);
+  checkCommand(command);
   const wasEmpty = result.inserted + result.updated + result.unchanged === 0 && result.skipped === 0;
   try {
     const limited = await refresh(userId);

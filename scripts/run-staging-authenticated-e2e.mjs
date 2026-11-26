@@ -143,6 +143,7 @@ try {
       'tests/e2e/arena-match-native-owners.spec.ts',
       'tests/e2e/native-live-scope.spec.ts',
       'tests/e2e/native-live-setup.spec.ts',
+      'tests/e2e/native-member-sync.spec.ts',
       'tests/e2e/arena-match-atomic.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',

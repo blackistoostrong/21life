@@ -3,6 +3,32 @@ const apiPost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api', () => ({ apiPost }));
 import { ArenaSyncError, classifyArenaSyncFailure, syncAndRefreshArenaMember, syncArenaMemberArchidektDecks } from '@/lib/arena-archidekt-sync';
 
+describe('captured live setup import commands',()=>{
+  beforeEach(()=>vi.resetAllMocks());
+  it('sends the captured bearer and keeps distinct openings out of the legacy pending map',async()=>{
+    apiPost.mockResolvedValue({status:200,data:{inserted:1,updated:0,unchanged:0,skipped:0}});
+    const first={accessToken:'actor-a-token',signal:new AbortController().signal};
+    const second={accessToken:'renewed-token',signal:new AbortController().signal};
+    await Promise.all([syncArenaMemberArchidektDecks('g','target','a',first),syncArenaMemberArchidektDecks('g','target','a',second)]);
+    expect(apiPost).toHaveBeenCalledTimes(2);
+    expect(apiPost).toHaveBeenNthCalledWith(1,'/api/arena-archidekt-sync',{groupId:'g',userId:'target'},
+      {timeoutMs:120000,authenticated:false,signal:first.signal,headers:{Authorization:'Bearer actor-a-token'}});
+  });
+  it('does not dispatch an already cancelled command',async()=>{
+    const parent=new AbortController();parent.abort();
+    await expect(syncArenaMemberArchidektDecks('g','target','a',{accessToken:'token',signal:parent.signal})).rejects.toMatchObject({name:'AbortError'});
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+  it('does not refresh a different opening after a late cancelled import response',async()=>{
+    let reply!:(value:unknown)=>void;apiPost.mockReturnValue(new Promise(resolve=>{reply=resolve;}));
+    const parent=new AbortController(),refresh=vi.fn();
+    const result=syncAndRefreshArenaMember('g','target',refresh,'a',{accessToken:'token',signal:parent.signal});
+    const assertion=expect(result).rejects.toMatchObject({name:'AbortError'});
+    parent.abort();reply({status:200,data:{inserted:1,updated:0,unchanged:0,skipped:0}});await assertion;
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
 describe('arena Archidekt sync', () => {
   beforeEach(() => vi.resetAllMocks());
   it('awaits an authenticated server result, including an unchanged catalog', async () => {

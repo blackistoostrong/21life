@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live member imports: `expo/hooks/use-live-setup-member-sync.ts` owns per-opening progress, cancellation and refresh-only retry. `expo/lib/arena-archidekt-sync.ts` accepts optional captured-bearer commands for scoped consumers while retaining legacy deduplication for other callers.
+
 - Round creation: `packages/domain/live-game-round.ts` owns fresh start/rematch state for web and native. Client-specific `lib/live-game-round.ts` re-exports preserve each resolver; the installed legacy live-game barrel remains unchanged. Shared contract tests run through both adapters.
 
 - Native live9.3.0: `expo/hooks/use-live-game-command-scope.ts` owns account/group command leases; `expo/lib/live-game-command-client.ts` freezes each command's JWT; `expo/lib/live-game-outbox-replay.ts` owns archived replay. `expo/hooks/use-native-live-setup.ts` owns setup draft, participant/deck projection and scoped restoration; `expo/lib/arena-deck-option.ts` is the pure deck projection (component re-export retained). The play screen still owns active-game orchestration and rendering; point6 remains open.
