@@ -2,6 +2,8 @@
 
 ## Durata comandi live web — 26 novembre, verifica in corso
 
+Verificato su5860d4f4: buildweb56route,3.25/18MiB;6browser nuovi e18regressioni consolidate PASS (desktop/mobile,4giocatori/2client, offline/risposta persa/recap/fullscreen e cambio reale account).2match per2flussi, cleanup confermati. Qualityroot861+7skip/75script/149floor e4testSDK PASS. Resta aperta la separazione dei proprietari del journal/controller; questa tranche protegge le operazioni prima del loro spostamento. Catalogo precedente integrato Devbcb7e5a0 viaPR274, albero identico a21be5836.
+
 La barriera preliminare all'estrazione del journal/session controller usa i lease esistenti di `useCommandScope`: slot distinti per comando UI, sync, bootstrap, refresh e telemetria. La chiusura account/gruppo annulla il trasporto e invalida gli ACK. `lib/web-live-command-client.ts` acquisisce una sessione SDK limitata nel tempo, verifica actor e cattura il JWT; il client isolato non adotta login successivi. Le richieste includono deadline15s sul body, non soltanto sugli header. L'avvio offline resta locale e non acquisisce un client Auth. Notifica legacy post-finalizzazione mantiene endpoint/payload, usa il bearer del comando e limite5s.
 
 La subscription partita ha anche un flag di apertura, disattivato prima della rimozione: un evento tardivo dello stesso game non passa soltanto perché l'account è ancora identico. Continuazioni foreground/online non iniziano sync dopo cleanup. Le refs del journal rimangono per ora nel renderer: questa protezione è distinta dalla successiva separazione dei proprietari, ancora obbligatoria. Baseline ROSSA Back su validazione start;4test SDK e qualityroot861/149floor PASS. Browser e build di questa tranche ancora richiesti.

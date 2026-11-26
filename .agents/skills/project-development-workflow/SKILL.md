@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Web live commands: `lib/web-live-command-client.ts` freezes one verified actor/JWT and bounds SDK requests including their bodies. The renderer currently uses `useCommandScope` leases for commands, sync, bootstrap, refresh and telemetry; abandoned acknowledgements are rejected. Journal/session decomposition remains open; offline starts stay local.
+
 - Web live catalog: `hooks/use-web-live-catalog.ts` owns account/group snapshots, cancellable single-flight reads and Realtime subscriptions. `lib/web-live-catalog-read.ts` owns SDK queries and participant projection; the play route composes loader/retry and the tracker without private transport. Background failures preserve a ready tracker; JWT renewal preserves the owner.
 
 - Native saved-setup lookup lives in `expo/lib/live-game-setup-restore.ts`; its old component-folder path is a compatibility re-export. Data controllers import the service directly, without a runtime dependency on a presentation folder.
