@@ -613,8 +613,11 @@ export default function LiveGameScreen() {
       }
     });
   }, [copy, currentUserId, groupId, isLiveScopeCurrent, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
-  const {networkOnline}=useNativeLiveConnectivity({currentUserId,isLiveScopeCurrent,syncJournal,resumeRemoteGame,
-    refreshAuthoritativeState,setSetupRetry,setSyncStatus,syncTimerRef,liveGameRef,telemetrySessionRef});
+  const {networkOnline}=useNativeLiveConnectivity({currentUserId,syncJournal,resumeRemoteGame,
+    refreshAuthoritativeState,setSetupRetry,setSyncStatus,
+    scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient},
+    getLiveGameId:()=>liveGameRef.current?.id??null,getTelemetrySessionId:()=>telemetrySessionRef.current,
+    cancelScheduledSync:()=>{if(syncTimerRef.current)clearTimeout(syncTimerRef.current);syncTimerRef.current=null;}});
 
   const liveGameId = liveGame?.id ?? null;
   const liveGamePlayerCount = liveGame?.state.players.length ?? 0;

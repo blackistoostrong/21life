@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live platform lifecycle: `expo/hooks/use-native-live-connectivity.ts` owns NetInfo/AppState subscriptions, a bounded pending network read and the polling interval. The screen supplies typed getters/actions; the controller never receives journal refs. Background telemetry uses the captured command client.
+
 - Native live member imports: `expo/hooks/use-live-setup-member-sync.ts` owns per-opening progress, cancellation and refresh-only retry. `expo/lib/arena-archidekt-sync.ts` accepts optional captured-bearer commands for scoped consumers while retaining legacy deduplication for other callers.
 
 - Round creation: `packages/domain/live-game-round.ts` owns fresh start/rematch state for web and native. Client-specific `lib/live-game-round.ts` re-exports preserve each resolver; the installed legacy live-game barrel remains unchanged. Shared contract tests run through both adapters.
