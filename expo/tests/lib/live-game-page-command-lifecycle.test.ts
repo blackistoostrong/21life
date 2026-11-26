@@ -42,7 +42,7 @@ function fixture() {
   endingGame:false,discardingGame:false,endIsDraw:true,endWinnerKey:'',endWinCondition:null,
   activePlayers:game.state.players,isValidLiveGameResult,parseParticipantKey,isLiveScopeCurrent:()=>current,
   beginLiveCommand:()=>{if(!current||busy)return null;busy=true;return{isCurrent:()=>current,release:()=>{busy=false;}};},
-  archiveAndClearLiveGameSession:io.archive,flushArchivedOutbox:vi.fn(),saveJournal:vi.fn().mockResolvedValue(undefined),
+  archiveAndClearLiveGameSession:io.archive,flushArchivedOutbox:vi.fn(),cancelScheduledSync:vi.fn(),saveJournal:vi.fn().mockResolvedValue(undefined),
   showToast:vi.fn(),copy:(key:string)=>key,hapticSuccess:vi.fn(),router:{replace:vi.fn()},
   getGameDurationSeconds:()=>42,formatGameDuration:()=>'42s',publishRecord:vi.fn(),
   setupReadyKey:'actor-a:group-a',selectedKeys:['user:actor-a'],playerCount:1,getDeckOptions:()=>[],participantDecks:{},

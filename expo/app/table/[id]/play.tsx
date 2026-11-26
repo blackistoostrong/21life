@@ -1,25 +1,17 @@
-import {useNativeLiveConnectivity} from '@/hooks/use-native-live-connectivity';
+import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
+import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { useLiveSetupMemberSync } from '@/hooks/use-live-setup-member-sync';
+import { useNativeLiveSession } from '@/hooks/use-native-live-session';
 import { useNativeLiveSetup } from '@/hooks/use-native-live-setup';
 import { createLiveGameRound } from '@/lib/live-game-round';
-import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
-import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
-import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
-import { useFocusEffect , useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect,useLocalSearchParams,useRouter } from 'expo-router';
 
 
-import * as Crypto from 'expo-crypto';
-import { useKeepAwake } from 'expo-keep-awake';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 import { DeckImage } from '@/components/deck/deck-image';
 import { LiveGameConfigurator } from '@/components/live-game/live-game-configurator';
-import { TableArena } from '@/components/live-game/table-arena';
 import { LiveGameRecapView } from '@/components/live-game/live-game-recap';
 import { LiveGameRecoveryPanel } from '@/components/live-game/recovery-panel';
-import { getSupabaseErrorMessage } from '@/lib/supabase-errors';
+import { TableArena } from '@/components/live-game/table-arena';
 import { Button } from '@/components/ui/button';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Modal } from '@/components/ui/modal';
@@ -27,61 +19,56 @@ import { ModalHeader } from '@/components/ui/modal-header';
 import { PhyrexianPanel } from '@/components/ui/phyrexian-panel';
 import { Screen } from '@/components/ui/screen';
 import { ArenaSkeleton } from '@/components/ui/screen-skeletons';
+import { colors,radii,spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useToast } from '@/contexts/toast-context';
 import { useRuntimeConfig } from '@/contexts/runtime-config-context';
-import { colors, radii, spacing } from '@/constants/theme';
+import { useToast } from '@/contexts/toast-context';
 import { useArena } from '@/hooks/use-arena';
 import { useScreenInsets } from '@/hooks/use-screen-insets';
-import { hapticLight, hapticMedium, hapticSuccess, hapticWarning } from '@/lib/haptics';
-import { apiPost } from '@/lib/api';
+import { hapticLight,hapticMedium,hapticSuccess,hapticWarning } from '@/lib/haptics';
+import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
+import { useKeepAwake } from 'expo-keep-awake';
+import { StatusBar } from 'expo-status-bar';
+import { useCallback,useEffect,useLayoutEffect,useRef,useState } from 'react';
+import { Platform,Pressable,ScrollView,StyleSheet,Text,View } from 'react-native';
 
-import {useNativeLiveJournal} from '@/hooks/use-native-live-journal';
-import { countLiveGamePendingOperations, getLiveGameSyncState, getLiveGameSyncIndicator, getLiveGameSyncCopy, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
 import {
-  getDefaultWinCondition,
-  getLiveGameResultWarnings,
-  getSuggestedWinner,
-  isValidLiveGameResult,
-  pickRandomPlayer,
-  type DamageMode,
-  type LiveGameMutation,
-  type LiveGamePlayer,
-  type LiveGameRecord,
-  type LiveGameState,
-  type WinCondition,
+getDefaultWinCondition,
+getLiveGameResultWarnings,
+getSuggestedWinner,
+isValidLiveGameResult,
+pickRandomPlayer,
+type DamageMode,
+type LiveGameMutation,
+type LiveGamePlayer,
+type LiveGameRecord,
+type LiveGameState,
+type WinCondition,
 } from '@/lib/live-game';
-import { buildRouletteSequence } from '@/lib/live-game-roulette';
-import {
-  saveLiveGameSetup,
-} from '@/lib/live-game-setup';
-import { formatGameDuration, getGameDurationSeconds } from '@/lib/live-game-duration';
 import { withLiveGameTimeout } from '@/lib/live-game-async';
-import { getDiscardConfirmationVisibility } from '@/lib/live-game-modal-state';
-import { applyQueuedLiveGameMutations, cancelLiveGame, ensureLiveGameCreated, fetchActiveLiveGame, fetchBusyLiveGameParticipantKeys, subscribeToLiveGame } from '@/lib/live-game-service';
+import { formatGameDuration,getGameDurationSeconds } from '@/lib/live-game-duration';
 import {
-  LIVE_GAME_SYNC_BATCH_SIZE,
-  getLiveGameSyncDelay,
-} from '@/lib/live-game-sync-policy';
-import {
-  loadLiveGameOutbox,
-  saveLiveGameOutbox,
-  type PendingLiveGameFinalization,
-  type ArchivedLiveGameOperation,
-} from '@/lib/live-game-offline';
-import { persistLiveGameTelemetry, recordLiveGameSyncError } from '@/lib/live-game-telemetry';
-import {
-  applyLiveGameImmersive,
-  clearLiveGameImmersive,
+applyLiveGameImmersive,
+clearLiveGameImmersive,
 } from '@/lib/live-game-immersive';
+import { getDiscardConfirmationVisibility } from '@/lib/live-game-modal-state';
 import {
-  applyLiveGameOrientationLock,
-  clearLiveGameOrientationLock,
+type PendingLiveGameFinalization
+} from '@/lib/live-game-offline';
+import {
+applyLiveGameOrientationLock,
+clearLiveGameOrientationLock,
 } from '@/lib/live-game-orientation';
-import { parseParticipantKey, toUserParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
+import { buildRouletteSequence } from '@/lib/live-game-roulette';
+import { fetchBusyLiveGameParticipantKeys } from '@/lib/live-game-service';
+import {
+saveLiveGameSetup,
+} from '@/lib/live-game-setup';
+import { countLiveGamePendingOperations,getLiveGameSyncCopy,getLiveGameSyncIndicator,getLiveGameSyncState } from '@/lib/live-game-sync-presentation';
+import { parseParticipantKey,type ParticipantKey } from '@/lib/participant-keys';
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { supabase } from '@/lib/supabase';
 const WIN_CONDITIONS: {
   value: WinCondition;
   icon: keyof typeof Ionicons.glyphMap;
@@ -117,14 +104,6 @@ export default function LiveGameScreen() {
   const {archidektSyncRequest,handleSelectSetupParticipant,handleRetryArchidektSync} = useLiveSetupMemberSync({
     groupId,currentUserId,members,refreshMemberDecks,copy,language,
     scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient}});
-  const {journal,snapshot:journalSnapshot}=useNativeLiveJournal(groupId,currentUserId,{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent});
-  const liveGame=journalSnapshot.record;
-  const realtimeRecordId=journalSnapshot.needsCreate?undefined:liveGame?.id;
-  const undoDepth=journalSnapshot.history.undo.length;
-  const redoDepth=journalSnapshot.history.redo.length;
-  const pendingSyncCount=journal.pendingCount();
-  const localPersistenceAvailable=journalSnapshot.localPersistenceAvailable;
-  const [booting, setBooting] = useState(true);
   const [starting, setStarting] = useState(false);
   const [damagePulse, setDamagePulse] = useState<Record<string, number>>({});
   const [randomHighlight, setRandomHighlight] = useState<ParticipantKey | null>(null);
@@ -141,18 +120,18 @@ export default function LiveGameScreen() {
   const [showRematch, setShowRematch] = useState(false);
   const [completedGame, setCompletedGame] = useState<LiveGameRecord | null>(null);
   const [completedDurationSeconds, setCompletedDurationSeconds] = useState(0);
-  const [recoveryOutbox, setRecoveryOutbox] = useState<ArchivedLiveGameOperation[]>([]);
   const [showClearRecoveryConfirm, setShowClearRecoveryConfirm] = useState(false);
   const rouletteTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const previousActivePlayerCountRef = useRef<number | null>(null);
-  const bootstrappingRef = useRef(true);
-  const syncRunningRef = useRef(false);
-  const syncPromiseRef = useRef<Promise<void> | null>(null);
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [syncStatus, setSyncStatus] = useState<'offline' | 'pending' | 'syncing' | 'synced' | 'error'>('synced');
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [authenticationRequired, setAuthenticationRequired] = useState(false);
-  const telemetrySessionRef = useRef(Crypto.randomUUID());
+  const onRemoteCompleted=useCallback((remote:LiveGameRecord)=>{
+ setCompletedGame(remote);setCompletedDurationSeconds(getGameDurationSeconds(remote.started_at,remote.ended_at??new Date().toISOString()));
+ setShowEndGame(false);setShowRematch(true);
+},[setCompletedGame,setCompletedDurationSeconds,setShowEndGame,setShowRematch]);
+const {journal,liveGame,undoDepth,redoDepth,pendingSyncCount,localPersistenceAvailable,booting,syncStatus,syncError,authenticationRequired,
+ networkOnline,recoveryCount,archivedPendingCount,saveJournal,syncJournal,flushArchivedOutbox,cancelScheduledSync,enqueueMutation,handleUndo,handleRedo,discardRecovery}
+ =useNativeLiveSession({groupId,currentUserId,hasCompletedGame:Boolean(completedGame),setSetupRetry,onRemoteCompleted,
+ scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient}});
+
 
   const openEndGameModal = useCallback((state: LiveGameState) => {
     const suggested = getSuggestedWinner(state);
@@ -187,18 +166,7 @@ export default function LiveGameScreen() {
     }
   }, [liveGame, openEndGameModal]);
 
-  useLayoutEffect(()=>journal.view.subscribe((value,previous)=>{
-    if(value.record?.id!==previous.record?.id){syncPromiseRef.current=null;syncRunningRef.current=false;}
-  }),[journal]);
-
   useLayoutEffect(() => {
-    bootstrappingRef.current = true;
-    syncPromiseRef.current = null;
-    syncRunningRef.current = false;
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = null;
-    setBooting(true);
-    setRecoveryOutbox([]);
     setShowEndGame(false); setShowRematch(false); setCompletedGame(null);
     setShowDiscardConfirm(false); setShowExitChoice(false); setShowClearRecoveryConfirm(false);
     setEndWinnerKey(''); setEndIsDraw(false); setEndWinCondition(null);
@@ -206,263 +174,6 @@ export default function LiveGameScreen() {
     setPendingEliminate(null); setDamagePulse({}); setRandomHighlight(null); setStartingHighlight(null);
     rouletteTimersRef.current.forEach(clearTimeout); rouletteTimersRef.current = [];
   }, [liveScopeEpoch]);
-
-  const saveJournal=journal.persist;
-
-  const flushOutbox = useCallback(async () => {
-    if (!isLiveScopeCurrent()) return;
-    const bound = bindLiveClient();
-    await replayLiveGameOutbox(bound.client, currentUserId ?? '', setRecoveryOutbox, isLiveScopeCurrent,
-      matchId => { void apiPost('/api/notifications/match-completed', { matchId }, {
-        authenticated: false, headers: { Authorization: `Bearer ${bound.accessToken}` },
-      }); });
-  }, [bindLiveClient, currentUserId, isLiveScopeCurrent, setRecoveryOutbox]);
-
-  useEffect(() => {
-    let active = true;
-    void loadLiveGameOutbox(currentUserId).then(outbox => {
-      if (active && isLiveScopeCurrent()) setRecoveryOutbox(outbox);
-    }).catch(() => {
-      if (active && isLiveScopeCurrent()) {
-        journal.markUnavailable();
-        setSyncError('LIVE_GAME_OUTBOX_UNAVAILABLE');
-      }
-    });
-    return () => { active = false; };
-  }, [journal,currentUserId, isLiveScopeCurrent]);
-
-  const syncJournal = useCallback(() => {
-    // Bootstrap owns journal/outbox replacement; reconnect must not sync the
-    // old session concurrently while its operations are being archived.
-    if (bootstrappingRef.current || !isLiveScopeCurrent()) return Promise.resolve();
-    const gameId = journal.getSnapshot().record?.id ?? null;
-    const active = () => isLiveScopeCurrent() && (journal.getSnapshot().record?.id ?? null) === gameId;
-    if (syncTimerRef.current) {
-      clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = null;
-    }
-    if (syncPromiseRef.current) return syncPromiseRef.current;
-    syncRunningRef.current = true;
-    setSyncStatus('syncing');
-    setSyncError(null);
-    let tracked: Promise<void>;
-    tracked = (async () => {
-      let failed = false;
-      let commandClient: ReturnType<typeof bindLiveClient>['client'] | null = null;
-      try {
-        commandClient = bindLiveClient().client;
-        await flushOutbox();
-        if (!active() || journal.getSnapshot().closed) return;
-        let serverRecord = journal.getSnapshot().serverRecord;
-        if (!serverRecord) return;
-        if (journal.getSnapshot().needsCreate) {
-          serverRecord = await ensureLiveGameCreated(commandClient, serverRecord);
-          if (!active() || journal.getSnapshot().closed) return;
-          if(!journal.acceptCreated(serverRecord))return;
-          await saveJournal();
-        }
-
-        while (active() && journal.getSnapshot().mutations.length > 0) {
-          const batch = journal.getSnapshot().mutations.slice(0, LIVE_GAME_SYNC_BATCH_SIZE);
-          serverRecord = await applyQueuedLiveGameMutations(commandClient, serverRecord, batch);
-          if (!active() || journal.getSnapshot().closed) return;
-          if(!journal.acknowledgeBatch(serverRecord,batch))return;
-          await saveJournal();
-        }
-
-        if (active() && journal.getSnapshot().pendingCancel) {
-          await cancelLiveGame(commandClient, serverRecord.id);
-          if (!active()) return;
-          await journal.acknowledgeCancellation(serverRecord.id);
-        }
-      } catch (error) {
-        if (!active()) return;
-        failed = true;
-        setAuthenticationRequired(isLiveGameAuthenticationError(error));
-        const message = getSupabaseErrorMessage(error, 'Sync failed');
-        setSyncError(message);
-        recordLiveGameSyncError(new Error(message));
-        setSyncStatus('error');
-        // Offline, timeout or a transient Realtime gap: the durable journal retries later.
-      } finally { if (active()) {
-        syncRunningRef.current = false;
-        if (!failed) {
-          setAuthenticationRequired(false);
-          setSyncStatus(journal.getSnapshot().mutations.length ? 'pending' : 'synced');
-        }
-        if (currentUserId && commandClient) {
-          void persistLiveGameTelemetry(commandClient, {
-            userId: currentUserId,
-            liveGameId: journal.getSnapshot().record?.id ?? null,
-            sessionId: telemetrySessionRef.current,
-            platform: 'expo',
-            force: failed,
-          }).catch(() => undefined);
-        }
-      } }
-    })().finally(() => {
-      if (syncPromiseRef.current === tracked) syncPromiseRef.current = null;
-    });
-    syncPromiseRef.current = tracked;
-    return tracked;
-  }, [journal,bindLiveClient, currentUserId, flushOutbox, isLiveScopeCurrent, saveJournal, setSyncStatus, setSyncError, setAuthenticationRequired]);
-
-  const flushArchivedOutbox = useCallback(() => {
-    const pendingSync = syncPromiseRef.current;
-    void (pendingSync ?? Promise.resolve())
-      .catch(() => undefined)
-      .finally(() => {
-        void syncJournal();
-      });
-  }, [syncJournal]);
-
-  const scheduleSync = useCallback(() => {
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    if(!isLiveScopeCurrent()||journal.getSnapshot().closed||journal.getSnapshot().mutations.length===0){
-      syncTimerRef.current=null;return;
-    }
-    const delay = getLiveGameSyncDelay({
-      queueDepth: journal.getSnapshot().mutations.length,
-      batchStartedAt: journal.getSnapshot().batchStartedAt,
-    });
-    syncTimerRef.current = setTimeout(() => {
-      syncTimerRef.current = null;
-      void syncJournal();
-    }, delay);
-  }, [journal,isLiveScopeCurrent,syncJournal]);
-
-  // Depend on the stable user id, not the session object: Supabase replaces
-  // `user` on every token refresh and the old dependency re-ran this bootstrap
-  // mid-game, tearing down the live table when the lookup was transiently empty.
-  useEffect(() => {
-    if (!groupId || !currentUserId) return;
-    bootstrappingRef.current = true;
-    let mounted = true;
-    void (async () => {
-      let cached = await withLiveGameTimeout(
-        journal.loadSaved(),
-        3_000,
-      ).catch(() => null);
-      if (!mounted || !isLiveScopeCurrent()) return;
-      const participantKey = toUserParticipantKey(currentUserId);
-      if(cached){
-        if(!journal.restore(cached)){journal.markUnavailable();cached=null;}
-        else setSyncStatus(cached.mutations.length?'pending':'synced');
-      }
-
-      try {
-        const remote = await withLiveGameTimeout(
-          fetchActiveLiveGame(bindLiveClient().client, groupId, participantKey),
-        );
-        if (!mounted || !isLiveScopeCurrent()) return;
-        if (remote && (!cached || !cached.needsCreate || remote.id === cached.record.id)) {
-          if(!await journal.replaceRemote(remote))return;
-          if(!mounted||!isLiveScopeCurrent())return;
-          await saveJournal();
-        } else if (!remote && cached && !cached.needsCreate) {
-          if(!await journal.forgetClean()){setSyncStatus('error');return;}
-          if(!mounted||!isLiveScopeCurrent())return;
-        } else if (!remote && !cached) {
-          await journal.forgetClean();
-        }
-      } catch {
-        // Cached session remains fully playable while offline.
-      } finally {
-        if (mounted && isLiveScopeCurrent()) {
-          bootstrappingRef.current = false;
-          setBooting(false);
-          void syncJournal();
-        }
-      }
-    })();
-    return () => { mounted = false; };
-  }, [journal,bindLiveClient, currentUserId, groupId, isLiveScopeCurrent, saveJournal, syncJournal]);
-
-  const refreshAuthoritativeState = useCallback(async () => {
-    const current = journal.getSnapshot().record;
-    if (!isLiveScopeCurrent() || !groupId || !currentUserId || !current || journal.getSnapshot().needsCreate || syncRunningRef.current) return;
-    const remote = await fetchActiveLiveGame(bindLiveClient().client, groupId, toUserParticipantKey(currentUserId));
-    if (!isLiveScopeCurrent() || !remote || remote.id !== current.id || journal.getSnapshot().closed || journal.getSnapshot().record?.id !== current.id) return;
-    journal.applyRemote(remote);
-    await saveJournal();
-  }, [journal,bindLiveClient, currentUserId, groupId, isLiveScopeCurrent, saveJournal]);
-
-  // A single failed boot lookup (network change, timeout, expired session)
-  // used to leave the setup screen while the server still considered this
-  // player busy in an active game: resume was unavailable and a new game was
-  // rejected. Retry the authoritative lookup while no local game is loaded.
-  const resumeRemoteGame = useCallback(async () => {
-    if (!isLiveScopeCurrent() || bootstrappingRef.current || !groupId || !currentUserId || journal.getSnapshot().record) return;
-    // Never resurrect a game that is being finalized or discarded, or one
-    // that already produced a recap: the server may still report it active
-    // until the queued terminal operation is flushed.
-    if (journal.getSnapshot().closed || journal.getSnapshot().pendingFinalization || journal.getSnapshot().pendingCancel || completedGame) return;
-    const remote = await withLiveGameTimeout(
-      fetchActiveLiveGame(bindLiveClient().client, groupId, toUserParticipantKey(currentUserId)),
-    );
-    if (!isLiveScopeCurrent() || !remote || journal.getSnapshot().record || journal.getSnapshot().closed || completedGame) return;
-    if(!await journal.replaceRemote(remote))return;
-    setSyncStatus('synced');
-    await saveJournal();
-    if (isLiveScopeCurrent()) void syncJournal();
-  }, [journal,bindLiveClient, completedGame, currentUserId, groupId, isLiveScopeCurrent, saveJournal, syncJournal, setSyncStatus]);
-
-  useEffect(() => {
-    if (booting || liveGame || completedGame) return undefined;
-    const timer = setTimeout(() => {
-      void resumeRemoteGame().catch(() => undefined);
-    }, 1_500);
-    return () => clearTimeout(timer);
-  }, [booting, completedGame, liveGame, resumeRemoteGame]);
-
-  useEffect(() => {
-    if (!realtimeRecordId) return undefined;
-    let active=true;
-    const stop=subscribeToLiveGame(supabase, realtimeRecordId, (remote) => {
-      if (!active || !isLiveScopeCurrent() || journal.getSnapshot().closed) return;
-      // A channel removal is asynchronous: ignore an event delivered for a
-      // previous game after the local session already moved on.
-      if (journal.getSnapshot().record?.id !== realtimeRecordId) return;
-      if (remote.status !== 'active') {
-        if (journal.getSnapshot().pendingFinalization || journal.getSnapshot().pendingCancel) return;
-        void journal.closeRemote().then(closed=>{
-          if(!isLiveScopeCurrent())return;
-          if(!closed){if(active)setSyncStatus('error');return;}
-          // Closing clears the record and can tear down this channel before
-          // the promise continuation. The terminal ACK belongs to the journal
-          // opening; publish only while it is still closed and has no new round.
-          if(!journal.getSnapshot().closed || journal.getSnapshot().record)return;
-        if (remote.status === 'ended') {
-          setCompletedGame(remote);
-          setCompletedDurationSeconds(getGameDurationSeconds(remote.started_at, remote.ended_at ?? new Date().toISOString()));
-          setShowEndGame(false);
-          setShowRematch(true);
-          showToast(copy('liveGameSaved'));
-        } else {
-          router.replace(`/table/${groupId}`);
-        }
-        }).catch(()=>{if(active && isLiveScopeCurrent()){journal.markUnavailable();setSyncStatus('error');}});
-        return;
-      }
-      if (syncRunningRef.current) return;
-      journal.applyRemote(remote);
-      void saveJournal();
-    }, (status) => {
-      if (!active || !isLiveScopeCurrent()) return;
-      if (status === 'SUBSCRIBED') {
-        setSyncStatus(journal.getSnapshot().mutations.length ? 'pending' : 'synced');
-        void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(active && isLiveScopeCurrent())void syncJournal();});
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        setSyncStatus('offline');
-      }
-    });
-    return ()=>{active=false;stop();};
-  }, [journal,copy, currentUserId, groupId, isLiveScopeCurrent, realtimeRecordId, refreshAuthoritativeState, router, saveJournal, showToast, syncJournal]);
-  const {networkOnline}=useNativeLiveConnectivity({currentUserId,syncJournal,resumeRemoteGame,
-    refreshAuthoritativeState,setSetupRetry,setSyncStatus,
-    scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient},
-    getLiveGameId:()=>journal.getSnapshot().record?.id??null,getTelemetrySessionId:()=>telemetrySessionRef.current,
-    cancelScheduledSync:()=>{if(syncTimerRef.current)clearTimeout(syncTimerRef.current);syncTimerRef.current=null;}});
 
   const liveGameId = liveGame?.id ?? null;
   const liveGamePlayerCount = liveGame?.state.players.length ?? 0;
@@ -509,14 +220,6 @@ export default function LiveGameScreen() {
       };
     }, [liveGameId, liveGamePlayerCount]),
   );
-
-  const enqueueMutation=useCallback((mutation:LiveGameMutation,inverse?:LiveGameMutation,historyMode:'record'|'skip'='record')=>{
-    const written=journal.enqueue(mutation,inverse,historyMode);
-    if(!written)return;
-    setSyncStatus('pending');void written.then(scheduleSync,scheduleSync);
-  },[journal,scheduleSync, setSyncStatus]);
-  const handleUndo=()=>{const written=journal.undo();if(written){setSyncStatus('pending');void written.then(scheduleSync,scheduleSync);void hapticLight();}};
-  const handleRedo=()=>{const written=journal.redo();if(written){setSyncStatus('pending');void written.then(scheduleSync,scheduleSync);void hapticLight();}};
 
   const pulseDamage = useCallback((key: ParticipantKey) => {
     setDamagePulse((current) => ({ ...current, [key]: (current[key] ?? 0) + 1 }));
@@ -758,10 +461,7 @@ export default function LiveGameScreen() {
     if (!command) return;
 
     setDiscardingGame(true);
-    if (syncTimerRef.current) {
-      clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = null;
-    }
+    cancelScheduledSync();
     try {
       if(!await journal.archive(null,true)||!command.isCurrent())return;
       flushArchivedOutbox();
@@ -834,10 +534,7 @@ export default function LiveGameScreen() {
         endedAt: new Date().toISOString(),
         players,
       };
-      if (syncTimerRef.current) {
-        clearTimeout(syncTimerRef.current);
-        syncTimerRef.current = null;
-      }
+      cancelScheduledSync();
 
       const durationSeconds = getGameDurationSeconds(liveGame.started_at, pending.endedAt);
       setCompletedDurationSeconds(durationSeconds);
@@ -910,8 +607,7 @@ export default function LiveGameScreen() {
   const gameState = liveGame?.state;
   const presentationPendingCount = countLiveGamePendingOperations({ mutations: pendingSyncCount,
     needsCreate: false, finalization: false, cancellation: false,
-    archivedOperations: recoveryOutbox.reduce((count,item) => count + countLiveGamePendingOperations({ mutations: item.mutations.length,
-      needsCreate: item.needsCreate, finalization: Boolean(item.finalization), cancellation: item.cancel }),0),
+    archivedOperations: archivedPendingCount,
   });
   const presentationState = getLiveGameSyncState({ pendingOperations: presentationPendingCount,
     online: networkOnline && syncStatus !== 'offline', syncing: syncStatus === 'syncing', localPersistenceAvailable,
@@ -1310,8 +1006,8 @@ export default function LiveGameScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[scrollContentStyle, styles.content]}>
-          {recoveryOutbox.length > 0 ? (
-            <LiveGameRecoveryPanel count={recoveryOutbox.length} language={language} syncing={syncStatus === 'syncing'}
+          {recoveryCount > 0 ? (
+            <LiveGameRecoveryPanel count={recoveryCount} language={language} syncing={syncStatus === 'syncing'}
               error={visibleSyncError} onSync={() => void syncJournal()} onDiscard={() => setShowClearRecoveryConfirm(true)} />
           ) : null}
           <PhyrexianPanel style={styles.setupPanel}>
@@ -1379,7 +1075,7 @@ export default function LiveGameScreen() {
         icon="warning-outline"
         tone="danger"
         onClose={() => setShowClearRecoveryConfirm(false)}
-        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { void saveLiveGameOutbox([], currentUserId); setRecoveryOutbox([]); setShowClearRecoveryConfirm(false); } }]}
+        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { discardRecovery(); setShowClearRecoveryConfirm(false); } }]}
       />
       <Modal
         visible={showRematch}

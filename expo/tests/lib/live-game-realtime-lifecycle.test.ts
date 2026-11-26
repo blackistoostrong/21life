@@ -4,7 +4,7 @@ import {expect,it,vi} from 'vitest';
 
 // Execute the shipped subscription effect and its actual dependency expression.
 // This characterizes controller lifetime, not the React Native renderer or SDK.
-const source=readFileSync('app/table/[id]/play.tsx','utf8');
+const source=readFileSync('hooks/use-native-live-session.ts','utf8');
 const ast=ts.createSourceFile('play.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
 let effect:ts.CallExpression|undefined;let identity:ts.VariableDeclaration|undefined;
 function visit(node:ts.Node){
@@ -29,7 +29,7 @@ function fixture(){
     supabase:{},isLiveScopeCurrent:vi.fn(()=>true),syncRunningRef:{current:false},copy:(key:string)=>key,
     currentUserId:'alice',groupId:'group',refreshAuthoritativeState:vi.fn().mockResolvedValue(undefined),
     router:{replace:vi.fn()},saveJournal:vi.fn(),showToast:vi.fn(),syncJournal:vi.fn(),
-    setSyncStatus:vi.fn(),setCompletedGame:vi.fn(),setCompletedDurationSeconds:vi.fn(),
+    setSyncStatus:vi.fn(),onRemoteCompleted:vi.fn(),setCompletedGame:vi.fn(),setCompletedDurationSeconds:vi.fn(),
     setShowEndGame:vi.fn(),setShowRematch:vi.fn(),getGameDurationSeconds:()=>42};
   const render=()=>{
     const {realtimeRecordId:unused,...inputs}=ports;void unused;
@@ -65,7 +65,7 @@ it('a terminal storage acknowledgement after teardown cannot publish a recap',as
   f.closeRemote.mockImplementation(()=>new Promise<boolean>(done=>{resolve=done;}));
   const cleanup=f.render().run();f.change({id:'game-a',status:'ended'});cleanup?.();resolve(true);
   await Promise.resolve();await Promise.resolve();
-  expect(f.ports.setCompletedGame).not.toHaveBeenCalled();expect(f.ports.showToast).not.toHaveBeenCalled();
+  expect(f.ports.onRemoteCompleted).not.toHaveBeenCalled();expect(f.ports.showToast).not.toHaveBeenCalled();
 });
 
 it('a subscribed refresh that finishes after teardown cannot flush a later round',async()=>{
@@ -88,7 +88,7 @@ it('its own successful close may clear the channel before the terminal continuat
   const cleanup=f.render().run();const ended={id:'game-a',status:'ended'};f.change(ended);
   f.snapshot.record=null;f.snapshot.closed=true;cleanup?.();resolve(true);
   await Promise.resolve();await Promise.resolve();
-  expect(f.ports.setCompletedGame).toHaveBeenCalledWith(ended);
+  expect(f.ports.onRemoteCompleted).toHaveBeenCalledWith(ended);
 });
 
 it.each(['account','round'])('a terminal ACK cannot publish after the %s owner changes',async change=>{
@@ -98,5 +98,5 @@ it.each(['account','round'])('a terminal ACK cannot publish after the %s owner c
   if(change==='account'){f.snapshot.record=null;f.snapshot.closed=true;f.ports.isLiveScopeCurrent.mockReturnValue(false);}
   else{f.snapshot.record={id:'game-b',status:'active'};f.snapshot.closed=false;}
   resolve(true);await Promise.resolve();await Promise.resolve();
-  expect(f.ports.setCompletedGame).not.toHaveBeenCalled();expect(f.ports.showToast).not.toHaveBeenCalled();
+  expect(f.ports.onRemoteCompleted).not.toHaveBeenCalled();expect(f.ports.showToast).not.toHaveBeenCalled();
 });
