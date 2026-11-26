@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-web-live-session.ts',
     'hooks/use-web-live-journal.ts', 'lib/web-live-session-journal.ts',
     'lib/web-live-command-client.ts',
     'app/table/[id]/play/page.tsx', 'hooks/use-web-live-catalog.ts', 'lib/web-live-catalog-read.ts',
