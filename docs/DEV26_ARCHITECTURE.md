@@ -1,5 +1,13 @@
 # DEV26 — Architettura e responsabilità
 
+## Risorse piattaforma native — 26 novembre
+
+`useNativeLiveConnectivity` possiede NetInfo, AppState e un intervallo10s. La pagina conserva il journal e fornisce soltanto getter/comandi tipizzati: nessun ref mutabile privato attraversa il confine finale. I callback leggono i port aggiornati al commit, ma il lease catturato dall'effect impedisce a eventi del vecchio epoch di invocare comandi del nuovo. Cleanup prima disattiva il proprietario, poi rimuove listener/intervallo; cancella il timer sync solo se non appartiene a un epoch successivo. Lettura NetInfo singola pendente, rejection gestita e nessuna prosecuzione dopo unmount/cambioaccount. La telemetria usa il clientSDK con JWT catturato, senza leggere la sessione globale.
+
+Estrazione901c0336 conserva tre statement daed3adfe5; fix successivo separato. ROSSO sul vero hook React: completamento readNetInfo dopo unmount invoca ancora sync/resume/retry.36browser consolidati desktop/mobile PASS, inclusi8nuovi (cleanup, cambioaccount, single-flight e JWT rinnovato); quality623native/857web e140/149floor PASS. Controller66/pagina1948nonempty; dimensione e ownership complessiva del runtime rimangono aperte. Export e integrazione finale della tranche da registrare, nessun collaudo dispositivo/immagini.
+
+Import membri precedente integrato Dev e9b919d4, albero identico aed3adfe5 ed exportAndroid/iOS Dev PASS (Android9.36MiB). NessunaAPK nuova.
+
 ## Setup: import membri — 26 novembre
 
 `useLiveSetupMemberSync` possiede avanzamento, richiesta corrente e retry del catalogo dopo import confermato. Estrazione4239bd45: quattro statement conservati da7aad1a33 con confronto AST, prima del fix. Il job vive nell'epoch account/gruppo; layout cleanup azzera UI e interrompe il trasporto. Slot sincrono per target esclude tap doppi, ogni finally rilascia soltanto il proprio job. I rinnovi JWT dello stesso account conservano la richiesta in corso.
