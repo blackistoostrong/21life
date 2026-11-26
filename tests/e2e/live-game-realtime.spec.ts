@@ -27,17 +27,29 @@ test('live game realtime subscribes when a locally started round is acknowledged
     });
   });
   // Observe only channel/filter metadata. Never retain or log join payloads/JWTs.
+  let gameId:string|null=null;
+  try{
   await configureTracker(page);
   await expect.poll(()=>catalogReady).toBe(true);
   await page.evaluate(()=>localStorage.setItem('live-onboarding-v1','done'));
   await page.getByTestId('live-start').click();
   await expect(page.getByTestId('live-end')).toBeVisible();
   await expect(page.getByTestId('live-sync-indicator')).toHaveAccessibleName(/Synced|Sincronizzato/,{timeout:15000});
-  const gameId=await page.evaluate(({group,user})=>{
+  gameId=await page.evaluate(({group,user})=>{
     const raw=localStorage.getItem(`phyrexian-arena:web-live-game:v2:${user}:${group}`);
     return raw?JSON.parse(raw).journal.record.id:null;
   },{group:groupId,user:process.env.E2E_USER_ID!});
   expect(gameId).toBeTruthy();
   await expect.poll(()=>joined.has(`id=eq.${gameId}`)).toBe(true);
   await expect.poll(()=>acknowledged.has(`realtime:web-live-game:${gameId}`)).toBe(true);
+  }finally{
+    // Each case leaves the shared disposable group ready for the next case.
+    if(gameId){
+      const response=await page.request.patch(`${process.env.SUPABASE_URL}/rest/v1/live_games?id=eq.${gameId}&group_id=eq.${groupId}`,{
+        headers:{apikey:process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,Authorization:`Bearer ${process.env.E2E_ACCESS_TOKEN}`},
+        data:{status:'cancelled',ended_at:new Date().toISOString()},
+      });
+      expect(response.ok()).toBe(true);
+    }
+  }
 });

@@ -426,8 +426,12 @@ export default function LiveGameScreen() {
       if (remote.status !== 'active') {
         if (journal.getSnapshot().pendingFinalization || journal.getSnapshot().pendingCancel) return;
         void journal.closeRemote().then(closed=>{
-          if(!active || !isLiveScopeCurrent())return;
-          if(!closed){setSyncStatus('error');return;}
+          if(!isLiveScopeCurrent())return;
+          if(!closed){if(active)setSyncStatus('error');return;}
+          // Closing clears the record and can tear down this channel before
+          // the promise continuation. The terminal ACK belongs to the journal
+          // opening; publish only while it is still closed and has no new round.
+          if(!journal.getSnapshot().closed || journal.getSnapshot().record)return;
         if (remote.status === 'ended') {
           setCompletedGame(remote);
           setCompletedDurationSeconds(getGameDurationSeconds(remote.started_at, remote.ended_at ?? new Date().toISOString()));
