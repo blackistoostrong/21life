@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type DisplayRecord = { id: string } | null;
 type Copy = (value: { it: string; en: string }) => string;
@@ -47,7 +47,7 @@ function restoreBrowserDisplay() {
 /** Owns table measurements, fullscreen listener and orientation cleanup; no game writes. */
 export function useWebTrackerDisplay(
   record: DisplayRecord,
-  recordRef: RefObject<DisplayRecord>,
+  getRecord: () => DisplayRecord,
   copy: Copy,
   toast: Notify,
 ) {
@@ -132,7 +132,7 @@ export function useWebTrackerDisplay(
     const updateFullscreen = () => {
       const isFullscreen = Boolean(document.fullscreenElement);
       setFullscreen(isFullscreen);
-      if (recordRef.current && displayOwners.get(document) === owner) {
+      if (getRecord() && displayOwners.get(document) === owner) {
         owner.wantsDisplay = true;
         void lockTrackerLandscapeOrientation(owner);
       }
@@ -149,7 +149,7 @@ export function useWebTrackerDisplay(
         restoreBrowserDisplay();
       }
     };
-  }, [recordRef]);
+  }, [getRecord]);
 
   const activeOrientationRecordId = record?.id ?? null;
   useEffect(() => {
