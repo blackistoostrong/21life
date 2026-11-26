@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { useLiveGameCommandScope } from './use-live-game-command-scope';
 import type { useArena } from '@/hooks/use-arena';
-import { restoreSetupDecks } from '@/components/live-game/restore-setup-decks';
+import { restoreSetupDecks } from '@/lib/live-game-setup-restore';
 import type { SetupParticipant } from '@/components/live-game/live-game-configurator';
 import { toDeckOption } from '@/lib/arena-deck-option';
 import { getLastDeckSelectionForParticipant } from '@/lib/arena-participants';
