@@ -30,7 +30,7 @@ export function useWebLiveSession(groupId: string, userId: string, { onCompleted
     const { begin: beginLiveJob, committed: isLiveCurrent, cancel: cancelLiveJob } = useCommandScope<'sync' | 'refresh' | 'bootstrap' | 'command' | 'telemetry'>(`${userId}:${groupId}`, true);
     const { journal, snapshot: journalSnapshot } = useWebLiveJournal(groupId, userId);
     const record = journalSnapshot.record;
-    const activeRecordId = record?.id;
+    const activeRecordId = journalSnapshot.needsCreate ? undefined : record?.id;
     const undoDepth = journalSnapshot.history.undo.length;
     const redoDepth = journalSnapshot.history.redo.length;
     const pendingSyncCount = journal.pendingCount();
@@ -334,7 +334,7 @@ export function useWebLiveSession(groupId: string, userId: string, { onCompleted
             journal.applyRemote(remote);
         }, (status) => {
             if (active && isLiveCurrent() && status === 'SUBSCRIBED') {
-                void refreshAuthoritativeState().catch(() => undefined).finally(() => { if (isLiveCurrent())
+                void refreshAuthoritativeState().catch(() => undefined).finally(() => { if (active && isLiveCurrent())
                     void flush(); });
             }
         });

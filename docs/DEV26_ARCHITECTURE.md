@@ -1,5 +1,9 @@
 # DEV26 — Architettura e responsabilità
 
+## Realtime dopo creazione locale — 26 novembre
+
+Web e native derivano l'identità del canale dallo snapshot osservabile e da `needsCreate`: il passaggio da round locale a creazione confermata deve riattivare l'effetto anche a ID invariato. Dipendere dal solo ID lasciava il creatore senza subscription. Le modifiche ai punti vita non cambiano l'identità del canale. Cleanup invalida prima i callback e poi rimuove il canale; anche il completamento tardivo di refresh o chiusura storage deve controllare quel lease. Il nuovo test autenticato osserva join/ACK Phoenix senza memorizzare payload o credenziali. Sei contratti eseguono l'effetto nativo effettivo e le sue dipendenze attraverso il parser TS; non certificano il renderer RN.
+
 ## Journal nativo — 26 novembre, estrazione runtime ancora in corso
 
 `expo/lib/native-live-session-journal.ts`251righe possiede snapshot, queue/history, intenti terminali, archiviazione e tracking delle scritture. Usa uno store Zustand vanilla per apertura; la dipendenza esisteva già. Nessun singleton privato, schema o versione storage nuova. `use-native-live-journal.ts`36righe osserva quel solo store; il renderer non mantiene più16stati/ref paralleli. Gli altri controller leggono snapshot e invocano azioni tipizzate.

@@ -119,6 +119,7 @@ export default function LiveGameScreen() {
     scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient}});
   const {journal,snapshot:journalSnapshot}=useNativeLiveJournal(groupId,currentUserId,{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent});
   const liveGame=journalSnapshot.record;
+  const realtimeRecordId=journalSnapshot.needsCreate?undefined:liveGame?.id;
   const undoDepth=journalSnapshot.history.undo.length;
   const redoDepth=journalSnapshot.history.redo.length;
   const pendingSyncCount=journal.pendingCount();
@@ -415,16 +416,17 @@ export default function LiveGameScreen() {
   }, [booting, completedGame, liveGame, resumeRemoteGame]);
 
   useEffect(() => {
-    if (!liveGame?.id || journal.getSnapshot().needsCreate) return undefined;
-    return subscribeToLiveGame(supabase, liveGame.id, (remote) => {
-      if (!isLiveScopeCurrent() || journal.getSnapshot().closed) return;
+    if (!realtimeRecordId) return undefined;
+    let active=true;
+    const stop=subscribeToLiveGame(supabase, realtimeRecordId, (remote) => {
+      if (!active || !isLiveScopeCurrent() || journal.getSnapshot().closed) return;
       // A channel removal is asynchronous: ignore an event delivered for a
       // previous game after the local session already moved on.
-      if (journal.getSnapshot().record?.id !== liveGame.id) return;
+      if (journal.getSnapshot().record?.id !== realtimeRecordId) return;
       if (remote.status !== 'active') {
         if (journal.getSnapshot().pendingFinalization || journal.getSnapshot().pendingCancel) return;
         void journal.closeRemote().then(closed=>{
-          if(!isLiveScopeCurrent())return;
+          if(!active || !isLiveScopeCurrent())return;
           if(!closed){setSyncStatus('error');return;}
         if (remote.status === 'ended') {
           setCompletedGame(remote);
@@ -435,22 +437,23 @@ export default function LiveGameScreen() {
         } else {
           router.replace(`/table/${groupId}`);
         }
-        }).catch(()=>{if(isLiveScopeCurrent()){journal.markUnavailable();setSyncStatus('error');}});
+        }).catch(()=>{if(active && isLiveScopeCurrent()){journal.markUnavailable();setSyncStatus('error');}});
         return;
       }
       if (syncRunningRef.current) return;
       journal.applyRemote(remote);
       void saveJournal();
     }, (status) => {
-      if (!isLiveScopeCurrent()) return;
+      if (!active || !isLiveScopeCurrent()) return;
       if (status === 'SUBSCRIBED') {
         setSyncStatus(journal.getSnapshot().mutations.length ? 'pending' : 'synced');
-        void refreshAuthoritativeState().catch(() => undefined).finally(() => syncJournal());
+        void refreshAuthoritativeState().catch(() => undefined).finally(() => {if(active && isLiveScopeCurrent())void syncJournal();});
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setSyncStatus('offline');
       }
     });
-  }, [journal,copy, currentUserId, groupId, isLiveScopeCurrent, liveGame?.id, refreshAuthoritativeState, router, saveJournal, showToast, syncJournal]);
+    return ()=>{active=false;stop();};
+  }, [journal,copy, currentUserId, groupId, isLiveScopeCurrent, realtimeRecordId, refreshAuthoritativeState, router, saveJournal, showToast, syncJournal]);
   const {networkOnline}=useNativeLiveConnectivity({currentUserId,syncJournal,resumeRemoteGame,
     refreshAuthoritativeState,setSetupRetry,setSyncStatus,
     scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient},
