@@ -2,6 +2,8 @@
 
 ## Catalogo tracker web — 26 novembre
 
+Verifica completata: buildweb pulito c8341cc7,56route e3.25/18MiB.10browser autenticati desktop/mobile PASS (Back su entrambe le query iniziali, cambio reale account, cold-error/retry, rinnovo JWT con ACK osservato sul vero SDK). Altri8flussi critici PASS:4giocatori/2client, offline, risposta di finalizzazione persa, recap e ownership fullscreen;2match per2flussi, cleanup verificato. Query e proiezioni Expo invariate; nessuna nuova APK. Aggiorna la nota di verifica pendente sottostante, senza chiudere il write-side.
+
 La route play compone Auth, lingua, loader/retry e WebLiveGame senza accesso SDK. `useWebLiveCatalog` possiede snapshot account/gruppo, richiesta singola e subscription; `lib/web-live-catalog-read.ts` possiede query e proiezione già esistenti. Usa i lease di `useCommandScope`, deadline condivisa15s e AbortSignal su ogni query; il servizio termina anche le richieste sorelle nel proprio finally. Nessun nuovo stato globale o dipendenza.
 
 Cambio account/gruppo nasconde immediatamente snapshot precedenti; layout cleanup annulla i job. L'ACK controlla la validità anche nel setter React. Rinnovo JWT dello stesso account conserva owner e draft; errori, arena vuota o membership assente durante refresh conservano un READY già acquisito per evitare l'espulsione di una partita attiva. Il primo caricamento conserva errore/retry e redirect membership precedenti. I comandi/journal del renderer rimangono una responsabilità distinta ancora da completare.

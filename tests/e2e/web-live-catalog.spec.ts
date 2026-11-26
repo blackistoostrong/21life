@@ -70,7 +70,7 @@ test('web live catalog exposes a failed cold read and allows a successful retry'
   return route.fulfill({status:403,json:{message:'Synthetic denied read'}});
  });
  await page.getByRole('button',{name:/Play Game|Gioca live/}).click();
- await expect(page.getByRole('alert')).toContainText(/Could not load this arena|Impossibile caricare/);
+ await expect(page.getByRole('alert').filter({hasText:/Could not load this arena|Impossibile caricare/})).toBeVisible();
  await expect(page.getByRole('heading',{name:/Set up the game|Configura la partita/})).toHaveCount(0);
  deny=false;
  await page.getByRole('button',{name:/^Retry$|^Riprova$/}).click();
