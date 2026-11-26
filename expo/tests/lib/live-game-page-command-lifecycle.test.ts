@@ -13,7 +13,7 @@ beforeEach(()=>{Object.values(io).forEach(mock=>mock.mockReset().mockResolvedVal
 
 // Execute the shipped handlers, extracted by the installed TS parser. Only I/O
 // and UI ports are replaced; this is not a second implementation of commands.
-const source = readFileSync('app/table/[id]/play.tsx', 'utf8');
+const source = ['app/table/[id]/play.tsx','hooks/use-native-live-round-commands.ts'].map(file=>readFileSync(file,'utf8')).join('\n');
 function handler(name: string, ports: Record<string, unknown>) {
   const ast = ts.createSourceFile('play.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let expression: ts.Expression | undefined;
@@ -44,6 +44,7 @@ function fixture() {
   beginLiveCommand:()=>{if(!current||busy)return null;busy=true;return{isCurrent:()=>current,release:()=>{busy=false;}};},
   archiveAndClearLiveGameSession:io.archive,flushArchivedOutbox:vi.fn(),cancelScheduledSync:vi.fn(),saveJournal:vi.fn().mockResolvedValue(undefined),
   showToast:vi.fn(),copy:(key:string)=>key,hapticSuccess:vi.fn(),router:{replace:vi.fn()},
+  onEvent:vi.fn(),
   getGameDurationSeconds:()=>42,formatGameDuration:()=>'42s',publishRecord:vi.fn(),
   setupReadyKey:'actor-a:group-a',selectedKeys:['user:actor-a'],playerCount:1,getDeckOptions:()=>[],participantDecks:{},
   resolveMeta:()=>({deckId:'deck-a'}),withLiveGameTimeout:(job:Promise<unknown>)=>job,fetchBusyLiveGameParticipantKeys:vi.fn(),
@@ -52,6 +53,7 @@ function fixture() {
  };
  for(const match of source.matchAll(/\b(set[A-Z]\w*)\b/g))ports[match[1]]??=vi.fn();
  for(const match of source.matchAll(/\b(\w+Ref)\b/g))ports[match[1]]??={current:null};
+ ports.onEvent=vi.fn((event:unknown)=>Reflect.apply(handler('onRoundEvent',ports),null,[event]));
  journal.view.subscribe((value,previous)=>{if(value.record!==previous.record)(ports.publishRecord as (record:unknown)=>void)(value.record);});
  return {ports,journal,expire:()=>{current=false;journal.deactivate();},game};
 }
@@ -116,6 +118,7 @@ for (const name of ['handleDiscardGame', 'handleEndGame']) {
       expect(ports.publishRecord).not.toHaveBeenCalled();
       expect(ports.setShowRematch).not.toHaveBeenCalled();
       expect(ports.setShowEndGame).not.toHaveBeenCalled();
+      expect(ports.onEvent).not.toHaveBeenCalled();
       expect(ports.flushArchivedOutbox).not.toHaveBeenCalled();
       expect(ports.saveJournal).not.toHaveBeenCalled();
       expect(ports.showToast).not.toHaveBeenCalled();
