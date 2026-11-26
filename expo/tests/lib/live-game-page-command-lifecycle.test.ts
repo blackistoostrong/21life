@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import ts from 'typescript';
 import { expect, it, vi } from 'vitest';
+import { createLiveGameRound } from '../../../packages/domain/live-game-round';
 
 // Execute the shipped handlers, extracted by the installed TS parser. Only I/O
 // and UI ports are replaced; this is not a second implementation of commands.
@@ -44,6 +45,7 @@ function fixture() {
     withLiveGameTimeout: (job: Promise<unknown>) => job, fetchBusyLiveGameParticipantKeys: vi.fn(),
     bindLiveClient: () => ({ client: 'actor-a-client' }), supabase: 'shared-client',
     createLiveGamePlayer: (input: unknown) => input, Crypto: { randomUUID },
+    createLiveGameRound,
     createLiveGameSummary: () => ({}), startingLife: 40, layoutVariant: 'classic', seatSetups: [],
     saveLiveGameSetup: vi.fn().mockResolvedValue(undefined), revealStartingPlayer: vi.fn(), syncJournal: vi.fn(),
     preparePreviousPod: () => ({ ...game, starting_life: 40 }),

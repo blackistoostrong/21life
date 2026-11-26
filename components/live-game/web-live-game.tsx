@@ -1,5 +1,7 @@
 'use client';
 
+import { createLiveGameRound } from '@/lib/live-game-round';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { WebTrackerParticipant } from '@/lib/types/web-tracker';
@@ -46,8 +48,6 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import {
   applyLiveGameMutation,
-  createLiveGamePlayer,
-  createLiveGameSummary,
   getDefaultWinCondition,
   getLiveGameResultWarnings,
   getSuggestedWinner,
@@ -598,43 +598,16 @@ export function WebLiveGame({
         const busy = await fetchBusyLiveGameParticipantKeys(supabase, groupId, keys);
         if (busy.length) throw new Error(copy({ it: 'Uno dei giocatori è già in una partita attiva.', en: 'A player is already in another active game.' }));
       }
-      const players = selected.map((seat, slot) => {
-        const participant = participants.find((entry) => entry.key === seat.participantKey)!;
-        const deck = participant.decks.find((entry) => entry.id === seat.deckId)!;
-        return createLiveGamePlayer({
-          slot,
-          participantKey: participant.key,
-          deckId: deck.id,
-          displayName: participant.displayName,
-          commander: deck.commander,
-          commanderImage: deck.commanderImage,
-          startingLife: nextStartingLife,
-          allParticipantKeys: keys,
-        });
+      const created = createLiveGameRound({
+        id: crypto.randomUUID(), groupId, actorId: userId, startedAt: new Date().toISOString(),
+        startingLife: nextStartingLife, layoutVariant: nextLayoutVariant, random: secureRandom,
+        seats: selected.map(seat => {
+          const participant = participants.find(entry => entry.key === seat.participantKey)!;
+          const deck = participant.decks.find(entry => entry.id === seat.deckId)!;
+          return {participantKey: participant.key, deckId: deck.id, displayName: participant.displayName,
+            commander: deck.commander, commanderImage: deck.commanderImage};
+        }),
       });
-      const startedAt = new Date().toISOString();
-      const startingPlayer = players[Math.floor(secureRandom() * players.length)]!;
-      const created: LiveGameRecord = {
-        id: crypto.randomUUID(),
-        group_id: groupId,
-        created_by: userId,
-        status: 'active',
-        starting_life: nextStartingLife,
-        state: {
-          version: 0,
-          players,
-          events: [],
-          summary: createLiveGameSummary(),
-          layoutVariant: nextLayoutVariant,
-          startingPlayerKey: startingPlayer.participantKey,
-          startingDirection: secureRandom() < 0.5 ? 'clockwise' : 'counterclockwise',
-        },
-        match_id: null,
-        started_at: startedAt,
-        ended_at: null,
-        created_at: startedAt,
-        updated_at: startedAt,
-      };
       serverRef.current = created;
       queueRef.current = [];
       syncBatchStartedAtRef.current = null;
@@ -656,7 +629,7 @@ export function WebLiveGame({
         });
       } catch { setLocalSaveError('unavailable'); }
       persist(created);
-      runRoulette(keys, startingPlayer.participantKey);
+      runRoulette(keys, created.state.startingPlayerKey!);
       void flush();
     } catch (error) {
       restoreDefaultTrackerDisplay();

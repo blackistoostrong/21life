@@ -1,4 +1,5 @@
 import { useNativeLiveSetup } from '@/hooks/use-native-live-setup';
+import { createLiveGameRound } from '@/lib/live-game-round';
 import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
 import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
@@ -42,8 +43,6 @@ import { queueLiveGameJournalWrite } from '@/lib/live-game-journal-writer';
 import { countLiveGamePendingOperations, getLiveGameSyncState, getLiveGameSyncIndicator, getLiveGameSyncCopy, isLiveGameAuthenticationError } from '@/lib/live-game-sync-presentation';
 import {
   applyLiveGameMutation,
-  createLiveGamePlayer,
-  createLiveGameSummary,
   getDefaultWinCondition,
   getLiveGameResultWarnings,
   getSuggestedWinner,
@@ -937,41 +936,12 @@ export default function LiveGameScreen() {
       }
       if (!command.isCurrent()) return;
 
-      const players = resolvedPlayers.map(({ key, meta }, slot) => createLiveGamePlayer({
-        slot,
-        participantKey: key,
-        deckId: meta!.deckId,
-        displayName: meta!.displayName,
-        commander: meta!.commander,
-        commanderImage: meta!.commanderImage,
-        startingLife,
-        allParticipantKeys: selectedKeys,
-      }));
-
-      const now = new Date().toISOString();
-      const startingPlayer = players[Math.floor(Math.random() * players.length)];
-      const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
-      const created: LiveGameRecord = {
-        id: Crypto.randomUUID(),
-        group_id: groupId,
-        created_by: user.id,
-        status: 'active',
-        starting_life: startingLife,
-        state: {
-          version: 0,
-          players,
-          layoutVariant,
-          startingPlayerKey: startingPlayer?.participantKey ?? null,
-          startingDirection,
-          events: [],
-          summary: createLiveGameSummary(),
-        },
-        match_id: null,
-        started_at: now,
-        ended_at: null,
-        created_at: now,
-        updated_at: now,
-      };
+      const created = createLiveGameRound({
+        id: Crypto.randomUUID(), groupId, actorId: user.id, startedAt: new Date().toISOString(),
+        startingLife, layoutVariant, random: Math.random,
+        seats: resolvedPlayers.map(({key, meta}) => ({participantKey: key, deckId: meta!.deckId,
+          displayName: meta!.displayName, commander: meta!.commander, commanderImage: meta!.commanderImage})),
+      });
       sessionClosedRef.current = false;
       serverRecordRef.current = created;
       mutationQueueRef.current = [];
@@ -1282,40 +1252,11 @@ export default function LiveGameScreen() {
       const previous = preparePreviousPod();
       if (!previous) return;
       const keys = previous.state.players.map((player) => player.participantKey);
-      const players = previous.state.players.map((player, slot) => createLiveGamePlayer({
-        slot,
-        participantKey: player.participantKey,
-        deckId: player.deckId,
-        displayName: player.displayName,
-        commander: player.commander,
-        commanderImage: player.commanderImage,
-        startingLife: previous.starting_life,
-        allParticipantKeys: keys,
-      }));
-      const now = new Date().toISOString();
-      const startingPlayer = players[Math.floor(Math.random() * players.length)];
-      const startingDirection = Math.random() < 0.5 ? 'clockwise' : 'counterclockwise';
-      const record: LiveGameRecord = {
-        id: Crypto.randomUUID(),
-        group_id: groupId,
-        created_by: user.id,
-        status: 'active',
-        starting_life: previous.starting_life,
-        state: {
-          version: 0,
-          players,
-          layoutVariant: previous.state.layoutVariant ?? 'classic',
-          startingPlayerKey: startingPlayer?.participantKey ?? null,
-          startingDirection,
-          events: [],
-          summary: createLiveGameSummary(),
-        },
-        match_id: null,
-        started_at: now,
-        ended_at: null,
-        created_at: now,
-        updated_at: now,
-      };
+      const record = createLiveGameRound({
+        id: Crypto.randomUUID(), groupId, actorId: user.id, startedAt: new Date().toISOString(),
+        startingLife: previous.starting_life, layoutVariant: previous.state.layoutVariant ?? 'classic',
+        seats: previous.state.players, random: Math.random,
+      });
       sessionClosedRef.current = false;
       serverRecordRef.current = record;
       mutationQueueRef.current = [];

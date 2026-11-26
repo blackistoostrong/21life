@@ -1,5 +1,13 @@
 # DEV26 — Architettura e responsabilità
 
+## Round condiviso — 25 novembre, verifica funzionale in corso
+
+`packages/domain/live-game-round.ts` possiede la costruzione di uno stato nuovo per avvio/rivincita. Riceve soltanto identità, timestamp, RNG, configurazione e metadati dei posti; ricrea i giocatori tramite il motore condiviso e non trasferisce counters, danni, eliminazioni o log dalla partita precedente. Tre copie produttive sono state rimosse. I moduli `lib/live-game-round` web/Expo offrono lo stesso contratto senza cambiare il barrel legacy: il test degli export installati rimane identico. Nessun clock/RNG ambientale nel dominio.
+
+Contratto unico eseguito da entrambi gli adapter per2/4/6posti misti user/guest, input non mutato e nessun alias fra round. Nuovi floor100 portano web149/native140 senza abbassare soglie. Quality857web/620native (7/3skip) PASS; build/export e wizard completo restano da verificare. Entrypoint web1163/native2053nonempty: diminuzione dovuta alla rimozione di tre costruttori, non chiusura del refactor o degli800target. I comandi continuano a possedere journal, permessi, feedback e trasporti nei rispettivi owner; nessuna regola IO è entrata nel dominio.
+
+La tranche precedente lifecycle/journal/setup è integrata suDev703bd2a0 con albero identico af48176e9: quality616nativi/853web,28browser React e exportAndroid+iOS Dev verificati su f48176e9; Android9.36/12MiB. I risultati di quella tranche non certificano i nuovi consumer round prima dei loro controlli finali.
+
 ## ACK archivio nativo — 25 novembre
 
 Il replay non salva più una copia completa dell'outbox letta prima di una richiesta di rete. `acknowledgeLiveGameOutboxItem`, nell'owner storage, rilegge l'archivio dentro la coda per account e confronta ID/snapshot dell'elemento inviato. Sostituisce/rimuove solo quella voce. Archivio revisionato o rimosso: nessuna scrittura, replay fermato e stato corrente restituito; altre partite aggiunte mentre il server risponde restano intatte. Il read/compare/write è serializzato insieme ad archiviazione/clear, senza tenere il lock durante la rete. Non promette transazioni fra processi OS distinti o rollback server: i comandi remoti già accettati restano idempotenti al retry.
