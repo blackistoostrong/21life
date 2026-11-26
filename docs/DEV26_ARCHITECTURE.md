@@ -1,5 +1,15 @@
 # DEV26 — Architettura e responsabilità
 
+## Catalogo tracker web — 26 novembre
+
+La route play compone Auth, lingua, loader/retry e WebLiveGame senza accesso SDK. `useWebLiveCatalog` possiede snapshot account/gruppo, richiesta singola e subscription; `lib/web-live-catalog-read.ts` possiede query e proiezione già esistenti. Usa i lease di `useCommandScope`, deadline condivisa15s e AbortSignal su ogni query; il servizio termina anche le richieste sorelle nel proprio finally. Nessun nuovo stato globale o dipendenza.
+
+Cambio account/gruppo nasconde immediatamente snapshot precedenti; layout cleanup annulla i job. L'ACK controlla la validità anche nel setter React. Rinnovo JWT dello stesso account conserva owner e draft; errori, arena vuota o membership assente durante refresh conservano un READY già acquisito per evitare l'espulsione di una partita attiva. Il primo caricamento conserva errore/retry e redirect membership precedenti. I comandi/journal del renderer rimangono una responsabilità distinta ancora da completare.
+
+Estrazione meccanica86d8afc8:8statement confrontati via AST. Baseline reale ROSSA Back:1lettura groups,0annullamenti; successivi check funzionali da registrare. Qualityroot857+7skip/75script/149floor PASS, senza riduzione delle soglie.
+
+Tranche piattaforma nativa integrata Dev0042cdb6 viaPR273: albero identico ae18f30d2, exportAndroid+iOS Dev PASS9.36/12MiB. Questo aggiornamento supera le note di integrazione ancora richiesta sotto.
+
 ## Risorse piattaforma native — 26 novembre
 
 `useNativeLiveConnectivity` possiede NetInfo, AppState e un intervallo10s. La pagina conserva il journal e fornisce soltanto getter/comandi tipizzati: nessun ref mutabile privato attraversa il confine finale. I callback leggono i port aggiornati al commit, ma il lease catturato dall'effect impedisce a eventi del vecchio epoch di invocare comandi del nuovo. Cleanup prima disattiva il proprietario, poi rimuove listener/intervallo; cancella il timer sync solo se non appartiene a un epoch successivo. Lettura NetInfo singola pendente, rejection gestita e nessuna prosecuzione dopo unmount/cambioaccount. La telemetria usa il clientSDK con JWT catturato, senza leggere la sessione globale.

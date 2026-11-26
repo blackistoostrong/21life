@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'app/table/[id]/play/page.tsx', 'hooks/use-web-live-catalog.ts', 'lib/web-live-catalog-read.ts',
     'hooks/use-arena-sharing.ts',
     'hooks/use-arena-session-export.ts',
     'hooks/use-arena-reports.ts',
