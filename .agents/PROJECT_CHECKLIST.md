@@ -4,6 +4,8 @@
 
 ### Priorità PM 20 novembre — candidato9.3.0 testabile
 
+- [x] 26Nov refactor strutturale web VERIFICATO fd37f487: tracker1213→658nonempty, owner journal161/hook13/session347/round197, niente SDK/trasporto/storage privato nel renderer. Buildweb pulito56route3.25/18MiB, quality868+7skip/75script/149floor PASS;7contratti journal,6browser React development/StrictMode e24autenticati desktop/mobile PASS.4giocatori/2client, offline/risposta persa/recap/fullscreen, account/gruppo/unmount e JWT;2match per2flussi e cleanup Dev verificati. Ultimi controlli fixture typecheck/lint/Knip/boundaries/security PASS. Expo e packages identici aDev0093bb65: nessun export/APK/DB/dependency/prod. Tre target sotto800: profile529/table713/web658; native1948 ancora aperto, immagini/dispositivi rinviati. Integrazione nuova tranche viaPR ancora richiesta.
+
 - [ ] 26Nov proprietari live web: renderer658nonempty, journal161+hook13, session347 e round197; nessun nuovo monolite/refbag, renderer senza trasporto privato e gate dedicato. Runtime28statement conservati da3c2d6a55 con port espliciti; round5statement+RNG conservati da8ba43885 con solo callback completamento. Journal non dichiarato copia AST:7contratti storage/domain e6browser React reali in StrictMode PASS (account A→B→A/gruppo/unmount/undo/redo). Qualityroot868+7skip/75script/149floor PASS; ultimi cambi solo fixture/docs. Richiesti build unico e collaudo autenticato consolidato prima del merge. Native1948 e punto6 complessivo ancora aperti.
 - [x] 26Nov comandi INTEGRATI Dev0093bb65 viaPR275:4check verdi, RESTmerged/ref/albero identico acef7dcd5 verificati. Completa le precedenti note PR275OPEN, nessunaAPK nuova.
 

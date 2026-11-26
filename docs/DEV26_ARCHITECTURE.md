@@ -1,6 +1,8 @@
 # DEV26 — Architettura e responsabilità
 
-## Proprietari runtime live web — 26 novembre, collaudo finale in corso
+## Proprietari runtime live web — 26 novembre, verificato
+
+Tranche verificata fd37f487: build pulito56route3.25/18MiB; quality868+7skip/75script/149floor,7contratti journal,6browser React/StrictMode e24autenticati desktop/mobile PASS.2match per2flussi finalizzati, cleanup Dev verificati. Il resto del codice Expo/packages è identico aDev0093bb65; nessun export/APK/migrazione. Confronto sullo stesso Dev: renderer1213→658righe, senza comprimere la presentazione. Profilo529 e tavolo713 sono già sotto800; native1948 resta da chiudere. Il collaudo immagini/dispositivi è separato e rinviato dal PM. Questa verifica completa la nota di build/browser pendenti sotto.
 
 Il renderer è sceso a658righe non vuote e compone i controller senza SDK, richieste o accesso diretto al journal persistente. Restano UI, dialoghi, drag/danno, roulette e timer di presentazione. Un gate top-level impedisce la reintroduzione di trasporti/storage privati; il grafo verifica confini e cicli.
 
