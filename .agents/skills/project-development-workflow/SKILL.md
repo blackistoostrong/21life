@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Native live journal: `expo/lib/native-live-session-journal.ts` owns per-opening Zustand snapshots, history/queue, durable-write tracking and archival actions; `use-native-live-journal.ts` owns React observation and the focused player projection. The shared card renderer accepts only its current presentation lease. Storage alone serializes accepted writes by account; the writer must register them immediately, before later reads/clears. Native session/round extraction remains open.
+
 - Web live runtime: `lib/web-live-session-journal.ts` owns private snapshots, queue/history, terminal intent, acknowledgements and durable storage; `hooks/use-web-live-journal.ts` observes it through React's built-in external-store hook. `use-web-live-session.ts` owns bootstrap, sync, Realtime and platform events; `use-web-live-round-commands.ts` owns scoped start/rematch/end/cancel. The renderer receives typed views/actions and presentation callbacks, without SDK or journal refs. `lib/web-live-command-client.ts` freezes each actor/JWT and bounds response bodies; offline starts stay local. Native controller decomposition remains open.
 
 - Web live catalog: `hooks/use-web-live-catalog.ts` owns account/group snapshots, cancellable single-flight reads and Realtime subscriptions. `lib/web-live-catalog-read.ts` owns SDK queries and participant projection; the play route composes loader/retry and the tracker without private transport. Background failures preserve a ready tracker; JWT renewal preserves the owner.

@@ -1,5 +1,15 @@
 # DEV26 — Architettura e responsabilità
 
+## Journal nativo — 26 novembre, estrazione runtime ancora in corso
+
+`expo/lib/native-live-session-journal.ts`251righe possiede snapshot, queue/history, intenti terminali, archiviazione e tracking delle scritture. Usa uno store Zustand vanilla per apertura; la dipendenza esisteva già. Nessun singleton privato, schema o versione storage nuova. `use-native-live-journal.ts`36righe osserva quel solo store; il renderer non mantiene più16stati/ref paralleli. Gli altri controller leggono snapshot e invocano azioni tipizzate.
+
+La queue account appartiene all'adapter AsyncStorage: ogni snapshot entra subito, il writer segue soltanto esito e drenaggio. Due ROSSI effettivi dimostravano remount con snapshot superato e resurrezione dopo clear. I nuovi ingressi da scope scaduto o sessione sigillata sono respinti; le scritture già accettate conservano l'actor catturato. Un lookup vuoto non elimina operazioni pendenti. Archiviazione/replacement sigillano lo stato prima dell'I/O e lo ripristinano su errore; ACK dei batch conserva append concorrenti. Il creator può ripristinare un pod composto solo da guest.
+
+La proiezione delle carte rimane sullo store per-player già esistente, con un lease opaco della schermata in focus. Il journal continua a ricevere dati mentre la route è nascosta; non può sovrascrivere il tavolo visibile. Al ritorno in focus ripubblica il proprio snapshot. Cleanup vecchi non cancellano il lease successivo.
+
+17contratti modello e2lease, precedenti8comandi/4ordinamento e qualityExpo646+3skip/140floor PASS; root868+7skip/75script/149floor PASS.42browser React/SDK consolidati PASS, inclusi6nuovi con il vero hook Expo useFocusEffect e port di navigazione/storage/crypto controllati. A→B→A, gruppo, focus sovrapposto, JWT e unmount verificati separatamente dal rendererRN/dispositivo, rinviato dal PM. Pagina1676righe: bootstrap/sync e comandi sono ancora da estrarre; build/export e integrazione della tranche ancora richiesti.
+
 ## Proprietari runtime live web — 26 novembre, verificato
 
 Tranche verificata fd37f487: build pulito56route3.25/18MiB; quality868+7skip/75script/149floor,7contratti journal,6browser React/StrictMode e24autenticati desktop/mobile PASS.2match per2flussi finalizzati, cleanup Dev verificati. Il resto del codice Expo/packages è identico aDev0093bb65; nessun export/APK/migrazione. Confronto sullo stesso Dev: renderer1213→658righe, senza comprimere la presentazione. Profilo529 e tavolo713 sono già sotto800; native1948 resta da chiudere. Il collaudo immagini/dispositivi è separato e rinviato dal PM. Questa verifica completa la nota di build/browser pendenti sotto.
