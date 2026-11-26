@@ -4,7 +4,7 @@ import { apiPost } from '@/lib/api';
 import { hapticLight } from '@/lib/haptics';
 import type { LiveGameMutation, LiveGameRecord } from '@/lib/live-game';
 import { withLiveGameTimeout } from '@/lib/live-game-async';
-import { loadLiveGameOutbox, saveLiveGameOutbox, type ArchivedLiveGameOperation } from '@/lib/live-game-offline';
+import { acknowledgeLiveGameOutboxItem, loadLiveGameOutbox, type ArchivedLiveGameOperation } from '@/lib/live-game-offline';
 import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
 import { applyQueuedLiveGameMutations, cancelLiveGame, ensureLiveGameCreated, fetchActiveLiveGame, subscribeToLiveGame } from '@/lib/live-game-service';
 import { LIVE_GAME_SYNC_BATCH_SIZE, getLiveGameSyncDelay } from '@/lib/live-game-sync-policy';
@@ -46,6 +46,9 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
     const syncRunningRef = useRef(false);
     const syncPromiseRef = useRef<Promise<void> | null>(null);
     const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const timerEpochRef = useRef(liveScopeEpoch);
+    const discardRecoveryRef = useRef<Promise<boolean> | null>(null);
+    const [discardingRecovery, setDiscardingRecovery] = useState(false);
     const [syncStatus, setSyncStatus] = useState<'offline' | 'pending' | 'syncing' | 'synced' | 'error'>('synced');
     const [syncError, setSyncError] = useState<string | null>(null);
     const [authenticationRequired, setAuthenticationRequired] = useState(false);
@@ -57,6 +60,9 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
         }
     }), [journal]);
     useLayoutEffect(() => {
+        timerEpochRef.current = liveScopeEpoch;
+        discardRecoveryRef.current = null;
+        setDiscardingRecovery(false);
         bootstrappingRef.current = true;
         syncPromiseRef.current = null;
         syncRunningRef.current = false;
@@ -93,7 +99,7 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
     const syncJournal = useCallback(() => {
         // Bootstrap owns journal/outbox replacement; reconnect must not sync the
         // old session concurrently while its operations are being archived.
-        if (bootstrappingRef.current || !isLiveScopeCurrent())
+        if (bootstrappingRef.current || !isLiveScopeCurrent() || discardRecoveryRef.current)
             return Promise.resolve();
         const gameId = journal.getSnapshot().record?.id ?? null;
         const active = () => isLiveScopeCurrent() && (journal.getSnapshot().record?.id ?? null) === gameId;
@@ -187,9 +193,11 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
         });
     }, [syncJournal]);
     const scheduleSync = useCallback(() => {
+        if (!isLiveScopeCurrent())
+            return;
         if (syncTimerRef.current)
             clearTimeout(syncTimerRef.current);
-        if (!isLiveScopeCurrent() || journal.getSnapshot().closed || journal.getSnapshot().mutations.length === 0) {
+        if (journal.getSnapshot().closed || journal.getSnapshot().mutations.length === 0) {
             syncTimerRef.current = null;
             return;
         }
@@ -350,12 +358,18 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
         });
         return () => { active = false; stop(); };
     }, [onRemoteCompleted, journal, copy, currentUserId, groupId, isLiveScopeCurrent, realtimeRecordId, refreshAuthoritativeState, router, saveJournal, showToast, syncJournal]);
+    const cancelScheduledSync = useCallback(() => {
+        if (timerEpochRef.current !== liveScopeEpoch)
+            return;
+        if (syncTimerRef.current)
+            clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+    }, [liveScopeEpoch]);
     const { networkOnline } = useNativeLiveConnectivity({ currentUserId, syncJournal, resumeRemoteGame,
         refreshAuthoritativeState, setSetupRetry, setSyncStatus,
         scope: { epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient },
         getLiveGameId: () => journal.getSnapshot().record?.id ?? null, getTelemetrySessionId: () => telemetrySessionRef.current,
-        cancelScheduledSync: () => { if (syncTimerRef.current)
-            clearTimeout(syncTimerRef.current); syncTimerRef.current = null; } });
+        cancelScheduledSync });
     const enqueueMutation = useCallback((mutation: LiveGameMutation, inverse?: LiveGameMutation, historyMode: 'record' | 'skip' = 'record') => {
         const written = journal.enqueue(mutation, inverse, historyMode);
         if (!written)
@@ -373,12 +387,44 @@ export function useNativeLiveSession({ groupId, currentUserId, scope, hasComplet
         void written.then(scheduleSync, scheduleSync);
         void hapticLight();
     } };
-    const cancelScheduledSync = useCallback(() => { if (syncTimerRef.current)
-        clearTimeout(syncTimerRef.current); syncTimerRef.current = null; }, []);
-    const discardRecovery = () => { void saveLiveGameOutbox([], currentUserId); setRecoveryOutbox([]); };
+    const discardRecovery = useCallback(() => {
+        if (!isLiveScopeCurrent()) return Promise.resolve(false);
+        if (discardRecoveryRef.current) return discardRecoveryRef.current;
+        if (syncPromiseRef.current) return Promise.resolve(false);
+        const confirmed = recoveryOutbox.map(item => ({ id: item.id, expected: JSON.stringify(item) }));
+        setDiscardingRecovery(true);
+        let tracked: Promise<boolean>;
+        tracked = (async () => {
+            try {
+                for (const item of confirmed) {
+                    if (!isLiveScopeCurrent()) return false;
+                    await acknowledgeLiveGameOutboxItem(item.id, item.expected, null, currentUserId);
+                }
+                if (!isLiveScopeCurrent()) return false;
+                const remaining = await loadLiveGameOutbox(currentUserId);
+                if (!isLiveScopeCurrent()) return false;
+                setRecoveryOutbox(remaining);
+                return true;
+            } catch (error) {
+                if (isLiveScopeCurrent()) {
+                    journal.markUnavailable();
+                    setSyncError(getSupabaseErrorMessage(error, copy('liveGameDiscardFailed')));
+                    setSyncStatus('error');
+                }
+                return false;
+            }
+        })().finally(() => {
+            if (discardRecoveryRef.current === tracked) {
+                discardRecoveryRef.current = null;
+                if (isLiveScopeCurrent()) setDiscardingRecovery(false);
+            }
+        });
+        discardRecoveryRef.current = tracked;
+        return tracked;
+    }, [currentUserId, recoveryOutbox, isLiveScopeCurrent, journal, copy]);
     const archivedPendingCount = recoveryOutbox.reduce((count, item) => count + countLiveGamePendingOperations({ mutations: item.mutations.length,
         needsCreate: item.needsCreate, finalization: Boolean(item.finalization), cancellation: item.cancel }), 0);
     return { journal, liveGame, undoDepth, redoDepth, pendingSyncCount, localPersistenceAvailable, booting, syncStatus, syncError, authenticationRequired,
         networkOnline, recoveryCount: recoveryOutbox.length, archivedPendingCount, saveJournal, syncJournal, flushArchivedOutbox, cancelScheduledSync,
-        enqueueMutation, handleUndo, handleRedo, discardRecovery };
+        enqueueMutation, handleUndo, handleRedo, discardRecovery, discardingRecovery };
 }

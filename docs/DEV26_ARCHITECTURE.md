@@ -1,5 +1,13 @@
 # DEV26 — Architettura e responsabilità
 
+## Controller sessione nativa — 26 novembre
+
+`expo/hooks/use-native-live-session.ts`430righe possiede bootstrap, sincronizzazione, subscription, timer, stato rete/errori e outbox privato. Compone il journal per apertura e il controller piattaforma; la pagina1394righe riceve snapshot, conteggi e azioni. Il runtime non espone ref o array privati dei recuperi. Un singolo callback di presentazione comunica il completamento remoto; setup e comandi round restano distinti. L'estrazione7356b843 conserva34statement AST da1e842f7e dopo adattamenti dichiarati, prima dei fix successivi.
+
+I callback di scheduling verificano lo scope prima di toccare timer; la cancellazione verifica l'epoch del proprietario anche durante cleanup. Lo scarto dei recuperi conferma per CAS soltanto gli snapshot selezionati e legge il residuo dopo l'ACK storage. Archivi aggiunti/revisionati rimangono; errore e cambio account non pubblicano falsi successi. Discard e replay non partono simultaneamente e i tap doppi condividono la Promise. Il dialog resta aperto e disabilitato durante la scrittura, chiude solo su successo.
+
+La chiusura remota è un comando del journal: la sua cancellazione dello snapshot può smontare il canale prima del seguito asincrono. L'ACK può pubblicare il recap solo se lo scope è corrente e il journal ancora chiuso senza nuovo round; eventi/status del canale smontato sono sempre ignorati.9contratti dell'effetto e11azioni estratte PASS;12browser eseguono controller, React/StrictMode, Zustand, scope e vero useFocusEffect Expo, sostituendo soltanto I/O e port di piattaforma. Non è certificazione del renderer RN o dei dispositivi.
+
 ## Realtime dopo creazione locale — 26 novembre
 
 Web e native derivano l'identità del canale dallo snapshot osservabile e da `needsCreate`: il passaggio da round locale a creazione confermata deve riattivare l'effetto anche a ID invariato. Dipendere dal solo ID lasciava il creatore senza subscription. Le modifiche ai punti vita non cambiano l'identità del canale. Cleanup invalida prima i callback e poi rimuove il canale; anche il completamento tardivo di refresh o chiusura storage deve controllare quel lease. Il nuovo test autenticato osserva join/ACK Phoenix senza memorizzare payload o credenziali. Sei contratti eseguono l'effetto nativo effettivo e le sue dipendenze attraverso il parser TS; non certificano il renderer RN.

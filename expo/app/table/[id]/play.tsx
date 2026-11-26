@@ -128,7 +128,7 @@ export default function LiveGameScreen() {
  setShowEndGame(false);setShowRematch(true);
 },[setCompletedGame,setCompletedDurationSeconds,setShowEndGame,setShowRematch]);
 const {journal,liveGame,undoDepth,redoDepth,pendingSyncCount,localPersistenceAvailable,booting,syncStatus,syncError,authenticationRequired,
- networkOnline,recoveryCount,archivedPendingCount,saveJournal,syncJournal,flushArchivedOutbox,cancelScheduledSync,enqueueMutation,handleUndo,handleRedo,discardRecovery}
+ networkOnline,recoveryCount,archivedPendingCount,saveJournal,syncJournal,flushArchivedOutbox,cancelScheduledSync,enqueueMutation,handleUndo,handleRedo,discardRecovery,discardingRecovery}
  =useNativeLiveSession({groupId,currentUserId,hasCompletedGame:Boolean(completedGame),setSetupRetry,onRemoteCompleted,
  scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient}});
 
@@ -1074,8 +1074,8 @@ const {journal,liveGame,undoDepth,redoDepth,pendingSyncCount,localPersistenceAva
         message={language === 'it' ? 'I salvataggi non ancora sincronizzati verranno rimossi definitivamente.' : 'Unsynced saves will be permanently removed.'}
         icon="warning-outline"
         tone="danger"
-        onClose={() => setShowClearRecoveryConfirm(false)}
-        actions={[{ label: copy('cancel'), variant: 'ghost', onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', onPress: () => { discardRecovery(); setShowClearRecoveryConfirm(false); } }]}
+        onClose={() => { if (!discardingRecovery) setShowClearRecoveryConfirm(false); }}
+        actions={[{ label: copy('cancel'), variant: 'ghost', disabled: discardingRecovery, onPress: () => setShowClearRecoveryConfirm(false) }, { label: language === 'it' ? 'Scarta' : 'Discard', variant: 'destructive', disabled: discardingRecovery || syncStatus === 'syncing', onPress: () => { void discardRecovery().then(cleared => { if (cleared && isLiveScopeCurrent()) setShowClearRecoveryConfirm(false); }); } }]}
       />
       <Modal
         visible={showRematch}
