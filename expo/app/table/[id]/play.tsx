@@ -1,3 +1,4 @@
+import {useNativeLiveConnectivity} from '@/hooks/use-native-live-connectivity';
 import { useLiveSetupMemberSync } from '@/hooks/use-live-setup-member-sync';
 import { useNativeLiveSetup } from '@/hooks/use-native-live-setup';
 import { createLiveGameRound } from '@/lib/live-game-round';
@@ -5,12 +6,12 @@ import { replayLiveGameOutbox } from '@/lib/live-game-outbox-replay';
 import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
 import { useFocusEffect , useLocalSearchParams, useRouter } from 'expo-router';
-import NetInfo from '@react-native-community/netinfo';
+
 
 import * as Crypto from 'expo-crypto';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { DeckImage } from '@/components/deck/deck-image';
@@ -193,7 +194,6 @@ export default function LiveGameScreen() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [localPersistenceAvailable, setLocalPersistenceAvailable] = useState(true);
   const [authenticationRequired, setAuthenticationRequired] = useState(false);
-  const [networkOnline, setNetworkOnline] = useState(true);
   const publishPendingSyncCount = useCallback(() => {
     setPendingSyncCount(countLiveGamePendingOperations({ mutations: mutationQueueRef.current.length,
       needsCreate: needsCreateRef.current, finalization: Boolean(pendingFinalizationRef.current), cancellation: pendingCancelRef.current }));
@@ -427,23 +427,6 @@ export default function LiveGameScreen() {
     }, delay);
   }, [syncJournal]);
 
-  useEffect(() => {
-    return NetInfo.addEventListener((state) => {
-      if (!isLiveScopeCurrent()) return;
-      const online = state.isConnected === true && state.isInternetReachable !== false;
-      setNetworkOnline(online);
-      if (!online) {
-        if (syncTimerRef.current) {
-          clearTimeout(syncTimerRef.current);
-          syncTimerRef.current = null;
-        }
-        setSyncStatus('offline');
-        return;
-      }
-      void syncJournal();
-    });
-  }, [isLiveScopeCurrent, syncJournal]);
-
   // Depend on the stable user id, not the session object: Supabase replaces
   // `user` on every token refresh and the old dependency re-ran this bootstrap
   // mid-game, tearing down the live table when the lookup was transiently empty.
@@ -630,38 +613,8 @@ export default function LiveGameScreen() {
       }
     });
   }, [copy, currentUserId, groupId, isLiveScopeCurrent, liveGame?.id, refreshAuthoritativeState, router, saveJournal, setOptimisticRecord, showToast, syncJournal]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void NetInfo.fetch().then((state) => {
-        if (state.isConnected === true && state.isInternetReachable !== false) {
-          void syncJournal();
-          void resumeRemoteGame().catch(() => undefined);
-          setSetupRetry(current => current + 1);
-        }
-      });
-    }, 10_000);
-    const appStateSubscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        void resumeRemoteGame().catch(() => undefined);
-        void refreshAuthoritativeState().catch(() => undefined).finally(() => syncJournal());
-        if (liveGameRef.current) applyLiveGameImmersive();
-      } else if (currentUserId) {
-        void persistLiveGameTelemetry(supabase, {
-          userId: currentUserId,
-          liveGameId: liveGameRef.current?.id ?? null,
-          sessionId: telemetrySessionRef.current,
-          platform: 'expo',
-          force: true,
-        }).catch(() => undefined);
-      }
-    });
-    return () => {
-      clearInterval(interval);
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      appStateSubscription.remove();
-    };
-  }, [currentUserId, refreshAuthoritativeState, resumeRemoteGame, setSetupRetry, syncJournal]);
+  const {networkOnline}=useNativeLiveConnectivity({currentUserId,isLiveScopeCurrent,syncJournal,resumeRemoteGame,
+    refreshAuthoritativeState,setSetupRetry,setSyncStatus,syncTimerRef,liveGameRef,telemetrySessionRef});
 
   const liveGameId = liveGame?.id ?? null;
   const liveGamePlayerCount = liveGame?.state.players.length ?? 0;
