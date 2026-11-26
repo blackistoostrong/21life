@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Web live catalog: `hooks/use-web-live-catalog.ts` owns account/group snapshots, cancellable single-flight reads and Realtime subscriptions. `lib/web-live-catalog-read.ts` owns SDK queries and participant projection; the play route composes loader/retry and the tracker without private transport. Background failures preserve a ready tracker; JWT renewal preserves the owner.
+
 - Native saved-setup lookup lives in `expo/lib/live-game-setup-restore.ts`; its old component-folder path is a compatibility re-export. Data controllers import the service directly, without a runtime dependency on a presentation folder.
 
 - Native live platform lifecycle: `expo/hooks/use-native-live-connectivity.ts` owns NetInfo/AppState subscriptions, a bounded pending network read and the polling interval. The screen supplies typed getters/actions; the controller never receives journal refs. Background telemetry uses the captured command client.

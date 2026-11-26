@@ -20,5 +20,6 @@ it('offers inline live creation while excluding occasional decks from automatic 
   expect(live).toContain('<WebTrackerWizard setup={setup}');
   expect(read('components/live-game/web-tracker-wizard.tsx')).toContain('<OccasionalDeckForm');
   expect(read('hooks/use-web-tracker-setup.ts')).toContain('!deck.isOccasional');
-  expect(read('app/table/[id]/play/page.tsx')).toContain(".is('group_id', null)");
+  expect(read('app/table/[id]/play/page.tsx')).toContain('useWebLiveCatalog(groupId,userId)');
+  expect(read('lib/web-live-catalog-read.ts')).toContain(".is('group_id', null)");
 });
