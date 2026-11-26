@@ -1,5 +1,13 @@
 # Supabase self-hosted operations
 
+## Dev gateway recovery — 26 November 2026
+
+Auth and REST returned502 before fixture provisioning. SSH showed healthy Dev database/Auth/REST containers and a stopped Dev Kong gateway (exit128, Docker network attachment timeout). Its persisted overlay address was assigned to another workload, while the Compose network definition requested dynamic allocation. A start attempt reproduced the timeout.
+
+After verifying identical configured environment, local image digest and bind mounts, only the stopped Dev gateway was recreated from `/opt/supabase-staging/supabase/docker` with `docker compose -p supabase-dev up -d --no-deps --force-recreate --pull never kong`. No database, volume, secret, Compose definition or shared daemon was changed. Kong became healthy; authenticated REST and Auth health returned200JSON. Other Dev service uptimes were unchanged.
+
+The failed test run had created zero synthetic Auth users (verified with a read-only database query over its client timestamp window), and never reached group creation. It is an environment failure, not an application regression. The staging runner now probes Auth health and a zero-row REST read before provisioning and records its private fixture descriptor before the first createUser request. Backend downtime must not be reported as a red product test. Check gateway/overlay allocation after cold starts before rerunning authenticated tests.
+
 ## Applying and verifying schema migrations
 
 The Dev and production Supabase stacks run remotely in Dokploy on the project

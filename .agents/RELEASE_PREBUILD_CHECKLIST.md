@@ -1,5 +1,7 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] Collaudi Dev remoti: preflight Auth health e REST JSON con querylimit0 prima delle fixture;502 prima del test non è una regressione applicativa. Dopo cold boot verificare gateway Dev e allocazioni overlay; non riavviare VM/Docker condivisi per correggere un singolo container Dev. Incidente26Nov documentato in SUPABASE_OPERATIONS.
+
 - [ ] Riallineamento branch mobile concorrenti: controllare conflitti e marker sia PROJECT_CHECKLIST sia MERGE_FAILURES; preservare entrambe le aggiunte. Ricertificare combinazione logout/journal/lifecycle sullo SHA finale, senza attribuire al merge i risultati dei singoli rami.
 
 - [ ] JobExpo CI con test condivisi root: `npm ci` sia root sia Expo; il PASS locale con entrambi i node_modules non certifica un runner con il solo Expo. Verificare check remoti prima del merge e APK dal commit finale di Dev.

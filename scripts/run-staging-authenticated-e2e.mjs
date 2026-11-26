@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { runNodeCommand } from './qa-command.mjs';
+import { assertStagingBackendReachable } from './staging-backend-preflight.mjs';
 import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
@@ -40,6 +41,9 @@ process.env.NEXT_PUBLIC_SUPABASE_URL ||= supabaseUrl;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= process.env.SUPABASE_ANON_KEY;
 if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Staging anon key is missing.');
 
+await assertStagingBackendReachable(supabaseUrl, serviceRoleKey);
+console.log('Staging Auth/REST preflight passed before fixture provisioning.');
+
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
@@ -49,6 +53,8 @@ const userIds = [];
 const usernames = [];
 const groupId = randomUUID();
 let exitCode = 1;
+mkdirSync(resolve('artifacts/dev26'),{ recursive: true });
+writeFileSync(resolve(`artifacts/dev26/staging-e2e-${groupId}.json`),JSON.stringify({ groupId,userIds,usernames,email }));
 
 try {
   for (let index = 0; index < playerCount; index += 1) {
