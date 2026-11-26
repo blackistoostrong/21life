@@ -32,6 +32,9 @@ for(const draws of [5,0]){
   await expect(page.getByRole('heading',{name:'Deck Rankings',exact:true})).toBeVisible();
   const deck=page.getByText('Commander',{exact:true}).first().locator('xpath=ancestor::div[@data-web-card][1]');
   await expect(deck.getByText(draws===5?'—':'0%',{exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:/Meta/}).click();
+  const pairs=page.getByRole('heading',{name:'Multicolor identities',exact:true}).locator('xpath=ancestor::div[@data-web-card][1]');
+  await expect(pairs.getByText(draws===5?'—':'0%',{exact:true})).toBeVisible();
  });
 }
 
