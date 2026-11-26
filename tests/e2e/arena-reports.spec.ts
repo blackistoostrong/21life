@@ -1,6 +1,39 @@
 import { test, expect } from '@playwright/test';
 import { arenaReportFixture } from '../fixtures/arena-analytics';
 import { fixtureLogin } from './fixture-login';
+import {arenaAnalyticsScope,parseArenaAnalyticsReport} from '../../packages/domain/arena-analytics';
+
+for(const draws of [5,0]){
+ test(`arena reports distinguish ${draws===5?'draw-only records':'genuine zero-percent losses'}`,async({page})=>{
+  test.skip(!process.env.E2E_ACCESS_TOKEN,'Requires disposable Dev authentication.');
+  await page.route('**/rest/v1/rpc/get_arena_analytics_bundle_v2',route=>{
+   const args=route.request().postDataJSON(),report=arenaReportFixture();
+   report.groupId=args.p_group_id;report.filters={since:args.p_since??null,until:args.p_until??null,bracket:args.p_bracket??null};
+   report.totalMatches=5;report.participations=5;report.rankingParticipations=5;
+   for(const row of [...report.players,...report.commanders,...report.colors,...report.decks]){
+    const values=row as unknown as Record<string,unknown>;
+    for(const key of Object.keys(values))if(typeof values[key]==='number')values[key]=0;
+    if('games_played'in values)values.games_played=5;
+    if('appearances'in values)values.appearances=5;
+    values.draws=draws;
+   }
+   report.colors[0].color_identity=['W','U'];report.decks[0].median_winning_duration_seconds=null;
+   parseArenaAnalyticsReport(report,arenaAnalyticsScope(report.groupId,report.filters));
+   return route.fulfill({status:200,json:report});
+  });
+  await fixtureLogin(page);
+  await page.locator(`a[href="/table/${process.env.E2E_GROUP_ID!}"]`).first().click();
+  await page.getByRole('tab',{name:/Players/}).click();
+  const board=page.getByRole('heading',{name:'Player Leaderboard',exact:true}).locator('xpath=ancestor::div[@data-web-card][1]');
+  await expect(board.getByText('Player A',{exact:true})).toBeVisible();
+  await expect(board.getByText(draws===5?'—':'0%',{exact:true})).toBeVisible();
+  await expect(board.getByText(draws===5?'0%':'—',{exact:true})).toHaveCount(0);
+  await page.getByRole('tab',{name:/Decks/}).click();
+  await expect(page.getByRole('heading',{name:'Deck Rankings',exact:true})).toBeVisible();
+  const deck=page.getByText('Commander',{exact:true}).first().locator('xpath=ancestor::div[@data-web-card][1]');
+  await expect(deck.getByText(draws===5?'—':'0%',{exact:true})).toBeVisible();
+ });
+}
 
 test('arena report panels preserve retry, neutral draws, provisional decks and award switching', async ({ page }) => {
   test.skip(!process.env.E2E_ACCESS_TOKEN, 'Requires disposable Dev authentication.');

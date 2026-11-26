@@ -6,7 +6,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { cardRowGap, colors, radii, spacing } from '@/constants/theme';
 import { getPlayerRank } from '@/lib/arena-stats';
 import type { ArenaProfile, PlayerStats } from '@/lib/types/arena';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord, formatWinRate } from '@/lib/win-rate';
 
 type TablePlayersTabProps = {
   filteredMatchCount: number;
@@ -121,7 +121,7 @@ export function TablePlayersTab({
                     </Text>
                   </View>
                   <View style={styles.winRateBlock}>
-                    <Text style={styles.playerWinRate}>{stats.winRate}%</Text>
+                    <Text style={styles.playerWinRate}>{formatWinRate(stats)}</Text>
                     <Text style={styles.winRateLabel}>{labels.winRate}</Text>
                   </View>
                   {rank === 1 ? (

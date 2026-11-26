@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatWinRate } from '@/lib/win-rate';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ManaColorPills } from '@/components/ui/mana-color-pills';
 import { colors } from '@/constants/theme';
@@ -11,6 +12,7 @@ type ColorReportSortKey = 'color' | 'appearances' | 'wins' | 'winRate';
 type ColorReportRow = {
   color: string;
   appearances: number;
+  decisiveGames: number;
   percentage: number;
   wins: number;
   winRate: number | null;
@@ -148,9 +150,10 @@ export function ManaColorReport({
       return {
         color: entry.color,
         appearances: entry.appearances,
+        decisiveGames: entry.decisiveGames,
         percentage: entry.percentage,
         wins: wonEntry?.appearances ?? 0,
-        winRate: winRateEntry?.winRate ?? null,
+        winRate: entry.decisiveGames > 0 ? winRateEntry?.winRate ?? null : null,
         isActive: entry.appearances > 0,
       };
     });
@@ -240,7 +243,7 @@ export function ManaColorReport({
               <Text style={styles.rowWinRate}>
                 {entry.winRate !== null
                   ? `${entry.winRate}%`
-                  : entry.appearances > 0 && entry.appearances < 3
+                  : entry.decisiveGames > 0 && entry.appearances < 3
                     ? labels.minThreeGames
                     : '—'}
               </Text>
@@ -290,7 +293,7 @@ export function ManaColorPairs({ pairs, language, labels }: ManaColorPairsProps)
               </View>
               <ManaColorPills colors={pair.colors} />
               <Text style={styles.pairTitle} numberOfLines={2}>{identityLabel}</Text>
-              <Text style={styles.pairStats}>{pair.winRate}%</Text>
+              <Text style={styles.pairStats}>{formatWinRate({ ...pair, gamesPlayed: pair.appearances })}</Text>
             </View>
             <Text style={styles.pairMeta}>{pair.appearances}G · {pair.wins}W</Text>
             <ColorBar value={pair.appearances} max={maxAppearances} color={pair.colors[0]} />

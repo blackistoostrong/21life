@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Presentazione di record neutrali — tranche report gruppo
+
+`packages/domain/win-rate.ts` mantiene il valore numerico storico0 quando non esiste un denominatore; `formatWinRate` mostra— per assenza di partite decisive e0% per sconfitte reali. `averageWinRate` conserva la media non pesata già mostrata, escludendo soltanto giocatori senza partite decisive. I compatibilità adapter web/Expo esportano lo stesso contratto: nessuna seconda formula nei componenti.
+
+Report giocatori, classifica mazzi e report colori/coppie del gruppo usano questa distinzione su entrambe le piattaforme. Ordinamento e soglie di campione restano numerici e invariati; righe colore prive di denominatore non mostrano né0% né un suggerimento che le tratti come sconfitte. La migrazione del valore storico e il ridisegno dei grafici sono fuori da questa correzione. I requisiti di DEV26-07 per altri consumatori restano da verificare separatamente.
+
 ## Candidato strutturale dei quattro target — 26 novembre
 
 Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo646righe non vuote. I controller possiedono risorse e comandi, i renderer compongono viste e interazioni. Il numero di righe è un vincolo di organizzazione, non la prova unica di qualità: gate, confronti AST e test dei proprietari verificano i confini. Integrazione/export aggiornati e collaudo visuale/dispositivo finale sono ancora necessari prima di dichiarare chiuso il punto6.
