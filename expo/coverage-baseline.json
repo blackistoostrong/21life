@@ -1,4 +1,10 @@
 {
+  "lib/native-live-session-journal.ts": {
+    "lines": 92,
+    "branches": 90,
+    "functions": 94,
+    "statements": 93
+  },
   "../packages/domain/live-game-round.ts": {
     "lines": 100,
     "branches": 100,

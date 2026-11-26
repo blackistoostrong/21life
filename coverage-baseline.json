@@ -1,4 +1,16 @@
 {
+  "lib/web-live-command-client.ts": {
+    "lines": 100,
+    "branches": 85,
+    "functions": 100,
+    "statements": 94
+  },
+  "lib/web-live-session-journal.ts": {
+    "lines": 88,
+    "branches": 75,
+    "functions": 91,
+    "statements": 88
+  },
   "packages/domain/live-game-round.ts": {
     "lines": 100,
     "branches": 100,

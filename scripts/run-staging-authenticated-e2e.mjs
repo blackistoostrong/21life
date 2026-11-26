@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { runNodeCommand } from './qa-command.mjs';
-import { assertStagingBackendReachable } from './staging-backend-preflight.mjs';
+import { assertStagingBackendReachable,assertStagingPreviewReachable } from './staging-backend-preflight.mjs';
 import { resolve } from 'node:path';
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
@@ -41,6 +41,10 @@ process.env.NEXT_PUBLIC_SUPABASE_URL ||= supabaseUrl;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= process.env.SUPABASE_ANON_KEY;
 if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Staging anon key is missing.');
 
+if(driver==='playwright'&&process.env.E2E_BASE_URL){
+  await assertStagingPreviewReachable(process.env.E2E_BASE_URL);
+  console.log('Staging preview preflight passed before fixture provisioning.');
+}
 await assertStagingBackendReachable(supabaseUrl, serviceRoleKey);
 console.log('Staging Auth/REST preflight passed before fixture provisioning.');
 
@@ -113,7 +117,7 @@ try {
       console.log('Staging native saved-match history verified.');
     }
   }
-  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands'])) {
+  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands', 'live game realtime'])) {
     const status = await runNodeCommand([
       resolve('node_modules/@playwright/test/cli.js'), 'test',
       'tests/e2e/public-ui.spec.ts',
@@ -153,6 +157,7 @@ try {
       'tests/e2e/native-live-connectivity.spec.ts',
       'tests/e2e/web-live-catalog.spec.ts',
       'tests/e2e/web-live-commands.spec.ts',
+      'tests/e2e/live-game-realtime.spec.ts',
       'tests/e2e/arena-match-atomic.spec.ts',
       '--grep', grep,
       '--project=desktop', '--project=mobile', '--workers=1', '--trace=off', '--max-failures=1',

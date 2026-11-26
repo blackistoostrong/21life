@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { queueLiveGameJournalWrite } from '@/lib/live-game-journal-writer';
 
 describe('native durable journal writer', () => {
-  it('serializes snapshots and reports persistence only after the write resolves', async () => {
+  it('enqueues every snapshot immediately and reports durability after earlier accepted writes resolve', async () => {
     let finish!: () => void;
     const gate = new Promise<void>(resolve => { finish = resolve; });
     const write = vi.fn(async () => undefined);
@@ -10,7 +10,7 @@ describe('native durable journal writer', () => {
     const first = queueLiveGameJournalWrite(Promise.resolve(), () => gate, onResult);
     const second = queueLiveGameJournalWrite(first,write,onResult);
     await Promise.resolve(); await Promise.resolve();
-    expect(write).not.toHaveBeenCalled(); expect(onResult).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledOnce(); expect(onResult).not.toHaveBeenCalled();
     finish(); await second;
     expect(write).toHaveBeenCalledOnce(); expect(onResult.mock.calls).toEqual([[true],[true]]);
   });

@@ -1,5 +1,49 @@
 # DEV26 — Architettura e responsabilità
 
+## Candidato strutturale dei quattro target — 26 novembre
+
+Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo646righe non vuote. I controller possiedono risorse e comandi, i renderer compongono viste e interazioni. Il numero di righe è un vincolo di organizzazione, non la prova unica di qualità: gate, confronti AST e test dei proprietari verificano i confini. Integrazione/export aggiornati e collaudo visuale/dispositivo finale sono ancora necessari prima di dichiarare chiuso il punto6.
+
+| Proprietario nativo | Crea/aggiorna/rilascia | Righe non vuote |
+| --- | --- | ---: |
+| use-native-live-setup | Draft, ripristino e proiezione catalogo per account/gruppo | Feature già verificata |
+| native-live-session-journal | Snapshot, queue/history, intenti terminali, ACK e archivio del singolo opening | 251 |
+| use-native-live-journal | Osservazione Zustand e lease della proiezione carte in focus | 36 |
+| use-native-live-session | Bootstrap, sync single-flight, timer per epoch, subscription e outbox privato; cleanup dei callback prima della rimozione | 430 |
+| use-native-live-connectivity | Listener NetInfo/AppState, singolo polling/read pendente e cleanup piattaforma | Feature già verificata |
+| use-native-live-round-commands | Validazione e lease start/end/discard/rematch; stato busy, eventi tipizzati verso la UI | 331 |
+| native-live-round-result-dialog | Presentazione controllata; nessun client/query/journal, delega soltanto il container immagine esistente | 212 |
+| native-live-screen-styles | Dichiarazioni StyleSheet della schermata e del suo dialogo, senza logica | 330 |
+| play.tsx | Composizione, controlli del tavolo, orientamento/fullscreen e timer di presentazione | 646 |
+
+Il cambio account/gruppo sostituisce epoch, journal e risorse; JWT dello stesso actor mantiene il proprietario. Queue storage serializzata per account, nessuna seconda queue nascosta nel writer. I callback vecchi non possono adottare client nuovi, aggiornare il nuovo owner o cancellarne timer. Il controller round usa i modelli pubblici di setup/sessione, il catalogo e un callback di eventi di presentazione: nessun ref bag o context privato universale.
+
+Round d54a2e79:10statement AST conservati dopo conversione dichiarata dei setter UI in eventi. Il test dei precedenti8comandi esegue ora anche il callback UI del renderer. Il dialogo e l'oggetto StyleSheet conservano il proprio AST senza cambi di condizioni, testo, ordine o valori; i test immagini/dispositivi richiesti dal PM restano separati.
+
+Verifica di modificabilità: una regola del win rate cambia nel dominio analytics condiviso e nei relativi contratti; una voce del recap cambia nel proprietario recap della piattaforma; un errore sync nel controller sessione e nella presentazione condivisa degli stati; un campo setup nel controller setup e nella sua vista. Nessuno richiede due implementazioni della regola o l'aggiunta di I/O nelle route. La stessa mappa si applica ai proprietari web descritti sotto.
+
+## Controller sessione nativa — 26 novembre
+
+`expo/hooks/use-native-live-session.ts`430righe possiede bootstrap, sincronizzazione, subscription, timer, stato rete/errori e outbox privato. Compone il journal per apertura e il controller piattaforma; la pagina1394righe riceve snapshot, conteggi e azioni. Il runtime non espone ref o array privati dei recuperi. Un singolo callback di presentazione comunica il completamento remoto; setup e comandi round restano distinti. L'estrazione7356b843 conserva34statement AST da1e842f7e dopo adattamenti dichiarati, prima dei fix successivi.
+
+I callback di scheduling verificano lo scope prima di toccare timer; la cancellazione verifica l'epoch del proprietario anche durante cleanup. Lo scarto dei recuperi conferma per CAS soltanto gli snapshot selezionati e legge il residuo dopo l'ACK storage. Archivi aggiunti/revisionati rimangono; errore e cambio account non pubblicano falsi successi. Discard e replay non partono simultaneamente e i tap doppi condividono la Promise. Il dialog resta aperto e disabilitato durante la scrittura, chiude solo su successo.
+
+La chiusura remota è un comando del journal: la sua cancellazione dello snapshot può smontare il canale prima del seguito asincrono. L'ACK può pubblicare il recap solo se lo scope è corrente e il journal ancora chiuso senza nuovo round; eventi/status del canale smontato sono sempre ignorati.9contratti dell'effetto e11azioni estratte PASS;12browser eseguono controller, React/StrictMode, Zustand, scope e vero useFocusEffect Expo, sostituendo soltanto I/O e port di piattaforma. Non è certificazione del renderer RN o dei dispositivi.
+
+## Realtime dopo creazione locale — 26 novembre
+
+Web e native derivano l'identità del canale dallo snapshot osservabile e da `needsCreate`: il passaggio da round locale a creazione confermata deve riattivare l'effetto anche a ID invariato. Dipendere dal solo ID lasciava il creatore senza subscription. Le modifiche ai punti vita non cambiano l'identità del canale. Cleanup invalida prima i callback e poi rimuove il canale; anche il completamento tardivo di refresh o chiusura storage deve controllare quel lease. Il nuovo test autenticato osserva join/ACK Phoenix senza memorizzare payload o credenziali. Sei contratti eseguono l'effetto nativo effettivo e le sue dipendenze attraverso il parser TS; non certificano il renderer RN.
+
+## Journal nativo — 26 novembre, estrazione runtime ancora in corso
+
+`expo/lib/native-live-session-journal.ts`251righe possiede snapshot, queue/history, intenti terminali, archiviazione e tracking delle scritture. Usa uno store Zustand vanilla per apertura; la dipendenza esisteva già. Nessun singleton privato, schema o versione storage nuova. `use-native-live-journal.ts`36righe osserva quel solo store; il renderer non mantiene più16stati/ref paralleli. Gli altri controller leggono snapshot e invocano azioni tipizzate.
+
+La queue account appartiene all'adapter AsyncStorage: ogni snapshot entra subito, il writer segue soltanto esito e drenaggio. Due ROSSI effettivi dimostravano remount con snapshot superato e resurrezione dopo clear. I nuovi ingressi da scope scaduto o sessione sigillata sono respinti; le scritture già accettate conservano l'actor catturato. Un lookup vuoto non elimina operazioni pendenti. Archiviazione/replacement sigillano lo stato prima dell'I/O e lo ripristinano su errore; ACK dei batch conserva append concorrenti. Il creator può ripristinare un pod composto solo da guest.
+
+La proiezione delle carte rimane sullo store per-player già esistente, con un lease opaco della schermata in focus. Il journal continua a ricevere dati mentre la route è nascosta; non può sovrascrivere il tavolo visibile. Al ritorno in focus ripubblica il proprio snapshot. Cleanup vecchi non cancellano il lease successivo.
+
+17contratti modello e2lease, precedenti8comandi/4ordinamento e qualityExpo646+3skip/140floor PASS; root868+7skip/75script/149floor PASS.42browser React/SDK consolidati PASS, inclusi6nuovi con il vero hook Expo useFocusEffect e port di navigazione/storage/crypto controllati. A→B→A, gruppo, focus sovrapposto, JWT e unmount verificati separatamente dal rendererRN/dispositivo, rinviato dal PM. Pagina1676righe: bootstrap/sync e comandi sono ancora da estrarre; build/export e integrazione della tranche ancora richiesti.
+
 ## Proprietari runtime live web — 26 novembre, verificato
 
 Tranche verificata fd37f487: build pulito56route3.25/18MiB; quality868+7skip/75script/149floor,7contratti journal,6browser React/StrictMode e24autenticati desktop/mobile PASS.2match per2flussi finalizzati, cleanup Dev verificati. Il resto del codice Expo/packages è identico aDev0093bb65; nessun export/APK/migrazione. Confronto sullo stesso Dev: renderer1213→658righe, senza comprimere la presentazione. Profilo529 e tavolo713 sono già sotto800; native1948 resta da chiudere. Il collaudo immagini/dispositivi è separato e rinviato dal PM. Questa verifica completa la nota di build/browser pendenti sotto.
