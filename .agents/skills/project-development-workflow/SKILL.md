@@ -122,6 +122,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 - Native rematch: `expo/hooks/use-native-live-rematch.ts` owns recap opening, scoped reference validation and cancellation. Shared reference policy/read protocol live in packages/domain and packages/data; local SDK adapters preserve each platform SDK. Renderers receive actions only.
 
+- Local table presets foundation: packages/domain/table-presets owns pure DTO/policies; lib/table-preset-codec reuses existing Zod through an Expo codec adapter. packages/data/table-preset-storage owns keyed accepted-operation ordering and fresh CRUD; platform adapters supply localStorage/Web Locks or AsyncStorage and identity/clock. Controllers/UI are not yet wired.
+
 ## Persistent checklist
 
 Native offline storage: `expo/lib/live-game-offline.ts` owns v3 account/group journal and per-account outbox keys, actor/version envelopes, shadow copies, durable tombstones and per-account I/O serialization. Every native caller passes the captured actor. Legacy creator-only migration retains v2 originals and prevents replay after scoped clear. Storage isolation is verified separately from in-flight sync and UI lifecycle, which remain open.

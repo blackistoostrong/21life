@@ -1,5 +1,8 @@
 # Checklist obbligatoria prima di compilare o distribuire
 
+- [ ] Prima dei guard merge salvare stato/draft/head/mergeable effettivi e ref branch indipendente; il solo base.sha del PR non prova il ref corrente. Se il guard fallisce, riportare il predicato e fare readback prima di ogni retry: nessuna PUT da stato presunto.
+
+
 - [ ] Collaudi con E2E_BASE_URL: verificare preview login200HTML prima di creare utenze; una preview scaduta non è un ROSSO del prodotto. Il runner rifiuta host produzione e controlla raggiungibilità prima del preflight backend e provisioning. Per realtime verificare esplicitamente join/ACK del round creato localmente: il solo badge Synced non certifica una sottoscrizione attiva.
 
 - [ ] Build locale Windows: prima di spostare .next, identificare e fermare esclusivamente il preview del checkout, poi verificare che il processo sia terminato. process.kill invia l'arresto ma non ne attende il completamento;26Nov renameEPERM ha fermato correttamente la compilazione prima del build. Non cancellare ricorsivamente cache o fermare processi non identificati.

@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Preset locali: fondazione
+
+`packages/domain/table-presets.ts` definisce DTO e policy di collezione senza dipendenze esterne. `lib/table-preset-codec.ts` riusa Zod4.6.7 già installato per il documento strict; l’adapter Expo riusa lo stesso codec senza esportare schema/istanze di libreria. I gate domain/data rimangono invariati.
+
+`packages/data/table-preset-storage.ts` possiede la coda immediata per chiave account/gruppo e i comandi read/modify/write, con storage/codec/clock ricevuti da port tipizzati. Gli adapter `lib/table-presets.ts` ed `expo/lib/table-presets.ts` usano rispettivamente localStorage con lock cross-tab e AsyncStorage. Nessuna lista di dati privati viene memorizzata nel singleton: solo promise di operazioni accettate, rimosse a completamento. Codec invalido/futuro non diventa una collezione vuota e nessun comando lo sovrascrive. La fondazione non avvia partite o crea mazzi; controller e UI devono ancora essere collegati.
+
 ## Rivincita: riferimenti e apertura del recap
 
 `packages/domain/live-game-reference-validation.ts` riconcilia soltanto posti/mazzi richiesti, senza sostituzioni automatiche. `packages/data/live-game-round-references.ts` verifica membership e legge gli ID puntuali con un unico budget15s; i due adapter SDK locali condividono protocollo e colonne. Un catalogo limitato non prova che un mazzo sia stato eliminato. Policy archive esplicita: rivincita ordinaria compatibile col picker arena; preset futuri richiedono riferimenti attivi.
