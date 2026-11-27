@@ -29,12 +29,13 @@ test.beforeAll(async()=>{
  const outputs=Array.isArray(result)?result:[result];if(outputs.length!==1||!('output'in outputs[0]))throw Error('Unexpected bundle');
  bundle=outputs[0].output.filter(item=>item.type==='chunk').map(item=>item.code).join('\n');
 });
-async function open(page:Page,options:{missing?:boolean;hold?:boolean}={}){
+async function open(page:Page,options:{missing?:boolean;hold?:boolean;busy?:boolean}={}){
  let release:()=>void=()=>{};let lookups=0;let aborted=0;const pending=new Promise<void>(resolve=>{release=resolve;});
  page.on('requestfailed',request=>{if(new URL(request.url()).pathname.endsWith('/groups'))aborted++;});
  await page.route('**/rest/v1/**',async(route:Route)=>{
   const url=new URL(route.request().url());const table=url.pathname.split('/').at(-1)!;
   let data:unknown=[];
+  if(table==='live_game_participants'&&options.busy)data=[{participant_key:'user:alice'}];
   if(table==='groups'){
    lookups++;if(options.hold)await pending;
    data=[{id:'group',group_members:[{user_id:'alice',profiles:{id:'alice',username:'alice',display_name:'Alice now'}}]}];
@@ -76,4 +77,10 @@ test('web offline rematch starts from its scoped historical metadata without rea
  const probe=await open(page);await page.evaluate(()=>{window.rematchHarness.render('alice',false);window.rematchHarness.start();});
  await expect.poll(()=>page.evaluate(()=>window.rematchHarness.stats().syncs)).toBe(1);expect(probe.lookups()).toBe(0);
  expect((await page.evaluate(()=>window.rematchHarness.stats())).record?.state.players[0].commander).toBe('A before');
+});
+
+test('web rematch returns to setup when a participant is busy in another round',async({page})=>{
+ await open(page,{busy:true});await page.evaluate(()=>window.rematchHarness.start());
+ await expect(page.getByTestId('rematch-state')).toContainText('"open":false');
+ expect(await page.evaluate(()=>window.rematchHarness.stats())).toMatchObject({writes:0,syncs:0,record:null});
 });

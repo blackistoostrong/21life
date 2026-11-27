@@ -110,8 +110,11 @@ export function useWebLiveRoundCommands(groupId: string, userId: string, { setup
                 const busy = await fetchBusyLiveGameParticipantKeys(client, groupId, keys,
                     previous?{excludeLiveGameId:previous.id,signal:controller.signal}:undefined);
                 if (!active())return;
-                if (busy.length)
+                if (busy.length) {
+                    if(previous)onSetupRequired({playerCount:nextPlayerCount,layoutVariant:nextLayoutVariant,
+                        startingLife:nextStartingLife,seats:nextSeats});
                     throw new Error(copy({ it: 'Uno dei giocatori è già in una partita attiva.', en: 'A player is already in another active game.' }));
+                }
                 if(previous){
                     for(let attempt=0;attempt<2;attempt++){
                         const stamp=liveGameReferenceStamp(selected,participantsRef.current);
