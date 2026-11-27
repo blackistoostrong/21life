@@ -12,7 +12,7 @@ import { BracketBadge } from '@/components/deck/bracket-badge';
 import { EdhrecBadge } from '@/components/deck/edhrec-badge';
 import { isProvisionalDeckRanking } from '@/lib/deck-ranking-visibility';
 import { Swords, Trophy } from 'lucide-react';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord, formatWinRate } from '@/lib/win-rate';
 
 type Props = { status: Omit<ArenaDataStatusProps, 'children'>;
   deckStats: DeckPerformanceStats[]; visibleDeckStats: DeckPerformanceStats[];
@@ -112,7 +112,7 @@ export function ArenaDeckRankingsPanel({ status, deckStats, visibleDeckStats, de
                             <div className="flex shrink-0 items-center justify-between gap-2 sm:block sm:text-right">
                               <p className="text-xs text-muted-foreground sm:hidden">{t({ it: 'win rate', en: 'win rate' })}</p>
                               <div>
-                                <p className="text-2xl font-bold text-emerald-400">{deck.winRate}%</p>
+                                <p className="text-2xl font-bold text-emerald-400">{formatWinRate(deck)}</p>
                                 <p className="hidden text-xs text-muted-foreground sm:block">{t({ it: 'win rate', en: 'win rate' })}</p>
                               </div>
                             </div>

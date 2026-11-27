@@ -6,6 +6,7 @@ import { MANA_CHART_COLORS, MANA_COLOR_LABELS, MANA_COLOR_ORDER } from '@/lib/ma
 import { useLanguage } from '@/components/language-provider';
 import { ManaColorBadge } from '@/components/ui/mana-color-pills';
 import type { ArenaColorPairStat, ArenaColorStat } from '@/lib/arena-color-analytics';
+import { formatWinRate } from '@/lib/win-rate';
 
 type ColorReportSortKey = 'color' | 'appearances' | 'wins' | 'winRate';
 type ColorReportSortDirection = 'asc' | 'desc';
@@ -13,6 +14,7 @@ type ColorReportSortDirection = 'asc' | 'desc';
 interface ColorReportRow {
   color: string;
   appearances: number;
+  decisiveGames: number;
   percentage: number;
   wins: number;
   winRate: number | null;
@@ -163,9 +165,10 @@ export function ManaColorReport({
       return {
         color: entry.color,
         appearances: entry.appearances,
+        decisiveGames: entry.decisiveGames,
         percentage: entry.percentage,
         wins: wonEntry?.appearances ?? 0,
-        winRate: winRateEntry?.winRate ?? null,
+        winRate: entry.decisiveGames > 0 ? winRateEntry?.winRate ?? null : null,
         isActive: entry.appearances > 0,
       };
     });
@@ -333,7 +336,7 @@ export function ManaColorReport({
                   <span className="font-medium tabular-nums text-foreground">{entry.winRate}%</span>
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    {entry.appearances > 0 && entry.appearances < 3
+                    {entry.decisiveGames > 0 && entry.appearances < 3
                       ? t({ it: 'min. 3 partite', en: 'min. 3 games' })
                       : '—'}
                   </span>
@@ -397,7 +400,7 @@ export function ManaColorPairs({ pairs, emptyLabel }: ManaColorPairsProps) {
               </span>
             </div>
             <div className="flex shrink-0 items-center justify-between gap-3 text-sm tabular-nums sm:block sm:text-right">
-              <span className="font-semibold text-foreground">{pair.winRate}%</span>
+              <span className="font-semibold text-foreground">{formatWinRate({ ...pair, gamesPlayed: pair.appearances })}</span>
               <span className="text-muted-foreground sm:ml-2">
                 {pair.appearances}G · {pair.wins}W
               </span>

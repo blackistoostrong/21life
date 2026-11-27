@@ -11,7 +11,7 @@ import {
   filterDeckRankings,
   isProvisionalDeckRanking,
 } from '@/lib/deck-ranking-visibility';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord, formatWinRate } from '@/lib/win-rate';
 
 type TableDecksTabProps = {
   commanderStats: CommanderStats[];
@@ -80,7 +80,7 @@ export function TableDecksTab({ commanderStats, labels }: TableDecksTabProps) {
             badge={index + 1}
             gamesPlayed={deck.gamesPlayed}
             wins={deck.wins}
-            trailing={<Text style={styles.deckWinRate}>{deck.winRate}%</Text>}
+            trailing={<Text style={styles.deckWinRate}>{formatWinRate(deck)}</Text>}
           />
         ))}
         {visibleDecks.length === 0 ? <Text style={styles.emptyFiltered}>{labels.noRankedDecks}</Text> : null}

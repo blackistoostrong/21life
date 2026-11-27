@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { type ArenaGuest } from '@/lib/arena-participants';
 import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
 import { Users, Trophy, Trash2, User, TrendingUp, Medal, BarChart3 } from 'lucide-react';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { averageWinRate, formatMatchRecord, formatWinRate } from '@/lib/win-rate';
 
 type Props = { status: Omit<ArenaDataStatusProps, 'children'>; playerStats: PlayerStats[];
   playerRanksByIndex: number[]; totalMatches: number | undefined;
@@ -49,6 +49,7 @@ function PlayerGuestDeleteButton({
 /** Presentation only; report availability never gates membership management. */
 export function ArenaPlayerReport({ status, playerStats, playerRanksByIndex, totalMatches, guests, canManageGroup, guestDeletion }: Props) {
   const { copy: t } = useLanguage();
+  const averageRate = averageWinRate(playerStats);
   const { deletingGuestIds, handleDeleteGuest } = guestDeletion;
   return <ArenaDataStatus loading={status.loading} error={status.error}
                 onRetry={status.onRetry}>
@@ -72,7 +73,7 @@ export function ArenaPlayerReport({ status, playerStats, playerRanksByIndex, tot
                         <span className="text-sm font-medium">{t({ it: 'Miglior giocatore', en: 'Top Player' })}</span>
                       </div>
                       <p className="text-2xl font-bold text-foreground">{playerStats[0]?.displayName || '-'}</p>
-                      <p className="text-sm text-muted-foreground">{playerStats[0]?.winRate}% {t({ it: 'win rate', en: 'win rate' })}</p>
+                      <p className="text-sm text-muted-foreground">{formatWinRate(playerStats[0])} {t({ it: 'win rate', en: 'win rate' })}</p>
                     </CardContent>
                   </Card>
                   <Card className="bg-card/50 border-border">
@@ -102,9 +103,9 @@ export function ArenaPlayerReport({ status, playerStats, playerRanksByIndex, tot
                         <span className="text-sm font-medium">{t({ it: 'Win rate medio', en: 'Avg Win Rate' })}</span>
                       </div>
                       <p className="text-2xl font-bold text-foreground">
-                        {Math.round(playerStats.reduce((a, b) => a + b.winRate, 0) / playerStats.length)}%
+                        {averageRate === null ? '—' : `${averageRate}%`}
                       </p>
-                      <p className="text-sm text-muted-foreground">{t({ it: 'su tutti i giocatori', en: 'across all players' })}</p>
+                      <p className="text-sm text-muted-foreground">{t({ it: 'sui giocatori con partite decisive', en: 'across players with decisive games' })}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -155,7 +156,7 @@ export function ArenaPlayerReport({ status, playerStats, playerRanksByIndex, tot
                           </div>
                           <div className="flex items-center gap-2 sm:justify-end">
                             <div className="text-left sm:text-right">
-                              <p className="text-2xl font-bold text-emerald-400">{player.winRate}%</p>
+                              <p className="text-2xl font-bold text-emerald-400">{formatWinRate(player)}</p>
                               <p className="text-xs text-muted-foreground">{t({ it: 'win rate', en: 'win rate' })}</p>
                             </div>
                             {canManageGroup && player.isGuest && (

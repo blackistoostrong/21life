@@ -117,7 +117,7 @@ try {
       console.log('Staging native saved-match history verified.');
     }
   }
-  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands', 'live game realtime'])) {
+  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands', 'live game realtime', 'arena report'])) {
     const status = await runNodeCommand([
       resolve('node_modules/@playwright/test/cli.js'), 'test',
       'tests/e2e/public-ui.spec.ts',

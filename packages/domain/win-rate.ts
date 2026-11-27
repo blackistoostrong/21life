@@ -66,6 +66,20 @@ export function winRate(wins: number, gamesPlayed: number, draws = 0) {
   return buildMatchRecord({ gamesPlayed, wins, draws }).winRate;
 }
 
+/** A neutral record has no percentage; the historic numeric value stays zero. */
+export function formatWinRate(record: MatchRecordCounts): string {
+  const result = buildMatchRecord(record);
+  return result.decisiveGames > 0 ? `${result.winRate}%` : '—';
+}
+
+/** Preserve the unweighted player mean, excluding records without a denominator. */
+export function averageWinRate(records: readonly MatchRecordCounts[]): number | null {
+  const rated = records.map(buildMatchRecord).filter(record => record.decisiveGames > 0);
+  return rated.length > 0
+    ? Math.round(rated.reduce((total, record) => total + record.winRate, 0) / rated.length)
+    : null;
+}
+
 /** Compact record, e.g. `6W-2L-2P`. */
 export function formatMatchRecord(
   record: MatchRecord,
