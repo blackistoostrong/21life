@@ -8,7 +8,7 @@
 
 ## Presentazione personale e archiviata
 
-Dashboard, schede profilo/mazzo, dettagli e stagioni archiviate web/Expo consumano `formatWinRate` dal dominio comune. Lo snapshot profilo conserva il MatchRecord completo del builder, compreso il valore numerico storico; la neutralità appartiene alla presentazione. I grafici conservano valori, settori e dimensioni: una label opzionale distingue il testo visibile/accessibile dal numero che disegna il grafico. Nessuna nuova query o regola di ordinamento. Vista pubblica e testi share restano da completare separatamente.
+Dashboard, schede profilo/mazzo, dettagli e stagioni archiviate web/Expo consumano `formatWinRate` dal dominio comune. Lo snapshot profilo conserva il MatchRecord completo del builder, compreso il valore numerico storico; la neutralità appartiene alla presentazione. I grafici conservano valori, settori e dimensioni: una label opzionale distingue il testo visibile/accessibile dal numero che disegna il grafico. Nessuna nuova query o regola di ordinamento. Vista pubblica web/Expo e testo share usano ora lo stesso formatter. Per i colori pubblici, `formatWinRateSummary` consuma percentuale e denominatore già presenti nel payload, senza introdurre campi API o ricostruire il numeratore. La percentuale numerica storica rimane invariata.
 
 ## Presentazione di record neutrali — tranche report gruppo
 
