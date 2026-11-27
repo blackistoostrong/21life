@@ -15,7 +15,7 @@ import { getDeckDisplayColors } from '@/lib/deck-metadata';
 import { isImportedDeckSource } from '@/lib/deck-importers';
 import { getDeckMastery } from '@/lib/deck-mastery';
 import { getProfileDisplayName } from '@/lib/profile-display';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord,formatWinRate } from '@/lib/win-rate';
 import type { ProfileDeck } from '@/lib/types/profile-deck';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
 
@@ -59,7 +59,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
         className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200"
       >
         <Trophy className="h-3 w-3" />
-        {stats.winRate}%
+        {formatWinRate(stats)}
         <span className="opacity-75">· {formatMatchRecord(stats)}</span>
       </span>
     );
@@ -133,7 +133,7 @@ export function ProfileDeckGrid({ filteredDecks, deckPerformance, deckWinRates, 
                 <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-7">
                   {!metricsLoading && !metricsError ? <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} /> : null}
                   <div className="min-w-[4.75rem] text-center">
-                    <p className="text-2xl font-black text-white">{performance?.winRate ?? 0}%</p>
+                    <p className="text-2xl font-black text-white">{metricsLoading || metricsError ? '—' : formatWinRate(performance??{gamesPlayed:0,wins:0})}</p>
                     <p className="text-xs text-white/60">Win rate</p>
                   </div>
                 </div>

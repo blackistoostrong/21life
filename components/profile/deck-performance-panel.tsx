@@ -3,6 +3,7 @@
 import { BarChart3, Crosshair, Shield, Skull, Swords } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useLanguage } from '@/components/language-provider';
+import {formatWinRate} from '@/lib/win-rate';
 import { formatGameDuration } from '@/lib/live-game-duration';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
 
@@ -18,14 +19,15 @@ export function DeckPerformancePanel({ performance }: { performance: DeckPerform
   const draws = performance?.draws ?? 0;
   const losses = performance?.losses ?? 0;
   const winRate = performance?.winRate ?? 0;
+  const valueLabel=formatWinRate({gamesPlayed,wins,draws});
   return <>
                   <section>
                     <h3 className="mb-3 flex items-center gap-2 font-semibold text-foreground"><BarChart3 className="h-4 w-4 text-emerald-300" />{t({ it: 'Impronta del mazzo', en: 'Deck fingerprint' })}</h3>
                     <div className="grid gap-3 rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-background/35 to-cyan-500/5 p-4 sm:grid-cols-[9rem_1fr]">
                       <div className="flex flex-col items-center justify-center">
-                        <DeckOutcomeChart wins={wins} draws={draws} losses={losses} winRate={winRate}
-                          label={t({ it: `Vittorie ${wins}, patte ${draws}, sconfitte ${losses}. Win rate ${winRate}%.`,
-                            en: `Wins ${wins}, draws ${draws}, losses ${losses}. Win rate ${winRate}%.` })} />
+                        <DeckOutcomeChart wins={wins} draws={draws} losses={losses} winRate={winRate} valueLabel={valueLabel}
+                          label={t({ it: `Vittorie ${wins}, patte ${draws}, sconfitte ${losses}. Win rate ${valueLabel}.`,
+                            en: `Wins ${wins}, draws ${draws}, losses ${losses}. Win rate ${valueLabel}.` })} />
                         <p className="mt-2 text-xs text-muted-foreground">{gamesPlayed} {t({ it: 'partite', en: 'games' })}</p>
                       </div>
                       <div className="space-y-3 self-center">

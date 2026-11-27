@@ -49,7 +49,7 @@ import {
   ServerCog,
 } from 'lucide-react';
 import Link from 'next/link';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord,formatWinRate } from '@/lib/win-rate';
 
 interface Group {
   id: string;
@@ -491,7 +491,7 @@ export default function DashboardPage() {
             <dl>
               {[
                 { label: t({ it: 'Partite', en: 'Games' }), value: personalAnalytics.gamesPlayed },
-                { label: t({ it: 'Win rate', en: 'Win rate' }), value: `${personalAnalytics.winRate}%` },
+                { label: t({ it: 'Win rate', en: 'Win rate' }), value: formatWinRate(personalAnalytics) },
                 { label: t({ it: 'Mazzi', en: 'Decks' }), value: personalAnalytics.uniqueDecks },
                 { label: t({ it: 'Vittorie', en: 'Wins' }), value: personalAnalytics.wins },
                 { label: t({ it: 'Streak attuale', en: 'Current streak' }), value: `${personalAnalytics.currentWinStreak}W` },
@@ -582,7 +582,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="ml-auto shrink-0 text-right text-sm sm:hidden">
                             <p className="font-semibold text-foreground">{formatMatchRecord(deck)}</p>
-                            <p className="text-xs text-muted-foreground">{deck.winRate}% {t({ it: 'win', en: 'win' })}</p>
+                            <p className="text-xs text-muted-foreground">{formatWinRate(deck)} {t({ it: 'win', en: 'win' })}</p>
                           </div>
                         </div>
                         <div className="hidden min-w-0 sm:block">
@@ -599,7 +599,7 @@ export default function DashboardPage() {
                         <ManaColorPills colors={deck.colors} size="xs" gap="tight" className="sm:hidden" />
                         <div className="hidden text-right sm:block">
                           <p className="text-sm font-semibold text-foreground">{formatMatchRecord(deck)}</p>
-                          <p className="text-xs text-muted-foreground">{deck.winRate}% {t({ it: 'win', en: 'win' })}</p>
+                          <p className="text-xs text-muted-foreground">{formatWinRate(deck)} {t({ it: 'win', en: 'win' })}</p>
                         </div>
                       </div>
                     ))}
@@ -634,7 +634,7 @@ export default function DashboardPage() {
                     <CardContent className="p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{t({ it: 'Win rate', en: 'Win rate' })}</p>
                       <p className="mt-1 text-2xl font-bold text-foreground">
-                        {personalAnalytics.winRate}%
+                        {formatWinRate(personalAnalytics)}
                       </p>
                     </CardContent>
                   </Card>
@@ -685,7 +685,7 @@ export default function DashboardPage() {
                             {formatMatchRecord(personalAnalytics.bestDeck)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {personalAnalytics.bestDeck.winRate}% {t({ it: 'win', en: 'win' })}
+                            {formatWinRate(personalAnalytics.bestDeck)} {t({ it: 'win', en: 'win' })}
                           </p>
                         </div>
                       </div>
@@ -713,7 +713,7 @@ export default function DashboardPage() {
                                     {t({ it: label.it, en: label.en })}
                                   </span>
                                 </span>
-                                <span className="text-muted-foreground">{stat.wins}W · {stat.winRate}%</span>
+                                <span className="text-muted-foreground">{stat.wins}W · {formatWinRate(stat)}</span>
                               </div>
                               <div className="h-2 overflow-hidden rounded-full bg-secondary">
                                 <div className="h-full rounded-full bg-emerald-400/90" style={{ width: `${stat.winRate}%` }} />

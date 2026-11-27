@@ -11,7 +11,7 @@ import {
   type ArenaSeasonArchive,
 } from '@/lib/arena-seasons';
 import { PhyrexianPanel } from '@/components/ui/phyrexian-panel';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord,formatWinRate } from '@/lib/win-rate';
 
 type RankingView = 'players' | 'decks';
 
@@ -117,7 +117,7 @@ export function PreviousSeasonsPanel({ archives }: { archives: ArenaSeasonArchiv
                       {subtitle ? <Text numberOfLines={1} style={styles.rowSubtitle}>{subtitle}</Text> : null}
                     </View>
                     <View style={styles.record}>
-                      <Text style={styles.rate}>{record.winRate}%</Text>
+                      <Text style={styles.rate}>{formatWinRate(record)}</Text>
                       <Text style={styles.wl}>{formatMatchRecord(record)}</Text>
                     </View>
                   </View>
