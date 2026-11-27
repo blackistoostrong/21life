@@ -68,8 +68,12 @@ export function winRate(wins: number, gamesPlayed: number, draws = 0) {
 
 /** A neutral record has no percentage; the historic numeric value stays zero. */
 export function formatWinRate(record: MatchRecordCounts): string {
-  const result = buildMatchRecord(record);
-  return result.decisiveGames > 0 ? `${result.winRate}%` : '—';
+  return formatWinRateSummary(buildMatchRecord(record));
+}
+
+/** Format an already computed rate when the payload carries its denominator. */
+export function formatWinRateSummary(record: Pick<MatchRecord, 'decisiveGames' | 'winRate'>): string {
+  return record.decisiveGames > 0 ? `${record.winRate}%` : '—';
 }
 
 /** Preserve the unweighted player mean, excluding records without a denominator. */

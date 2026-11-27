@@ -8,7 +8,7 @@
 
 ## Presentazione personale e archiviata
 
-Dashboard, schede profilo/mazzo, dettagli e stagioni archiviate web/Expo consumano `formatWinRate` dal dominio comune. Lo snapshot profilo conserva il MatchRecord completo del builder, compreso il valore numerico storico; la neutralità appartiene alla presentazione. I grafici conservano valori, settori e dimensioni: una label opzionale distingue il testo visibile/accessibile dal numero che disegna il grafico. Nessuna nuova query o regola di ordinamento. Vista pubblica e testi share restano da completare separatamente.
+Dashboard, schede profilo/mazzo, dettagli e stagioni archiviate web/Expo consumano `formatWinRate` dal dominio comune. Lo snapshot profilo conserva il MatchRecord completo del builder, compreso il valore numerico storico; la neutralità appartiene alla presentazione. I grafici conservano valori, settori e dimensioni: una label opzionale distingue il testo visibile/accessibile dal numero che disegna il grafico. Nessuna nuova query o regola di ordinamento. Vista pubblica web/Expo e testo share usano ora lo stesso formatter. Per i colori pubblici, `formatWinRateSummary` consuma percentuale e denominatore già presenti nel payload, senza introdurre campi API o ricostruire il numeratore. La percentuale numerica storica rimane invariata.
 
 ## Presentazione di record neutrali — tranche report gruppo
 
@@ -28,7 +28,7 @@ Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo648r
 | use-native-live-session | Bootstrap, sync single-flight, timer per epoch, subscription e outbox privato; cleanup dei callback prima della rimozione | 430 |
 | use-native-live-connectivity | Listener NetInfo/AppState, singolo polling/read pendente e cleanup piattaforma | Feature già verificata |
 | use-native-live-round-commands | Validazione e lease start/end/discard; compone rivincita, stato busy ed eventi tipizzati verso la UI | 287 |
-| use-native-live-rematch | Apertura recap, riferimenti correnti e cancellazione scoped prima della partenza | 123 |
+| use-native-live-rematch | Apertura recap, riferimenti correnti e cancellazione scoped prima della partenza | 194 |
 | native-live-round-result-dialog | Presentazione controllata; nessun client/query/journal, delega soltanto il container immagine esistente | 212 |
 | native-live-screen-styles | Dichiarazioni StyleSheet della schermata e del suo dialogo, senza logica | 330 |
 | play.tsx | Composizione, controlli del tavolo, orientamento/fullscreen e timer di presentazione | 648 |

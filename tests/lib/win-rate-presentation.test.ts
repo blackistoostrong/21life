@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {averageWinRate,buildMatchRecord,formatWinRate} from '@/lib/win-rate';
+import {averageWinRate,buildMatchRecord,formatWinRate,formatWinRateSummary} from '@/lib/win-rate';
 
 it.each([
  [{gamesPlayed:0,wins:0,draws:0},'—'],
@@ -23,4 +23,13 @@ it('does not lower a player mean by counting a draw-only player as zero percent'
 });
 it('keeps the existing unweighted mean rather than substituting a pooled percentage',()=>{
  expect(averageWinRate([{gamesPlayed:10,wins:1},{gamesPlayed:1,wins:1}])).toBe(55);
+});
+
+it.each([
+ [{decisiveGames:0,winRate:0},'—'],
+ [{decisiveGames:1,winRate:0},'0%'],
+ [{decisiveGames:2,winRate:50},'50%'],
+ [{decisiveGames:11,winRate:55},'55%'],
+])('formats an already computed summary without inventing its numerator: %j',(record,label)=>{
+ expect(formatWinRateSummary(record)).toBe(label);
 });
