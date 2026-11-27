@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'lib/live-game-reference-reader.ts',
     'hooks/use-web-live-round-commands.ts',
     'hooks/use-web-live-session.ts',
     'hooks/use-web-live-journal.ts', 'lib/web-live-session-journal.ts',
@@ -42,6 +43,7 @@ export const featureOwners = {
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
+    'expo/lib/live-game-reference-reader.ts',
     'expo/hooks/use-native-live-round-commands.ts',
     'expo/hooks/use-native-live-session.ts',
     'expo/hooks/use-native-live-journal.ts', 'expo/lib/native-live-session-journal.ts', 'expo/stores/live-game-runtime-store.ts',
