@@ -6,6 +6,10 @@
 
 `use-native-live-rematch` possiede richiesta abortibile, apertura del recap e comando scoped; il controller round lo compone tramite modelli pubblici. Il corrispondente owner web resta `use-web-live-round-commands`. Cambio account/gruppo, chiusura e unmount invalidano i risultati tardivi; la propria chiusura dopo una partenza accettata conserva persistenza/sync. Busy lookup esclude soltanto il round precedente. Offline conserva metadati scoped del recap; letture malformate non diventano una partenza offline. Nessuna cache/query duplicata nei renderer.
 
+## Presentazione personale e archiviata
+
+Dashboard, schede profilo/mazzo, dettagli e stagioni archiviate web/Expo consumano `formatWinRate` dal dominio comune. Lo snapshot profilo conserva il MatchRecord completo del builder, compreso il valore numerico storico; la neutralità appartiene alla presentazione. I grafici conservano valori, settori e dimensioni: una label opzionale distingue il testo visibile/accessibile dal numero che disegna il grafico. Nessuna nuova query o regola di ordinamento. Vista pubblica e testi share restano da completare separatamente.
+
 ## Presentazione di record neutrali — tranche report gruppo
 
 `packages/domain/win-rate.ts` mantiene il valore numerico storico0 quando non esiste un denominatore; `formatWinRate` mostra— per assenza di partite decisive e0% per sconfitte reali. `averageWinRate` conserva la media non pesata già mostrata, escludendo soltanto giocatori senza partite decisive. I compatibilità adapter web/Expo esportano lo stesso contratto: nessuna seconda formula nei componenti.

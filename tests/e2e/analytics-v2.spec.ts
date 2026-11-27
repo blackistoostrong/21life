@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { analyticsDashboardFixture } from '../fixtures/analytics-dashboard';
 import { fixtureLogin } from './fixture-login';
 import { profileCatalogFixture } from '../fixtures/profile-catalog';
+import {parseProfileCatalogMetrics} from '../../packages/domain/profile-catalog-metrics';
 
 test('analytics v2 refuses incomplete data and retries without a facts fallback',async({ page })=>{
   test.skip(process.env.E2E_ANALYTICS_FLOW !== '1','Requires a disposable authenticated backend.');
@@ -322,10 +323,10 @@ for(const outcome of ['empty','draw-only','losses'] as const){
   await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
    const report=profileCatalogFixture();report.userId=userId;
    Object.assign(report.decks[0],{deck_id:deckId,games_played:games,wins:0,draws,tracked_games:0,second_places:0,
-    mastery_points:0,damage_dealt:0,damage_taken:0,life_gained:0,commander_damage:0,infect_dealt:0,eliminations:0,
+    mastery_points:games,damage_dealt:0,damage_taken:0,life_gained:0,commander_damage:0,infect_dealt:0,eliminations:0,
     group_damage_dealt:0,group_damage_events:0,median_winning_duration_seconds:null,
     first_eliminations:0,comeback_wins:0,combo_wins:0,alternate_wins:0});
-   if(!games){report.total=0;report.decks=[];}
+   parseProfileCatalogMetrics(report);
    return route.fulfill({json:report});
   });
   await fixtureLogin(page);
@@ -337,6 +338,8 @@ for(const outcome of ['empty','draw-only','losses'] as const){
   }else await expect(page.getByRole('heading',{name:'No personal data yet',exact:true})).toBeVisible();
   await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
   const player=page.getByRole('region',{name:'Your player card'});
+  await expect(player.getByText(String(games),{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('alert').filter({hasText:'Statistics unavailable.'})).toHaveCount(0);
   await expect(player.getByText(label,{exact:true}).first()).toBeVisible();
   const deck=page.locator('[data-web-card]').filter({has:page.getByRole('heading',{name:'Neutral presentation fixture',exact:true})});
   await expect(deck.getByText(label,{exact:true}).first()).toBeVisible();
