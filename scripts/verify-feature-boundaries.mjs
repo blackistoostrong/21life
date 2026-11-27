@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 export const featureOwners = {
   web: [
     'lib/arena-recap-period.ts',
+    'lib/arena-recap.ts',
     'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
     'lib/table-preset-codec.ts',
     'lib/table-presets.ts',
@@ -50,6 +51,7 @@ export const featureOwners = {
   ],
   native: [
     'expo/lib/arena-recap-period.ts',
+    'expo/lib/arena-recap.ts',
     'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
     'expo/lib/table-preset-codec.ts',
     'expo/lib/table-presets.ts',
