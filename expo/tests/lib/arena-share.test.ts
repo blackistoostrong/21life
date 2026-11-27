@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildArenaShareText } from '@/lib/arena-share';
+import {buildMatchRecord} from '@/lib/win-rate';
 
 const labels = {
   arenaStatsTitle: 'Arena Stats', period: 'Period', totalMatches: 'Matches',
@@ -52,4 +53,18 @@ describe('arena share', () => {
 it('does not invent a date for undated historical matches',()=>{
   const text=buildArenaShareText({arenaName:'Group',periodLabel:'All',totalMatches:1,topPlayers:[],topDecks:[],topColors:[],recentMatches:[{playedAt:null,winnerName:'Draw',participants:[]}]},labels);
   expect(text).toContain('—');expect(text).not.toContain('1970');
+});
+
+it.each([
+ [{gamesPlayed:3,wins:0,draws:3},'—','0W-0L-3D'],
+ [{gamesPlayed:3,wins:0,draws:0},'0%','0W-3L-0D'],
+ [{gamesPlayed:3,wins:1,draws:1},'50%','1W-1L-1D'],
+] as const)('share text preserves the meaning of %j without sending anything',(counts,label,record)=>{
+ const stats=buildMatchRecord(counts);
+ const text=buildArenaShareText({arenaName:'Group',periodLabel:'All',totalMatches:3,
+  topPlayers:[{...stats,displayName:'Player'}],topDecks:[{...stats,commander:'Commander'}],
+  topColors:[],recentMatches:[]},labels);
+ expect(text).toContain(`Player - ${label} (${record})`);
+ expect(text).toContain(`Commander - ${label} (${record})`);
+ if(!stats.decisiveGames)expect(text).not.toContain('0%');
 });

@@ -15,7 +15,7 @@ import { ArrowLeft, CalendarDays, Copy, Link2, Palette, Swords, Trophy, Users } 
 import { useToast } from '@/hooks/use-toast';
 import { formatArenaSeasonDate, formatArenaSeasonLabel } from '@/lib/arena-seasons';
 import type { ArenaColorAnalytics } from '@/lib/arena-color-analytics';
-import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord, formatWinRate, formatWinRateSummary, type MatchRecord } from '@/lib/win-rate';
 
 import { format } from 'date-fns';
 
@@ -47,6 +47,7 @@ interface PublicArenaResponse {
     gamesPlayed: number;
     percentage: number;
     winRate: number;
+    decisiveGames: number;
   }>;
   // Reuse the shared shape so this response type cannot drift from the payload
   // the API actually returns.
@@ -203,7 +204,7 @@ export default function PublicArenaPage() {
                   </div>
                   <p className="truncate text-xl font-bold text-foreground">{data.topPlayers[0].displayName}</p>
                   <p className="text-sm text-muted-foreground">
-                    {data.topPlayers[0].winRate}% · {formatMatchRecord(data.topPlayers[0])}
+                    {formatWinRate(data.topPlayers[0])} · {formatMatchRecord(data.topPlayers[0])}
                   </p>
                 </CardContent>
               </Card>
@@ -224,7 +225,7 @@ export default function PublicArenaPage() {
                     <p className="truncate font-semibold text-foreground">{data.topDecks[0].name}</p>
                     <p className="truncate text-xs text-muted-foreground">{data.topDecks[0].ownerDisplayName}</p>
                     <p className="text-sm text-muted-foreground">
-                      {data.topDecks[0].winRate}% · {formatMatchRecord(data.topDecks[0])}
+                      {formatWinRate(data.topDecks[0])} · {formatMatchRecord(data.topDecks[0])}
                     </p>
                   </div>
                 </CardContent>
@@ -242,7 +243,7 @@ export default function PublicArenaPage() {
                     <p className="font-semibold text-foreground">{t(data.topColors[0].label)}</p>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {data.topColors[0].percentage}% {t({ it: 'del meta', en: 'of meta' })} · {data.topColors[0].winRate}% WR
+                    {data.topColors[0].percentage}% {t({ it: 'del meta', en: 'of meta' })} · {formatWinRateSummary(data.topColors[0])} WR
                   </p>
                 </CardContent>
               </Card>
@@ -279,7 +280,7 @@ export default function PublicArenaPage() {
                 {data.topPlayers[0]?.displayName || '—'}
               </p>
               <p className="text-sm text-muted-foreground">
-                {data.topPlayers[0] ? `${data.topPlayers[0].winRate}%` : '—'}
+                {data.topPlayers[0] ? formatWinRate(data.topPlayers[0]) : '—'}
               </p>
             </CardContent>
           </Card>
@@ -300,7 +301,7 @@ export default function PublicArenaPage() {
                     <span className="font-medium text-foreground">{player.displayName}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {player.winRate}% · {formatMatchRecord(player)}
+                    {formatWinRate(player)} · {formatMatchRecord(player)}
                   </span>
                 </div>
               ))}
@@ -333,7 +334,7 @@ export default function PublicArenaPage() {
                           </span>
                         )}
                       </div>
-                      <span className="shrink-0 text-sm text-emerald-300">{deck.winRate}%</span>
+                      <span className="shrink-0 text-sm text-emerald-300">{formatWinRate(deck)}</span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatMatchRecord(deck)}

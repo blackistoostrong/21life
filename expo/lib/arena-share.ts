@@ -1,4 +1,4 @@
-import { formatMatchRecord, type MatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord, formatWinRate, type MatchRecord } from '@/lib/win-rate';
 
 export interface ArenaShareParticipant {
   displayName: string;
@@ -75,14 +75,14 @@ export function buildArenaShareText(payload: ArenaSharePayload, labels: ArenaSha
   ];
 
   payload.topPlayers.slice(0, 5).forEach((player, index) => {
-    lines.push(`${index + 1}. ${player.displayName} - ${player.winRate}% (${formatMatchRecord(player)})`);
+    lines.push(`${index + 1}. ${player.displayName} - ${formatWinRate(player)} (${formatMatchRecord(player)})`);
   });
 
   lines.push('', labels.topDecks);
   payload.topDecks.slice(0, 5).forEach((deck, index) => {
     const bracket = deck.bracket ? ` [B${deck.bracket}]` : '';
     const owner = deck.ownerDisplayName?.trim() ? ` — ${deck.ownerDisplayName.trim()}` : '';
-    lines.push(`${index + 1}. ${deck.commander}${owner}${bracket} - ${deck.winRate}% (${formatMatchRecord(deck)})`);
+    lines.push(`${index + 1}. ${deck.commander}${owner}${bracket} - ${formatWinRate(deck)} (${formatMatchRecord(deck)})`);
   });
 
   if (payload.topColors.length > 0) {
