@@ -120,6 +120,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 - `fdroid/metadata/`: local F-Droid build recipe; the official submission is reviewed on GitLab.
 - `docs/`: current release-readiness, legal, provenance, and operating documentation.
 
+- Native rematch: `expo/hooks/use-native-live-rematch.ts` owns recap opening, scoped reference validation and cancellation. Shared reference policy/read protocol live in packages/domain and packages/data; local SDK adapters preserve each platform SDK. Renderers receive actions only.
+
 ## Persistent checklist
 
 Native offline storage: `expo/lib/live-game-offline.ts` owns v3 account/group journal and per-account outbox keys, actor/version envelopes, shadow copies, durable tombstones and per-account I/O serialization. Every native caller passes the captured actor. Legacy creator-only migration retains v2 originals and prevents replay after scoped clear. Storage isolation is verified separately from in-flight sync and UI lifecycle, which remain open.

@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Rivincita: riferimenti e apertura del recap
+
+`packages/domain/live-game-reference-validation.ts` riconcilia soltanto posti/mazzi richiesti, senza sostituzioni automatiche. `packages/data/live-game-round-references.ts` verifica membership e legge gli ID puntuali con un unico budget15s; i due adapter SDK locali condividono protocollo e colonne. Un catalogo limitato non prova che un mazzo sia stato eliminato. Policy archive esplicita: rivincita ordinaria compatibile col picker arena; preset futuri richiedono riferimenti attivi.
+
+`use-native-live-rematch` possiede richiesta abortibile, apertura del recap e comando scoped; il controller round lo compone tramite modelli pubblici. Il corrispondente owner web resta `use-web-live-round-commands`. Cambio account/gruppo, chiusura e unmount invalidano i risultati tardivi; la propria chiusura dopo una partenza accettata conserva persistenza/sync. Busy lookup esclude soltanto il round precedente. Offline conserva metadati scoped del recap; letture malformate non diventano una partenza offline. Nessuna cache/query duplicata nei renderer.
+
 ## Presentazione di record neutrali — tranche report gruppo
 
 `packages/domain/win-rate.ts` mantiene il valore numerico storico0 quando non esiste un denominatore; `formatWinRate` mostra— per assenza di partite decisive e0% per sconfitte reali. `averageWinRate` conserva la media non pesata già mostrata, escludendo soltanto giocatori senza partite decisive. I compatibilità adapter web/Expo esportano lo stesso contratto: nessuna seconda formula nei componenti.

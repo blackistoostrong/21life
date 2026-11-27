@@ -34,7 +34,7 @@ export function reconcileLiveGameReferences(
 
 /** Watch only the requested references, not unrelated catalog changes or card art. */
 export function liveGameReferenceStamp(seats:readonly LiveGameSeatReference[],
-  participants:readonly Pick<LiveGameReferenceParticipant,'key'|'decks'>[]){
+  participants:readonly {key:ParticipantKey;decks:readonly {id:string;isArchived?:boolean}[]}[]){
   return JSON.stringify(seats.map(seat=>{
     const participant=participants.find(value=>value.key===seat.participantKey);
     const deck=participant?.decks.find(value=>value.id===seat.deckId);

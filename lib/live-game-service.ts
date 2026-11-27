@@ -87,15 +87,19 @@ export async function fetchBusyLiveGameParticipantKeys(
   client: SupabaseClient,
   groupId: string,
   participantKeys: string[],
+  options?: { excludeLiveGameId?: string; signal?: AbortSignal },
 ): Promise<string[]> {
   if (!participantKeys.length) return [];
-  const { data, error } = await client
+  let request = client
     .from('live_game_participants')
     .select('participant_key')
     .eq('group_id', groupId)
     .eq('status', 'active')
     .eq('is_eliminated', false)
     .in('participant_key', participantKeys);
+  if (options?.excludeLiveGameId) request = request.neq('live_game_id', options.excludeLiveGameId);
+  if (options?.signal) request = request.abortSignal(options.signal);
+  const { data, error } = await request;
   if (error) throw error;
   return (data ?? []).map((entry) => entry.participant_key as string);
 }

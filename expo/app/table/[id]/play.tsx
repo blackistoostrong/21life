@@ -238,7 +238,7 @@ const {journal, liveGame, undoDepth, redoDepth, pendingSyncCount, localPersisten
   else{setShowEndGame(false);if(event.type==='discard-finished')setShowDiscardConfirm(false);}
  },[setCompletedGame,setCompletedDurationSeconds,setShowRematch,setShowEndGame,setShowDiscardConfirm]);
  const {starting,endingGame,discardingGame,handleStart,handleDiscardGame,handleEndGame,handleRematchSameDecks,handleRematchReselect}
-  =useNativeLiveRoundCommands({groupId,user,completedGame,setup:liveSetup,session:liveSession,catalog:{members,guests},
+  =useNativeLiveRoundCommands({groupId,user,completedGame,rematchOpen:showRematch,setup:liveSetup,session:liveSession,catalog:{members,guests},
    scope:{epoch:liveScopeEpoch,isCurrent:isLiveScopeCurrent,bindClient:bindLiveClient,beginCommand:beginLiveCommand},
    result:{isDraw:endIsDraw,winnerKey:endWinnerKey,winCondition:endWinCondition},presentation:{onEvent:onRoundEvent,pulseDamage,revealStartingPlayer}});
 
@@ -670,12 +670,14 @@ const {journal, liveGame, undoDepth, redoDepth, pendingSyncCount, localPersisten
         ) : null}
         <View style={styles.rematchActions}>
           <Button
-            label={copy('liveGameSameDecks')}
+            label={copy(starting?'liveGameStarting':'liveGameSameDecks')}
+            disabled={starting}
             icon="layers-outline"
             onPress={handleRematchSameDecks}
           />
           <Button
             label={copy('liveGameReselectDecks')}
+            disabled={starting}
             icon="albums-outline"
             variant="outline"
             onPress={handleRematchReselect}

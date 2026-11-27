@@ -299,6 +299,8 @@ export type TranslationKey =
   | 'liveGameStart'
   | 'liveGameStarting'
   | 'liveGameStarted'
+  | 'liveGameRematchUnavailable'
+  | 'liveGamePreviousPending'
   | 'liveGameStartFailed'
   | 'liveGameMinPlayersError'
   | 'liveGameDeckError'

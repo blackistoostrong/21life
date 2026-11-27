@@ -45,6 +45,7 @@ export const featureOwners = {
   native: [
     'expo/lib/live-game-reference-reader.ts',
     'expo/hooks/use-native-live-round-commands.ts',
+    'expo/hooks/use-native-live-rematch.ts',
     'expo/hooks/use-native-live-session.ts',
     'expo/hooks/use-native-live-journal.ts', 'expo/lib/native-live-session-journal.ts', 'expo/stores/live-game-runtime-store.ts',
     'expo/lib/live-game-setup-restore.ts',
