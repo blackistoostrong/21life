@@ -5,7 +5,6 @@ import {useArenaSeasonContext} from '@/hooks/use-arena-season-context';
 import {ArenaAnalyticsStatus} from '@/components/table/arena-analytics-status';
 import {useArenaDayExport} from '@/hooks/use-arena-day-export';
 import {arenaHistoryScope} from '../../../../packages/domain/arena-history';
-import {getArenaAnalyticsSince} from '@/lib/arena-analytics-bundle';
 import {ArenaHistoryStatus} from '@/components/table/arena-history-status';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -60,13 +59,13 @@ import { useToast } from '@/contexts/toast-context';
 import { hapticSuccess } from '@/lib/haptics';
 import { type DeckStatsSort } from '@/lib/arena-deck-stats';
 import {
+  getArenaAnalyticsSince,
   buildArenaAnalyticsView,
   createEmptyArenaAnalyticsView,
 } from '@/lib/arena-analytics-bundle';
 import {
   filterMatchesByDate,
   filterMatchesByBracket,
-  getArenaPeriodLabel,
   type ArenaDateFilter,
 } from '@/lib/arena-filters';
 import { canKickArenaMember, canLeaveArena, canManageArenaMembership, isArenaMember } from '@/lib/arena-membership';
@@ -77,13 +76,11 @@ import {
 } from '@/lib/arena-session-export';
 import { buildMatchShareText } from '@/lib/arena-match-share';
 import { groupMatchesByDay } from '@/lib/arena-session';
-import { buildArenaShareText } from '@/lib/arena-share';
-import { getMatchWinnerName } from '@/lib/arena-stats';
+import { useNativeArenaRecap } from '@/hooks/use-native-arena-recap';
+import { ArenaRecapDialog } from '@/components/table/arena-recap-dialog';
 import { buildPlayerAwardsFromAggregates } from '@/lib/player-awards';
-import { getSiteUrl } from '@/lib/env';
 import { apiPost } from '@/lib/api';
 import { isLeaveArenaConfirmationValid } from '@/lib/leave-arena-confirm';
-import { MANA_COLOR_LABELS } from '@/lib/mana-colors';
 
 import { fetchActiveLiveGame, fetchLiveGameByMatchId } from '@/lib/live-game-service';
 import type { LiveGameRecord } from '@/lib/live-game';
@@ -116,7 +113,7 @@ const DECK_SORT_KEYS: Record<DeckStatsSort, 'deckSortWinRate' | 'deckSortGamesPl
 export default function TableScreen() {
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const groupId = Array.isArray(id) ? id[0] : id;
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { copy, language } = useLanguage();
   const router = useRouter();
 
@@ -143,6 +140,7 @@ export default function TableScreen() {
     addGuestDeck,
     removeGuest,
   } = useArena(groupId, user?.id);
+  const recap = useNativeArenaRecap(user?.id ?? '', groupId ?? '', group?.name ?? '', session);
 
   const [activeTab, setActiveTab] = useState<ArenaTab>('matches');
   const [awardsView, setAwardsView] = useState<'players' | 'decks'>('decks');
@@ -368,96 +366,7 @@ export default function TableScreen() {
     setShowInviteQr(true);
   }, [group]);
 
-  const buildArenaStatsShareMessage = useCallback(() => {
-    if (!group || !report.ready || !season.ready) return '';
-
-    const locale = language === 'it' ? 'it-IT' : 'en-US';
-    return buildArenaShareText({
-      arenaName: group.name,
-      periodLabel: dateFilter === 'all' && seasonContext
-        ? formatArenaSeasonLabel(
-            seasonContext.currentSeasonStart,
-            seasonContext.currentSeasonEnd,
-            language === 'it' ? 'it-IT' : 'en-US',
-          )
-        : getArenaPeriodLabel(dateFilter, language),
-      totalMatches: reportedMatchCount,
-      topPlayers: playerStats.slice(0, 5).map((player) => ({
-        displayName: player.displayName,
-        gamesPlayed: player.gamesPlayed,
-        wins: player.wins,
-        losses: player.losses,
-        draws: player.draws,
-        decisiveGames: player.decisiveGames,
-        winRate: player.winRate,
-      })),
-      topDecks: commanderStats.slice(0, 5).map((deck) => ({
-        commander: deck.commander,
-        ownerDisplayName: deck.ownerDisplayName,
-        gamesPlayed: deck.gamesPlayed,
-        wins: deck.wins,
-        losses: deck.losses,
-        draws: deck.draws,
-        decisiveGames: deck.decisiveGames,
-        winRate: deck.winRate,
-        bracket: deck.bracket,
-      })),
-      topColors: colorAnalytics.played.slice(0, 5).map((entry) => ({
-        label: MANA_COLOR_LABELS[entry.color]?.[language] || entry.color,
-        gamesPlayed: entry.appearances,
-        percentage: entry.percentage,
-      })),
-      recentMatches: filteredMatches.slice(0, 3).map((match) => ({
-        playedAt: match.played_at,
-        notes: match.notes,
-        winnerName: getMatchWinnerName(match, copy('liveGameDraw')),
-        participants: match.match_participants.map((participant) => {
-          const deck = getParticipantDeckSnapshot(participant);
-          return {
-            displayName: getParticipantDisplayName(participant),
-            commander: deck?.commander || null,
-            deckName: deck?.name || null,
-            isWinner: participant.is_winner,
-            bracket: deck?.bracket || null,
-          };
-        }),
-      })),
-      publicUrl: group.is_public ? `${getSiteUrl()}/arena/${group.invite_code}` : null,
-    }, {
-      arenaStatsTitle: copy('arenaStatsTitle'),
-      period: copy('period'),
-      totalMatches: copy('totalMatchesLabel'),
-      topPlayers: copy('leaderboard'),
-      topDecks: copy('topDecks'),
-      topColors: copy('mostPlayedColors'),
-      recentMatches: copy('recentMatches'),
-      winner: copy('winner'),
-      winRate: copy('winRate'),
-      publicPage: copy('publicPage'),
-      noComment: copy('noComment'),
-    }, locale);
-  }, [
-    colorAnalytics.played,
-    commanderStats,
-    copy,
-    dateFilter,
-    seasonContext,
-    filteredMatches,
-    group,
-    language,
-    playerStats,
-    reportedMatchCount,report.ready,season.ready,
-  ]);
-
-  const shareArenaStats = useCallback(() => {
-    if (!group) return;
-    const message=buildArenaStatsShareMessage();
-    if(!message)return;
-    setSharePreview({
-      title: `${group.name} - 21Life`,
-      message,
-    });
-  }, [buildArenaStatsShareMessage, group,setSharePreview]);
+  const shareArenaStats = () => {void recap.controller.open();};
 
   const confirmSharePreview = useCallback(async () => {
     if (!sharePreview) return;
@@ -955,13 +864,13 @@ export default function TableScreen() {
 
         {isMember ? (
           <TableArenaManagement
-            showExportStats={report.ready && reportedMatchCount > 0}
+              showExportStats={Boolean(user?.id && groupId)}
             canManage={canManage}
             canLeave={canLeave}
             labels={{
               arenaManagement: copy('arenaManagement'),
               shareInvite: copy('shareInvite'),
-              exportArenaStats: copy('shareStats'),
+              exportArenaStats: recap.labels.open,
               editArena: copy('editArena'),
               guests: copy('guests'),
               leaveArena: copy('leaveArena'),
@@ -983,6 +892,7 @@ export default function TableScreen() {
         ) : null}
       </ScrollView>
 
+      <ArenaRecapDialog recap={recap} />
       <SharePreviewModal
         visible={Boolean(sharePreview)}
         title={sharePreview?.title || ''}

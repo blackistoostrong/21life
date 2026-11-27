@@ -2,28 +2,14 @@
 import { useLanguage } from '@/components/language-provider';
 import { useToast } from '@/hooks/use-toast';
 import type { Group } from '@/lib/types/arena-catalog';
-import type { ArenaSeasonContext } from '@/lib/arena-seasons';
-import type { useArenaReports, useArenaReportScope } from '@/hooks/use-arena-reports';
-import type { useArenaMatchHistory } from '@/hooks/use-arena-match-history';
 import type { Match } from '@/lib/types/arena-match';
-import { MANA_COLOR_LABELS } from '@/lib/mana-colors';
-import { buildArenaShareText } from '@/lib/arena-share';
 import { getParticipantDeckSnapshot, getParticipantDisplayName } from '@/lib/arena-participants';
 import { getProfileDisplayName } from '@/lib/profile-display';
 import { formatGameDuration } from '@/lib/live-game-duration';
-import { formatArenaSeasonLabel } from '@/lib/arena-seasons';
 import { format } from 'date-fns';
 
-type Reports = ReturnType<typeof useArenaReports>;
-type Input = Pick<Reports, 'analyticsPayload' | 'playerStats' | 'deckStats' | 'colorAnalytics'> & {
-  group: Group | null; season: { ready: boolean };
-  reportAnalytics: Pick<Reports['reportAnalytics'], 'ready'>;
-  history: Pick<ReturnType<typeof useArenaMatchHistory>, 'loading' | 'error' | 'recentMatches'>;
-  dateFilter: ReturnType<typeof useArenaReportScope>['dateFilter'];
-  seasonContext: ArenaSeasonContext | null;
-};
-/** Browser sharing consumes acknowledged report/history models; no private reads. */
-export function useArenaSharing({ group, season, reportAnalytics, history, dateFilter, seasonContext, analyticsPayload, playerStats, deckStats, colorAnalytics }: Input) {
+/** Existing invitation and single-match sharing remain independent of period recap. */
+export function useArenaSharing({group}: {group: Group | null}) {
   const { copy: t, language } = useLanguage();
   const { toast } = useToast();
   const copyInviteLink = () => {
@@ -91,107 +77,6 @@ export function useArenaSharing({ group, season, reportAnalytics, history, dateF
     ].filter((line): line is string => line !== null).join('\n');
   };
 
-  const getPeriodLabel = () => {
-    if (dateFilter === '7d') return t({ it: 'Ultimi 7 giorni', en: 'Last 7 days' });
-    if (dateFilter === '30d') return t({ it: 'Ultimi 30 giorni', en: 'Last 30 days' });
-    if (dateFilter === '90d') return t({ it: 'Ultimi 90 giorni', en: 'Last 90 days' });
-    return seasonContext
-      ? formatArenaSeasonLabel(
-          seasonContext.currentSeasonStart,
-          seasonContext.currentSeasonEnd,
-          language === 'it' ? 'it-IT' : 'en-US',
-        )
-      : t({ it: 'Tutto il periodo', en: 'All time' });
-  };
-
-  const handleShareArenaStats = async () => {
-    if (!group || !season.ready || !reportAnalytics.ready || history.loading || history.error) return;
-
-    const filteredMatches = history.recentMatches as unknown as Match[];
-    const text = buildArenaShareText({
-      arenaName: group.name,
-      periodLabel: getPeriodLabel(),
-      totalMatches: analyticsPayload.totalMatches ?? 0,
-      topPlayers: playerStats.slice(0, 5).map((player) => ({
-        displayName: player.displayName,
-        gamesPlayed: player.gamesPlayed,
-        wins: player.wins,
-        losses: player.losses,
-        draws: player.draws,
-        decisiveGames: player.decisiveGames,
-        winRate: player.winRate,
-      })),
-      topDecks: deckStats.slice(0, 5).map((deck) => ({
-        name: deck.name,
-        commander: deck.commander,
-        ownerDisplayName: deck.ownerDisplayName,
-        gamesPlayed: deck.gamesPlayed,
-        wins: deck.wins,
-        losses: deck.losses,
-        draws: deck.draws,
-        decisiveGames: deck.decisiveGames,
-        winRate: deck.winRate,
-        bracket: deck.bracket,
-      })),
-      topColors: colorAnalytics.played.slice(0, 5).map((entry) => ({
-        label: t(MANA_COLOR_LABELS[entry.color] || MANA_COLOR_LABELS.C),
-        gamesPlayed: entry.appearances,
-        percentage: entry.percentage,
-      })),
-      recentMatches: filteredMatches.slice(0, 3).map((match) => ({
-        playedAt: match.played_at,
-        notes: match.notes,
-        winnerName: getMatchWinnerName(match),
-        participants: match.match_participants.map((participant) => {
-          const deck = getParticipantDeckSnapshot(participant);
-          return {
-            displayName: getParticipantDisplayName(participant),
-            commander: deck?.commander || null,
-            deckName: deck?.name || null,
-            isWinner: participant.is_winner,
-            bracket: deck?.bracket || null,
-          };
-        }),
-      })),
-      publicUrl: group.is_public ? `${window.location.origin}/arena/${group.invite_code}` : null,
-    }, {
-      arenaStatsTitle: t({ it: 'Statistiche playgroup', en: 'Playgroup stats' }),
-      period: t({ it: 'Periodo', en: 'Period' }),
-      totalMatches: t({ it: 'Partite', en: 'Matches' }),
-      topPlayers: t({ it: 'Top giocatori', en: 'Top players' }),
-      topDecks: t({ it: 'Top mazzi', en: 'Top decks' }),
-      topColors: t({ it: 'Colori più giocati', en: 'Most played colors' }),
-      recentMatches: t({ it: 'Ultime partite', en: 'Recent matches' }),
-      winner: t({ it: 'Vincitore', en: 'Winner' }),
-      winRate: t({ it: 'win rate', en: 'win rate' }),
-      publicPage: t({ it: 'Pagina pubblica', en: 'Public page' }),
-      noComment: t({ it: 'Nessun commento', en: 'No comment' }),
-    });
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `${group.name} - 21Life`,
-          text,
-        });
-        return;
-      }
-
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: t({ it: 'Statistiche copiate', en: 'Stats copied' }),
-        description: t({ it: 'Il riepilogo del playgroup è negli appunti', en: 'Playgroup summary copied to clipboard' }),
-      });
-    } catch (error) {
-      if ((error as DOMException)?.name === 'AbortError') return;
-      toast({
-        title: t({ it: 'Errore', en: 'Error' }),
-        description: t({ it: 'Impossibile condividere le statistiche', en: 'Unable to share stats' }),
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleShareMatch = async (match: Match) => {
     const text = buildMatchShareText(match);
     const shareData = {
@@ -229,5 +114,5 @@ export function useArenaSharing({ group, season, reportAnalytics, history, dateF
       }
     }
   };
-  return { copyInviteLink, getWinConditionLabel, handleShareArenaStats, handleShareMatch };
+  return { copyInviteLink, getWinConditionLabel, handleShareMatch };
 }

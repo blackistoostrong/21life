@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'hooks/use-web-arena-recap.ts', 'lib/arena-recap-export.ts',
     'lib/arena-recap-period.ts',
     'lib/arena-recap.ts',
+    'lib/arena-recap-controller.ts', 'lib/arena-recap-text.ts',
     'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
     'lib/table-preset-codec.ts',
     'lib/table-presets.ts',
@@ -50,8 +52,10 @@ export const featureOwners = {
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
+    'expo/hooks/use-native-arena-recap.ts', 'expo/lib/arena-recap-export.ts',
     'expo/lib/arena-recap-period.ts',
     'expo/lib/arena-recap.ts',
+    'expo/lib/arena-recap-controller.ts', 'expo/lib/arena-recap-text.ts',
     'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
     'expo/lib/table-preset-codec.ts',
     'expo/lib/table-presets.ts',
@@ -80,6 +84,7 @@ export const featureOwners = {
     'expo/hooks/use-arena-day-export.ts', 'expo/hooks/use-profile-decks.ts',
   ],
   presentation: [
+    'components/arena/arena-recap-dialog.tsx', 'expo/components/table/arena-recap-dialog.tsx',
     'expo/components/live-game/native-live-round-result-dialog.tsx',
     'components/arena/arena-history-panel.tsx',
     'components/arena/arena-player-report.tsx',
