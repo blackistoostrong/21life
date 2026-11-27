@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Period recap foundation (not yet wired): packages/domain/arena-recap-period computes7/30device calendar days from an injected Date; local lib adapters re-export it. packages/data/arena-history-query reuses one private complete traversal for existing day export and bounded calendar periods, preserving revisions/size/deadline failures instead of exporting partial history. Aggregation/privacy/preview/share remain pending.
+
 - Rematch preflight foundation (wiring pending): `packages/domain/live-game-reference-validation.ts` reconciles references and watches selected availability without replacement. `packages/data/live-game-round-references.ts` owns bounded ID reads, membership/metadata validation, cancellation and one15s budget; web/Expo `lib/live-game-reference-reader.ts` are thin local SDK adapters using shared columns. No second catalog/cache or new schema. The round controllers are not connected to this foundation yet.
 
 - Arena win-rate presentation: `packages/domain/win-rate.ts` exposes `formatWinRate` (em dash without decisive games, genuine losses remain0%) and the existing unweighted player mean via `averageWinRate`, excluding only neutral records. Web/native group player/deck/color/pair reports use these shared helpers/denominator guards. Stored numbers, queries, ordering and sample thresholds remain unchanged; DEV26-07 consumers outside group reports still require review.
