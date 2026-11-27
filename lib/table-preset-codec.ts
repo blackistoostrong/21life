@@ -1,5 +1,4 @@
 import {z} from 'zod';
-import {parseParticipantKey, type ParticipantKey} from '../packages/domain/participant-keys';
 import {LIVE_GAME_MIN_PLAYERS, LIVE_GAME_MAX_PLAYERS} from '../packages/domain/live-game-types';
 import {
   TABLE_PRESET_LIMIT, TablePresetError, normalizeTablePresetName, tablePresetNameKey,
@@ -9,11 +8,7 @@ import {
 const MAX_DOCUMENT_LENGTH = 65536;
 const uuid = z.uuid();
 const scopeSchema = z.strictObject({accountId: uuid, groupId: uuid});
-const participant = z.custom<ParticipantKey>(value => {
-  if (typeof value !== 'string') return false;
-  const key = parseParticipantKey(value);
-  return key !== null && uuid.safeParse(key.id).success;
-});
+const participant = z.templateLiteral([z.enum(['user:', 'guest:']), uuid]);
 const name = z.string().refine(value => {
   try {return normalizeTablePresetName(value) === value;} catch {return false;}
 });
@@ -49,10 +44,14 @@ const documentSchema = z.strictObject({
   groupId: uuid,
   presets: z.array(preset).max(TABLE_PRESET_LIMIT),
 }).refine(value => {
-  const ids = new Set(value.presets.map(preset => preset.id));
-  const names = new Set(value.presets.map(preset => tablePresetNameKey(preset.name)));
-  return ids.size === value.presets.length && names.size === value.presets.length
-    && value.presets.every(preset => preset.accountId === value.accountId && preset.groupId === value.groupId);
+  try {
+    const ids = new Set(value.presets.map(preset => preset.id));
+    const names = new Set(value.presets.map(preset => tablePresetNameKey(preset.name)));
+    return ids.size === value.presets.length && names.size === value.presets.length
+      && value.presets.every(preset => preset.accountId === value.accountId && preset.groupId === value.groupId);
+  } catch {
+    return false;
+  }
 });
 
 export function validateTablePresetScope(scope: TablePresetScope): void {

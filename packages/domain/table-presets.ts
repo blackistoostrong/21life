@@ -1,9 +1,10 @@
 import type {ParticipantKey} from './participant-keys';
+import type {LiveGameRoundSeat} from './live-game-round';
 import type {TableLayoutVariant} from './live-game-types';
 
 export const TABLE_PRESET_LIMIT = 10;
 export const TABLE_PRESET_NAME_LIMIT = 40;
-export type TablePresetErrorKind = 'invalid' | 'unsupported' | 'scope' | 'name' | 'duplicate' | 'limit' | 'not_found' | 'storage' | 'cancelled';
+export type TablePresetErrorKind = 'invalid' | 'unsupported' | 'scope' | 'name' | 'duplicate' | 'limit' | 'not_found' | 'storage' | 'cancelled' | 'references' | 'changed';
 
 export class TablePresetError extends Error {
   constructor(readonly kind: TablePresetErrorKind) {
@@ -22,6 +23,13 @@ export type TablePresetDraft = Readonly<{
   startingLife: number;
   layoutVariant: TableLayoutVariant;
   seats: readonly TablePresetSeat[];
+}>;
+/** Transient selected-reference labels; deliberately absent from persisted documents. */
+export type TablePresetReference = LiveGameRoundSeat & Readonly<{
+  deckName: string;
+  bracket: string | null;
+  sourceType: string | null;
+  deckKind: 'registered' | 'guest' | 'occasional';
 }>;
 export type TablePresetV1 = TablePresetDraft & TablePresetScope & Readonly<{
   schemaVersion: 1;

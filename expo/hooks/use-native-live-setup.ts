@@ -1,3 +1,5 @@
+import type {PreparedTablePreset} from '../../packages/data/table-preset-references';
+import type {TablePresetReference} from '../../packages/domain/table-presets';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { useLiveGameCommandScope } from './use-live-game-command-scope';
 import type { useArena } from '@/hooks/use-arena';
@@ -43,6 +45,12 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
     return Number.parseInt(lifePreset, 10);
   }, [customLife, lifePreset]);
   const [occasionalDecks, setOccasionalDecks] = useState<MemberDeck[]>([]);
+  const contextKey = `${userId}:${groupId}`;
+  const [presetProjection, setPresetProjection] = useState<{
+    key: string; references: readonly TablePresetReference[]; revision: number;
+  }>(() => ({key: contextKey, references: [], revision: 0}));
+  const presetReferences = useMemo(() => presetProjection.key === contextKey ? presetProjection.references : [],
+    [contextKey, presetProjection]);
   const decksByUser = useMemo(() => {
     const map = new Map<string, MemberDeck[]>();
     [...decks, ...occasionalDecks].forEach((deck) => {
@@ -53,41 +61,45 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
     return map;
   }, [decks, occasionalDecks]);
   const getDeckOptions = useCallback((key: ParticipantKey) => {
-    if (key.startsWith('guest:')) {
-      const guestId = key.slice(6);
-      const guestDecks = guests.find((guest) => guest.id === guestId)?.arena_guest_decks || [];
-      return guestDecks.map(toDeckOption);
+    const existing = key.startsWith('guest:')
+      ? (guests.find(guest => guest.id === key.slice(6))?.arena_guest_decks || []).map(toDeckOption)
+      : (decksByUser.get(key.slice(5)) || []).map(toDeckOption);
+    const options = new Map<string, ReturnType<typeof toDeckOption>>();
+    for (const option of existing) if (!options.has(option.id)) options.set(option.id, option);
+    const reference = presetReferences.find(reference => reference.participantKey === key);
+    if (reference) {
+      options.set(reference.deckId, {
+        id: reference.deckId, name: reference.deckName, commander: reference.commander,
+        commander_image: reference.commanderImage, bracket: reference.bracket,
+        source_type: reference.deckKind === 'guest' ? 'guest' : reference.sourceType, is_favorite: options.get(reference.deckId)?.is_favorite ?? false,
+      });
     }
-    return (decksByUser.get(key.slice(5)) || []).map(toDeckOption);
-  }, [decksByUser, guests]);
-  const setupParticipants = useMemo<SetupParticipant[]>(() => [
-    ...members.map((member) => {
-      const key = toUserParticipantKey(member.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: getProfileDisplayName(member),
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-    ...guests.map((guest) => {
-      const key = toGuestParticipantKey(guest.id);
-      const options = getDeckOptions(key);
-      return {
-        key,
-        name: guest.display_name,
-        decks: options,
-        preferredDeckId: getPreferredDeckId(
-          options,
-          getLastDeckSelectionForParticipant(key, matches),
-        ),
-      };
-    }),
-  ], [getDeckOptions, guests, matches, members]);
+    return Array.from(options.values());
+  }, [decksByUser, guests, presetReferences]);
+  const setupParticipants = useMemo<SetupParticipant[]>(() => {
+    const known: SetupParticipant[] = [
+      ...members.map(member => {
+        const key = toUserParticipantKey(member.id);
+        const options = getDeckOptions(key);
+        return {key, name: getProfileDisplayName(member), decks: options,
+          preferredDeckId: getPreferredDeckId(options, getLastDeckSelectionForParticipant(key, matches))};
+      }),
+      ...guests.map(guest => {
+        const key = toGuestParticipantKey(guest.id);
+        const options = getDeckOptions(key);
+        return {key, name: guest.display_name, decks: options,
+          preferredDeckId: getPreferredDeckId(options, getLastDeckSelectionForParticipant(key, matches))};
+      }),
+    ];
+    for (const reference of presetReferences) {
+      if (!known.some(participant => participant.key === reference.participantKey)) {
+        known.push({key: reference.participantKey, name: reference.displayName,
+          decks: getDeckOptions(reference.participantKey), preferredDeckId: reference.deckId});
+      }
+    }
+    return known.map(participant => ({...participant,
+      name: presetReferences.find(reference => reference.participantKey === participant.key)?.displayName ?? participant.name}));
+  }, [getDeckOptions, guests, matches, members, presetReferences]);
   const latestParticipants = useRef(setupParticipants);
   useLayoutEffect(() => { latestParticipants.current = setupParticipants; }, [setupParticipants]);
   const applySeatSetups = useCallback((nextSeats: LiveGameSeatSetup[]) => {
@@ -110,6 +122,18 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
       setCustomLife(String(value));
     }
   }, []);
+  const applyPreset = useCallback((prepared: PreparedTablePreset) => {
+    const draft = prepared.draft;
+    setPlayerCount(draft.playerCount);
+    setLayoutVariant(draft.layoutVariant);
+    applyStartingLife(draft.startingLife);
+    applySeatSetups(draft.seats.map(({participantKey, deckId}) => ({participantKey, deckId})));
+    setPresetProjection(current => ({key: contextKey, references: prepared.references,
+      revision: current.key === contextKey ? current.revision + 1 : 1}));
+  }, [applySeatSetups, applyStartingLife, contextKey]);
+  const presetReviewRevision = presetProjection.key === contextKey ? presetProjection.revision : 0;
+  const presetMissingReferences = presetReviewRevision > 0
+    ? seatSetups.filter(seat => !seat.participantKey || !seat.deckId).length : 0;
   const handlePlayerCountChange = useCallback((count: number) => {
     setPlayerCount(count);
     applySeatSetups(Array.from({ length: count }, (_, index) => (
@@ -140,6 +164,7 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
     setSetupReadyKey(null);
     setSetupRestoreError(false);
     setOccasionalDecks([]);
+    setPresetProjection({key: contextKey, references: [], revision: 0});
     const defaults = createDefaultLiveGameSetup();
     setPlayerCount(defaults.playerCount);
     setLayoutVariant(defaults.layoutVariant);
@@ -150,7 +175,7 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
       setupHydratingRef.current = null;
       job?.controller.abort();
     };
-  }, [epoch, applySeatSetups, applyStartingLife]);
+  }, [epoch, contextKey, applySeatSetups, applyStartingLife]);
   useEffect(() => {
     const selectedDecks = seatSetups.flatMap((seat) => {
       if (!seat.participantKey || !seat.deckId) return [];
@@ -198,5 +223,5 @@ export function useNativeLiveSetup(groupId: string, user: { id: string } | null,
       setSetupReadyKey(`${userId}:${groupId}`);
     }).catch(() => { if (active()) setSetupRestoreError(true); }).finally(() => { if (active()) setupHydratingRef.current = null; });
   }, [applySeatSetups, applyStartingLife, bindClient, groupId, isCurrent, loading, setupParticipants, setupRetry, userId]);
- return { selectedKeys, participantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup };
+ return { selectedKeys, participantDecks, playerCount, setPlayerCount, layoutVariant, setLayoutVariant, seatSetups, setupReadyKey, setupRestoreError, setSetupRetry, startingLife, setOccasionalDecks, getDeckOptions, setupParticipants, applySeatSetups, applyStartingLife, handlePlayerCountChange, handleAssignSeat, resetSetup, applyPreset, presetReviewRevision, presetMissingReferences };
 }

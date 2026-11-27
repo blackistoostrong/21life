@@ -844,5 +844,23 @@
     "branches": 89.28,
     "functions": 100,
     "statements": 93.18
+  },
+  "../packages/domain/table-presets.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/table-preset-storage.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/data/table-preset-references.ts": {
+    "lines": 100,
+    "branches": 80,
+    "functions": 100,
+    "statements": 90
   }
 }

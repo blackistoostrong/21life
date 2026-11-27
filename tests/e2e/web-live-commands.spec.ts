@@ -3,6 +3,47 @@ import {test,expect,type Request} from '@playwright/test';
 import {configureTracker} from './live-tracker-fixture';
 import {transitionFixtureSession} from './profile-auth-fixture';
 
+test('web live presets CRUD uses real Dev references without starting a game',async({page})=>{
+ test.skip(!process.env.E2E_ACCESS_TOKEN,'Requires disposable Dev authentication.');
+ const groupId=await configureTracker(page),userId=process.env.E2E_USER_ID!;
+ const writes:Request[]=[];
+ page.on('request',request=>{
+  const path=new URL(request.url()).pathname;
+  if(request.method()!=='GET'&&/\/rest\/v1\/live_game(s|_participants)$/.test(path))writes.push(request);
+ });
+ await page.getByRole('button',{name:/^Table presets$|^Preset del tavolo$/}).click();
+ await page.getByLabel(/^(Preset name|Nome preset)$/).fill('Dev preset');
+ await page.getByRole('button',{name:/^Save current setup$|^Salva configurazione attuale$/}).click();
+ await expect(page.getByRole('button',{name:/^(Load|Carica) Dev preset$/})).toBeVisible();
+ const stored=await page.evaluate(({groupId,userId})=>{
+  const raw=localStorage.getItem(`phyrexian-arena:table-presets:v1:${userId}:${groupId}`);
+  return raw?JSON.parse(raw):null;
+ },{groupId,userId});
+ expect(stored).toMatchObject({schemaVersion:1,accountId:userId,groupId});
+ expect(stored.presets).toHaveLength(1);expect(stored.presets[0].seats).toHaveLength(2);
+ await page.getByRole('button',{name:/^Close$|^Chiudi$/}).click();
+ await page.getByRole('button',{name:/^Reset$|^Azzera$/}).click();
+ await expect(page.getByTestId('live-start')).toBeDisabled();
+ await page.getByRole('button',{name:/^Table presets$|^Preset del tavolo$/}).click();
+ await page.getByRole('button',{name:/^(Load|Carica) Dev preset$/}).click();
+ await expect(page.getByRole('button',{name:/^Apply to setup$|^Applica al setup$/})).toBeVisible();
+ await page.getByRole('button',{name:/^Apply to setup$|^Applica al setup$/}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.getByTestId('live-start')).toBeEnabled();
+ await expect(page.getByTestId('live-end')).toHaveCount(0);expect(writes).toHaveLength(0);
+ await page.getByRole('button',{name:/^Table presets$|^Preset del tavolo$/}).click();
+ await page.getByRole('button',{name:/^(Rename|Rinomina) Dev preset$/}).click();
+ await page.getByLabel(/^(Preset name|Nome preset)$/).fill('Dev renamed');
+ await page.getByRole('button',{name:/^Rename$|^Rinomina$/}).click();
+ await expect(page.getByRole('button',{name:/^(Load|Carica) Dev renamed$/})).toBeVisible();
+ await page.getByRole('button',{name:/^Close$|^Chiudi$/}).click();await page.reload();
+ await page.getByRole('button',{name:/^Table presets$|^Preset del tavolo$/}).click();
+ await page.getByRole('button',{name:/^(Delete|Elimina) Dev renamed$/}).click();
+ await page.getByRole('button',{name:/^Confirm deletion$|^Conferma eliminazione$/}).click();
+ await expect(page.getByText(/^(No saved presets\.|Nessun preset salvato\.)$/)).toBeVisible();
+ expect(writes).toHaveLength(0);
+});
+
 for(const transition of ['back','account'] as const){
 test(`web live commands cancel pending start validation on ${transition}`,async({page})=>{
   test.skip(!process.env.E2E_ACCESS_TOKEN,'Requires disposable Dev authentication.');

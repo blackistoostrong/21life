@@ -8,6 +8,8 @@ export const featureOwners = {
   web: [
     'lib/table-preset-codec.ts',
     'lib/table-presets.ts',
+    'lib/table-preset-controller.ts',
+    'hooks/use-web-table-presets.ts',
     'lib/live-game-reference-reader.ts',
     'hooks/use-web-live-round-commands.ts',
     'hooks/use-web-live-session.ts',
@@ -47,6 +49,8 @@ export const featureOwners = {
   native: [
     'expo/lib/table-preset-codec.ts',
     'expo/lib/table-presets.ts',
+    'expo/lib/table-preset-controller.ts',
+    'expo/hooks/use-native-table-presets.ts',
     'expo/lib/live-game-reference-reader.ts',
     'expo/hooks/use-native-live-round-commands.ts',
     'expo/hooks/use-native-live-rematch.ts',

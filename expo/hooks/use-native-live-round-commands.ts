@@ -9,7 +9,6 @@ import { createLiveGameRound } from '@/lib/live-game-round';
 import { fetchBusyLiveGameParticipantKeys } from '@/lib/live-game-service';
 import { saveLiveGameSetup } from '@/lib/live-game-setup';
 import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys';
-import { getProfileDisplayName } from '@/lib/profile-display';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useLayoutEffect, useState } from 'react';
@@ -33,7 +32,7 @@ type Ports = {
     completedGame: LiveGameRecord | null;
     rematchOpen: boolean;
     scope: Pick<ReturnType<typeof useLiveGameCommandScope>, 'epoch' | 'isCurrent' | 'bindClient' | 'beginCommand'>;
-    setup: Pick<ReturnType<typeof useNativeLiveSetup>, 'selectedKeys' | 'participantDecks' | 'playerCount' | 'setupReadyKey' | 'getDeckOptions' | 'startingLife' | 'layoutVariant' | 'seatSetups' | 'setPlayerCount' | 'setLayoutVariant' | 'applySeatSetups' | 'applyStartingLife'>;
+    setup: Pick<ReturnType<typeof useNativeLiveSetup>, 'setupParticipants' | 'selectedKeys' | 'participantDecks' | 'playerCount' | 'setupReadyKey' | 'getDeckOptions' | 'startingLife' | 'layoutVariant' | 'seatSetups' | 'setPlayerCount' | 'setLayoutVariant' | 'applySeatSetups' | 'applyStartingLife'>;
     session: Pick<ReturnType<typeof useNativeLiveSession>, 'networkOnline' | 'journal' | 'liveGame' | 'saveJournal' | 'syncJournal' | 'flushArchivedOutbox' | 'cancelScheduledSync' | 'enqueueMutation'>;
     catalog: Pick<ReturnType<typeof useArena>, 'members' | 'guests'>;
     result: {
@@ -51,8 +50,7 @@ type Ports = {
 export function useNativeLiveRoundCommands({ groupId, user, completedGame, rematchOpen, scope, setup, session, catalog, result, presentation }: Ports) {
     const { epoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient, beginCommand: beginLiveCommand } = scope;
     const { journal, liveGame, saveJournal, syncJournal, flushArchivedOutbox, cancelScheduledSync, enqueueMutation } = session;
-    const { selectedKeys, participantDecks, playerCount, setupReadyKey, getDeckOptions, startingLife, layoutVariant, seatSetups } = setup;
-    const { members, guests } = catalog;
+    const { setupParticipants, selectedKeys, participantDecks, playerCount, setupReadyKey, getDeckOptions, startingLife, layoutVariant, seatSetups } = setup;
     const { isDraw: endIsDraw, winnerKey: endWinnerKey, winCondition: endWinCondition } = result;
     const { onEvent, pulseDamage, revealStartingPlayer } = presentation;
     const { copy } = useLanguage();
@@ -64,39 +62,15 @@ export function useNativeLiveRoundCommands({ groupId, user, completedGame, remat
     const [discardingGame, setDiscardingGame] = useState(false);
     const resolveMeta = (key: ParticipantKey) => {
         const parsed = parseParticipantKey(key);
-        if (!parsed)
-            return null;
-        const deckId = participantDecks[key];
-        const deck = getDeckOptions(key).find((entry) => entry.id === deckId);
-        if (!deck)
-            return null;
-        if (parsed.type === 'user') {
-            const member = members.find((entry) => entry.id === parsed.id);
-            if (!member)
-                return null;
-            return {
-                key,
-                deckId: deck.id,
-                displayName: getProfileDisplayName(member),
-                commander: deck.commander,
-                commanderImage: deck.commander_image,
-                isGuest: false,
-                userId: parsed.id,
-                guestId: null,
-            };
-        }
-        const guest = guests.find((entry) => entry.id === parsed.id);
-        if (!guest)
-            return null;
+        const participant = setupParticipants.find(participant => participant.key === key);
+        const deck = getDeckOptions(key).find(deck => deck.id === participantDecks[key]);
+        if (!parsed || !participant || !deck) return null;
         return {
-            key,
-            deckId: deck.id,
-            displayName: guest.display_name,
-            commander: deck.commander,
-            commanderImage: deck.commander_image,
-            isGuest: true,
-            userId: null,
-            guestId: parsed.id,
+            key, deckId: deck.id, displayName: participant.name,
+            commander: deck.commander, commanderImage: deck.commander_image,
+            isGuest: parsed.type === 'guest',
+            userId: parsed.type === 'user' ? parsed.id : null,
+            guestId: parsed.type === 'guest' ? parsed.id : null,
         };
     };
     const handleStart = async () => {

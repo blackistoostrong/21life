@@ -122,7 +122,7 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 - Native rematch: `expo/hooks/use-native-live-rematch.ts` owns recap opening, scoped reference validation and cancellation. Shared reference policy/read protocol live in packages/domain and packages/data; local SDK adapters preserve each platform SDK. Renderers receive actions only.
 
-- Local table presets foundation: packages/domain/table-presets owns pure DTO/policies; lib/table-preset-codec reuses existing Zod through an Expo codec adapter. packages/data/table-preset-storage owns keyed accepted-operation ordering and fresh CRUD; platform adapters supply localStorage/Web Locks or AsyncStorage and identity/clock. Controllers/UI are not yet wired.
+- Local table presets foundation: packages/domain/table-presets owns pure DTO/policies; lib/table-preset-codec reuses existing Zod through an Expo codec adapter. packages/data/table-preset-storage owns keyed accepted-operation ordering and fresh CRUD; platform adapters supply localStorage/Web Locks or AsyncStorage and identity/clock. Scoped controllers now expose readonly snapshots; platform hooks bind committed callbacks, and keyed web/native setup containers own CRUD/preview/confirmation UI. The web wizard receives a composition slot. Selected-only fresh metadata projection preserves valid IDs beyond picker caps; final consolidated QA/integration and physical device checks remain open.
 
 ## Persistent checklist
 

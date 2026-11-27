@@ -904,5 +904,35 @@
     "branches": 100,
     "functions": 100,
     "statements": 100
+  },
+  "packages/domain/table-presets.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/data/table-preset-storage.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "packages/data/table-preset-references.ts": {
+    "lines": 100,
+    "branches": 80,
+    "functions": 100,
+    "statements": 90
+  },
+  "lib/table-preset-codec.ts": {
+    "lines": 100,
+    "branches": 95,
+    "functions": 100,
+    "statements": 98
+  },
+  "lib/table-preset-controller.ts": {
+    "lines": 98,
+    "branches": 80,
+    "functions": 89,
+    "statements": 92
   }
 }

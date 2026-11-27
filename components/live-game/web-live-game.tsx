@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import type { WebTrackerParticipant } from '@/lib/types/web-tracker';
 import { useWebTrackerSetup } from '@/hooks/use-web-tracker-setup';
 import { WebTrackerWizard } from '@/components/live-game/web-tracker-wizard';
+import { WebTablePresets } from '@/components/live-game/web-table-presets';
 import { useWebTrackerDisplay } from '@/hooks/use-web-tracker-display';
 import {
   ArrowLeft,
@@ -371,6 +372,7 @@ const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTr
         onBack={() => router.replace(`/table/${groupId}`)} />;
     }
     return <WebTrackerWizard setup={setup} groupId={groupId} arenaName={arenaName}
+      presetControls={<WebTablePresets groupId={groupId} userId={userId} setup={setup} online={online} disabled={starting || setup.occasionalCreationBusy} />}
       online={online} journalError={recoveryIssue || localSaveError} starting={starting}
       deckWizardSearch={featureFlags?.deckWizardSearch !== false}
       onExit={() => router.push(`/table/${groupId}`)} onStart={() => void startGame()} />;

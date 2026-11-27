@@ -85,7 +85,7 @@ describe('strict persisted preset document',()=>{
   expect(future).toContain('preserve');
  });
  it.each([
-  {access_token:'private'}, {schemaVersion:2}, {startingLife:0}, {startingLife:1.5},
+  {access_token:'private'}, {schemaVersion:2}, {name:''}, {name:' '}, {name:'a'.repeat(41)}, {startingLife:0}, {startingLife:1.5},
   {playerCount:3}, {layoutVariant:'unknown'}, {updatedAt:'yesterday'}, {id:'not-an-id'},
  ])('rejects unsupported record fields or malformed values: %j',change=>{
   expect(()=>decodeTablePresets(document([{...add()[0],...change}]),scope)).toThrow('TABLE_PRESET_INVALID');
@@ -99,6 +99,8 @@ describe('strict persisted preset document',()=>{
  });
  it.each([
   {participantKey:null,deckId:id(5),deckKind:'guest'},
+  {participantKey:7,deckId:id(5),deckKind:'guest'},
+  {participantKey:{kind:'guest'},deckId:id(5),deckKind:'guest'},
   {participantKey:`guest:${id(4)}`,deckId:id(5),deckKind:'registered'},
   {participantKey:`user:${id(1)}`,deckId:id(3),deckKind:'guest'},
   {participantKey:`user:${id(1)}`,deckId:null,deckKind:'registered'},

@@ -5,9 +5,9 @@ import {withRequestDeadline} from './request-deadline';
 type Reply={data:unknown;error:unknown};
 export const LIVE_GAME_REFERENCE_COLUMNS={
   group:'id,group_members(user_id,profiles(id,username,display_name))',
-  deck:'id,user_id,group_id,commander,commander_image,is_archived,source_type',
+  deck:'id,user_id,group_id,name,commander,commander_image,bracket,is_archived,source_type',
   guest:'id,group_id,display_name',
-  guestDeck:'id,guest_id,group_id,commander,commander_image',
+  guestDeck:'id,guest_id,group_id,name,commander,commander_image,bracket',
 } as const;
 export interface LiveGameReferenceReader{
   group(groupId:string,userIds:string[],signal:AbortSignal):PromiseLike<Reply>;
@@ -35,6 +35,8 @@ function label(value:unknown){
   return value;
 }
 function image(value:unknown){return value===null||value===''?null:text(value);}
+function deckName(deck:Record<string,unknown>){return label(deck.name===undefined?deck.commander:deck.name);}
+function deckBracket(deck:Record<string,unknown>){return deck.bracket===undefined||deck.bracket===null?null:label(deck.bracket);}
 
 /** Bounded reference reads; no catalog cache, service role or global client. */
 export async function readLiveGameRoundReferences(reader:LiveGameReferenceReader,input:{
@@ -79,7 +81,7 @@ export async function readLiveGameRoundReferences(reader:LiveGameReferenceReader
           &&(deck.group_id===null||deck.group_id===input.groupId)&&deck.source_type!=='historical').map(deck=>{
         if(!userDecks.includes(text(deck.id))||typeof deck.is_archived!=='boolean'
           ||(deck.source_type!==null&&typeof deck.source_type!=='string'))throw new LiveGameReferenceReadError('invalid');
-        return{id:text(deck.id),commander:label(deck.commander),commanderImage:image(deck.commander_image),isArchived:deck.is_archived};
+        return{id:text(deck.id),name:deckName(deck),bracket:deckBracket(deck),sourceType:deck.source_type,commander:label(deck.commander),commanderImage:image(deck.commander_image),isArchived:deck.is_archived};
       })};
     });
     for(const guest of guestRows){
@@ -88,7 +90,7 @@ export async function readLiveGameRoundReferences(reader:LiveGameReferenceReader
       participants.push({key:`guest:${id}`,displayName:text(guest.display_name),decks:guestDeckRows
         .filter(deck=>deck.guest_id===id&&deck.group_id===input.groupId).map(deck=>{
           if(!guestDecks.includes(text(deck.id)))throw new LiveGameReferenceReadError('invalid');
-          return{id:text(deck.id),commander:label(deck.commander),commanderImage:image(deck.commander_image)};
+          return{id:text(deck.id),name:deckName(deck),bracket:deckBracket(deck),commander:label(deck.commander),commanderImage:image(deck.commander_image)};
         })});
     }
     return{kind:'ready',participants};

@@ -219,3 +219,15 @@ it('reselect does nothing after scope expiration',async()=>{
  const {ports,expire}=fixture();expire();await handler('handleRematchReselect',ports)();
  expect(ports.applySeatSetups).not.toHaveBeenCalled();expect(ports.onEvent).not.toHaveBeenCalled();
 });
+
+it('start metadata uses the scoped setup projection for registered and guest references outside the limited catalog',()=>{
+ const {ports}=fixture();
+ ports.setupParticipants=[{key:'user:actor-a',name:'Current member'},{key:'guest:g',name:'Current guest'}];
+ ports.participantDecks={'user:actor-a':'deck-a','guest:g':'deck-g'};
+ ports.getDeckOptions=(key:string)=>[{id:key==='user:actor-a'?'deck-a':'deck-g',commander:'Current commander',commander_image:null}];
+ const resolve=handler('resolveMeta',ports);
+ expect(Reflect.apply(resolve,null,['user:actor-a'])).toMatchObject({displayName:'Current member',deckId:'deck-a',isGuest:false,userId:'actor-a'});
+ expect(Reflect.apply(resolve,null,['guest:g'])).toMatchObject({displayName:'Current guest',deckId:'deck-g',isGuest:true,guestId:'g'});
+ ports.setupParticipants=[];
+ expect(Reflect.apply(handler('resolveMeta',ports),null,['user:actor-a'])).toBeNull();
+});
