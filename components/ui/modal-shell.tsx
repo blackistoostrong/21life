@@ -71,10 +71,12 @@ export function ModalOverlay({
   children,
   className,
   onClose,
+  title = '21Life',
 }: {
   children: React.ReactNode;
   className?: string;
   onClose?: () => void;
+  title?: string;
 }) {
   const returnFocus = React.useRef<HTMLElement | null>(
     typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null,
@@ -98,7 +100,7 @@ export function ModalOverlay({
             className,
           )}
         >
-          <DialogPrimitive.Title className="sr-only">21Life</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
           {children}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

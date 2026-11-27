@@ -1,6 +1,7 @@
 import { NativeLiveRoundResultDialog } from '@/components/live-game/native-live-round-result-dialog';
 import { nativeLiveScreenStyles as styles } from '@/components/live-game/native-live-screen-styles';
 import { SetupRestoreGate } from '@/components/live-game/setup-restore-gate';
+import { NativeTablePresets } from '@/components/live-game/native-table-presets';
 import { useLiveGameCommandScope } from '@/hooks/use-live-game-command-scope';
 import { useLiveSetupMemberSync } from '@/hooks/use-live-setup-member-sync';
 import { useNativeLiveRoundCommands,type NativeRoundPresentationEvent } from '@/hooks/use-native-live-round-commands';
@@ -577,7 +578,11 @@ const {journal, liveGame, undoDepth, redoDepth, pendingSyncCount, localPersisten
             <Text style={styles.setupHint}>{copy('liveGameSetupHint')}</Text>
 
             <SetupRestoreGate ready={setupReadyKey === `${user?.id}:${groupId}`} error={setupRestoreError} language={language} onRetry={() => setSetupRetry(current => current + 1)}>
+            <NativeTablePresets groupId={groupId} userId={currentUserId ?? ''} setup={liveSetup}
+              scope={{epoch: liveScopeEpoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient}}
+              online={networkOnline} disabled={starting} />
             <LiveGameConfigurator
+              reviewRevision={liveSetup.presetReviewRevision}
               groupId={groupId}
               onOccasionalDeckCreated={deck => setOccasionalDecks(current => [...current.filter(item => item.id !== deck.id), deck])}
               playerCount={playerCount}

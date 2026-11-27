@@ -101,4 +101,14 @@ it('shares one total time budget across group verification and the following rea
  expect(f.calls.find(call=>call.url.pathname.endsWith('/arena_guests'))?.signal?.aborted).toBe(true);
  expect(vi.getTimerCount()).toBe(0);
 });
+it('keeps current deck names and source kinds for a selected-reference setup projection',async()=>{
+ const f=fixture();Object.assign((f.data.decks as Record<string,unknown>[])[0],{name:'Current name',source_type:'occasional'});
+ Object.assign((f.data.arena_guest_decks as Record<string,unknown>[])[0],{name:'Current guest name'});
+ const result=await f.read();if(result.kind!=='ready')throw Error('Expected ready');
+ expect(result.participants.find(participant=>participant.key==='user:alice')?.decks[0])
+  .toMatchObject({id:'deck-a',name:'Current name',sourceType:'occasional'});
+ expect(result.participants.find(participant=>participant.key==='guest:bob')?.decks[0])
+  .toMatchObject({id:'deck-b',name:'Current guest name'});
+});
+
 }

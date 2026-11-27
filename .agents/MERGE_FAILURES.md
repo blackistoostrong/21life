@@ -1,5 +1,12 @@
 # Registro dei merge falliti
 
+## 2026-11-27 — guard metadati PR281
+- Il controllo preparatorio ha rifiutato lo stato PR con `PR state mismatch`; nessuna PUT merge eseguita e nessun build/deploy dipendente avviato. Il messaggio iniziale non riportava il singolo predicato fallito, quindi la causa specifica non è accertata.
+- Readback REST no-cache successivo: OPEN, draft=false, head3df7610a, mergeable=true/clean; base.sha ancora7d0f3621 mentre ref origin/Dev258adbd8 riflette PR280 già integrata. Non usare base.sha come prova del ref attuale. Nessun conflitto sorgente osservato.
+- Recupero: salvare metadati e ref separati, ripetere i gate sullo stesso head solo dopo il readback e verificare merge/ref/albero. Stato finale nel PROJECT_CHECKLIST; nessun merge attestato da questa voce.
+- Prevenzione: salvare i valori effettivi prima dei guard e indicare il predicato fallito; confrontare il ref Dev indipendente dai metadati del PR, che possono risultare transitori.
+
+
 ## 2026-11-25 — integrazione logout nel lifecycle live PR269
 - Merge locale origin/Dev a9251a21 in68dcf6ad interrotto con conflitti esclusivamente nei registri MERGE_FAILURES e PROJECT_CHECKLIST. PR269 OPEN/head9590c93f verificato; PR267 già MERGED con albero identico al candidato verificato. Nessun build dipendente avviato.
 - Recupero: conservate entrambe le aggiunte in ciascun registro; nessun conflitto applicativo. Verificare indice senza file unmerged e marker, poi nuova quality web/Expo, prove React e bundle sullo SHA combinato prima dell'integrazione Dev.

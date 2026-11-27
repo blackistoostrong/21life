@@ -4,7 +4,7 @@ import type {LiveGameRoundSeat} from './live-game-round';
 export type LiveGameSeatReference={participantKey:ParticipantKey|null;deckId:string|null};
 export type LiveGameReferenceParticipant={
   key:ParticipantKey;displayName:string;
-  decks:readonly {id:string;commander:string;commanderImage:string|null;isArchived?:boolean}[];
+  decks:readonly {id:string;commander:string;commanderImage:string|null;isArchived?:boolean;name?:string;sourceType?:string|null;bracket?:string|null}[];
 };
 export type LiveGameReferenceIssue={seat:number;reason:'participant_missing'|'participant_duplicate'|'deck_missing'|'deck_archived'};
 

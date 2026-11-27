@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 // Explicit owners: expanding a feature requires extending this inventory.
 export const featureOwners = {
   web: [
+    'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
+    'lib/table-preset-codec.ts',
+    'lib/table-presets.ts',
+    'lib/table-preset-controller.ts',
+    'hooks/use-web-table-presets.ts',
     'lib/live-game-reference-reader.ts',
     'hooks/use-web-live-round-commands.ts',
     'hooks/use-web-live-session.ts',
@@ -43,6 +48,11 @@ export const featureOwners = {
     'hooks/use-profile-commander-search.ts', 'lib/profile-commander.ts', 'hooks/use-profile-directory.ts', 'hooks/use-profile-account-credentials.ts', 'hooks/use-profile-password-change.ts', 'lib/profile-password.ts',
   ],
   native: [
+    'packages/features/table-presets/controller.ts', 'packages/features/table-presets/codec.ts', 'packages/features/table-presets/labels.ts',
+    'expo/lib/table-preset-codec.ts',
+    'expo/lib/table-presets.ts',
+    'expo/lib/table-preset-controller.ts',
+    'expo/hooks/use-native-table-presets.ts',
     'expo/lib/live-game-reference-reader.ts',
     'expo/hooks/use-native-live-round-commands.ts',
     'expo/hooks/use-native-live-rematch.ts',

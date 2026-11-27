@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Preset locali: fondazione
+
+`packages/domain/table-presets.ts` definisce DTO e policy di collezione senza dipendenze esterne. `lib/table-preset-codec.ts` riusa Zod4.6.7 già installato per il documento strict; l’adapter Expo riusa lo stesso codec senza esportare schema/istanze di libreria. I gate domain/data rimangono invariati.
+
+`packages/data/table-preset-storage.ts` possiede la coda immediata per chiave account/gruppo e i comandi read/modify/write, con storage/codec/clock ricevuti da port tipizzati. Gli adapter `lib/table-presets.ts` ed `expo/lib/table-presets.ts` usano rispettivamente localStorage con lock cross-tab e AsyncStorage. Nessuna lista di dati privati viene memorizzata nel singleton: solo promise di operazioni accettate, rimosse a completamento. Codec invalido/futuro non diventa una collezione vuota e nessun comando lo sovrascrive. La fondazione non avvia partite o crea mazzi; controller e UI devono ancora essere collegati.
+
 ## Rivincita: riferimenti e apertura del recap
 
 `packages/domain/live-game-reference-validation.ts` riconcilia soltanto posti/mazzi richiesti, senza sostituzioni automatiche. `packages/data/live-game-round-references.ts` verifica membership e legge gli ID puntuali con un unico budget15s; i due adapter SDK locali condividono protocollo e colonne. Un catalogo limitato non prova che un mazzo sia stato eliminato. Policy archive esplicita: rivincita ordinaria compatibile col picker arena; preset futuri richiedono riferimenti attivi.
@@ -685,3 +691,13 @@ Migrazione106(20261120074242) applicata solo Dev, poi107(20261120080129) sostitu
 26/26API REST reali desktop/mobile PASS in14.4s: create/replay/concorrenza, conflitto409, rollback header/partecipanti/notifiche, ID di altro match, actor errato, anon/nonmembro, edit ordinario di B consentito ma sostituzione negata, date ignote e vincitore guest. Cleanup verificato. Metadati SSH READ ONLY: invoker, search_path vuoto, authenticated EXECUTE=true, anon/PUBLIC=false, policy preesistenti identiche. Checksum106 d488b8b44468d5772060645efd49e806f4838adf196ac29cf16495f0edc9f009 e107 cfdf413b88d951435af6939fa5106e89ebc2be3efcda0945b0eb0186bec04e46 corrispondono al registry. Quality830+3skip/71script/146floor e manifest107 PASS. Test nel percorso autenticato predefinito; produzione resta gate autorizzato dal PM.
 
 I consumer web/Expo non usano ancora l'RPC: createBack ed editparziale restano ROSSI noti. Trasporto/payload condivisi, ID per apertura e owner di draft/comandi sono il prossimo blocco; build/export finali dopo integrazione. Nessun claim di chiusura dei client o del punto6, nessuna ripetizione build per soli metadati, nessuna analisi immagini o prova fisica.
+
+## Preset locali — collegamento27 novembre
+
+`packages/features/table-presets/controller.ts` possiede snapshot readonly, comandi e cancellazione per account/playgroup. I hook locali React creano il controller puro durante render e collegano i callback dopo commit; ogni comando cattura i propri callback. Nessuna dipendenza framework entra nei layer domain/data. UI web e Native montano un’apertura con chiave account/gruppo e possiedono soltanto nome, rinomina e conferma eliminazione; il wizard web riceve il container come slot, senza raggiungere storage o SDK.
+
+`packages/data/table-preset-references.ts` usa il lettore già condiviso con rivincita, ora con nome/bracket esistenti: legge soltanto gli ID selezionati, verifica membership e scarta archivi, riferimenti mancanti o non autorizzati. I setup mantengono al massimo sei riferimenti con metadati verificati, distinti dal catalogo completo: i cap dei picker non fanno sparire una scelta valida. La conferma aggiorna esclusivamente il setup e porta alla revisione dei posti. Nessun comando di avvio o creazione deck è disponibile al controller preset.
+
+Web Locks protegge l’intera transazione localStorage fra tab; AsyncStorage usa la coda per chiave dello stesso repository. Gli errori mantengono setup e bytes precedenti, incluse versioni future. Le prove browser Native usano hook reali e SDK reale intercettato; sostituiscono solo storage, crypto e prefetch immagini. Non certificano il renderer o un dispositivo fisico.
+
+Il primo exportAndroid830ad708 ha rilevato che Metro non includeva i re-export verso lib web. Moduli portabili preset (controller, codec e copy) ora risiedono nel solo packages/features/table-presets, aggiunto esplicitamente ai watchFolders di Metro. Non viene esposta l’intera cartella lib web. Il codec è una factory: ciascun adapter passa la propria copia Zod già installata; nessun import runtime dalla Zod o dai servizi web nel bundle Native. Domain/data restano puri con gate invariati. Coverage include i moduli condivisi ed estende i floor, mantenendo quelli precedenti. Build/export dello SHA corretto richiesti: il buildweb precedente non certifica questa correzione.

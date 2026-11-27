@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { loadWebLiveGameSetup, saveWebLiveGameSetup, type WebLiveGameSetup, type WebLiveGameSeatSetup } from '@/lib/live-game-setup';
 import type { TableLayoutVariant } from '@/lib/live-game-table-layout';
+import type {PreparedTablePreset} from '../packages/data/table-preset-references';
+import type {TablePresetReference} from '../packages/domain/table-presets';
 import type { ParticipantKey } from '@/lib/participant-keys';
 import type { WebTrackerDeck, WebTrackerParticipant } from '@/lib/types/web-tracker';
 
@@ -13,9 +15,37 @@ export function useWebTrackerSetup(groupId: string, userId: string, catalogParti
   const [occasionalCreationRequests, setOccasionalCreationRequests] = useState<Record<string, boolean>>({});
   const occasionalCreationBusy = Object.values(occasionalCreationRequests).some(Boolean);
   const [occasionalDecks, setOccasionalDecks] = useState<Record<string, WebTrackerDeck[]>>({});
-  const participants = useMemo(() => catalogParticipants.map(participant => ({ ...participant,
-    decks: [...participant.decks, ...(occasionalDecks[participant.key] || []).filter(deck => !participant.decks.some(item => item.id === deck.id))],
-  })), [catalogParticipants, occasionalDecks]);
+  const contextKey = `${userId}:${groupId}`;
+  const [presetProjection, setPresetProjection] = useState<{
+    key: string; references: readonly TablePresetReference[]; revision: number;
+  }>(() => ({key: contextKey, references: [], revision: 0}));
+  const presetReferences = useMemo(() => presetProjection.key === contextKey ? presetProjection.references : [],
+    [contextKey, presetProjection]);
+  const participants = useMemo(() => {
+    const rows = [...catalogParticipants];
+    for (const reference of presetReferences) {
+      if (rows.some(row => row.key === reference.participantKey)) continue;
+      const isGuest = reference.participantKey.startsWith('guest:');
+      rows.push({key: reference.participantKey, displayName: reference.displayName, isGuest,
+        userId: isGuest ? null : reference.participantKey.slice(5),
+        guestId: isGuest ? reference.participantKey.slice(6) : null, decks: []});
+    }
+    return rows.map(participant => {
+      const decks = [...participant.decks, ...(occasionalDecks[participant.key] || [])
+        .filter(deck => !participant.decks.some(item => item.id === deck.id))];
+      const reference = presetReferences.find(reference => reference.participantKey === participant.key);
+      if (reference) {
+        const index = decks.findIndex(deck => deck.id === reference.deckId);
+        const option: WebTrackerDeck = {
+          id: reference.deckId, name: reference.deckName, commander: reference.commander,
+          commanderImage: reference.commanderImage, isFavorite: decks[index]?.isFavorite ?? false,
+          isOccasional: reference.deckKind === 'occasional',
+        };
+        if (index >= 0) decks[index] = option; else decks.push(option);
+      }
+      return {...participant, displayName: reference?.displayName ?? participant.displayName, decks};
+    });
+  }, [catalogParticipants, occasionalDecks, presetReferences]);
   const initialSetup = useMemo(() => loadWebLiveGameSetup(groupId, userId), [groupId, userId]);
   const [playerCount, setPlayerCount] = useState(initialSetup.playerCount);
   const [layoutVariant, setLayoutVariant] = useState<TableLayoutVariant>(initialSetup.layoutVariant);
@@ -24,6 +54,22 @@ export function useWebTrackerSetup(groupId: string, userId: string, catalogParti
   const [setupStep, setSetupStep] = useState(0);
   const [setupSeatIndex, setSetupSeatIndex] = useState(0);
   const [setupDeckSearch, setSetupDeckSearch] = useState('');
+  const [setupReadyKey, setSetupReadyKey] = useState(contextKey);
+  useLayoutEffect(() => {
+    if (setupReadyKey === contextKey) return;
+    setPlayerCount(initialSetup.playerCount);
+    setLayoutVariant(initialSetup.layoutVariant);
+    setStartingLife(initialSetup.startingLife);
+    setSeats(initialSetup.seats);
+    setSetupStep(0);
+    setSetupSeatIndex(0);
+    setSetupDeckSearch('');
+    setOccasionalDecks({});
+    setOccasionalCreationRequests({});
+    setPresetProjection({key: contextKey, references: [], revision: 0});
+    setSetupReadyKey(contextKey);
+  }, [contextKey, initialSetup, setupReadyKey]);
+
 
   useEffect(() => {
     seats.forEach((seat) => {
@@ -75,6 +121,18 @@ export function useWebTrackerSetup(groupId: string, userId: string, catalogParti
     setStartingLife(value.startingLife);
     setSeats(value.seats);
   };
+  const applyPreset = (prepared: PreparedTablePreset) => {
+    const draft = prepared.draft;
+    restoreSetup({playerCount: draft.playerCount, layoutVariant: draft.layoutVariant, startingLife: draft.startingLife,
+      seats: draft.seats.map(({participantKey, deckId}) => ({participantKey, deckId}))});
+    setPresetProjection(current => ({key: contextKey, references: prepared.references,
+      revision: current.key === contextKey ? current.revision + 1 : 1}));
+    setSetupStep(3);
+    setSetupSeatIndex(0);
+    setSetupDeckSearch('');
+  };
+  const presetMissingReferences = presetProjection.key === contextKey && presetProjection.revision > 0
+    ? seats.filter(seat => !seat.participantKey || !seat.deckId).length : 0;
   // Preserve thrown storage errors: the game controller exposes durability feedback.
   const persistSetup = useCallback((value: WebLiveGameSetup) => {
     saveWebLiveGameSetup(groupId, userId, value);
@@ -83,6 +141,6 @@ export function useWebTrackerSetup(groupId: string, userId: string, catalogParti
     startingLife, setStartingLife, seats, setSeats, setupStep, setSetupStep,
     setupSeatIndex, setSetupSeatIndex, setupDeckSearch, setSetupDeckSearch,
     changePlayerCount, updateSeatParticipant, setOccasionalBusy, registerOccasionalDeck,
-    restoreSetup, persistSetup };
+    restoreSetup, persistSetup, applyPreset, presetMissingReferences, setupReadyKey };
 }
 export type WebTrackerSetupController = ReturnType<typeof useWebTrackerSetup>;

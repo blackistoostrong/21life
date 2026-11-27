@@ -62,6 +62,7 @@ type Labels = {
 };
 
 type Props = {
+  reviewRevision?: number;
   groupId: string;
   onOccasionalDeckCreated: (deck: MemberDeck) => void;
   playerCount: number;
@@ -128,6 +129,7 @@ function LayoutPreview({ count, variant, orientation }: {
 }
 
 export function LiveGameConfigurator({
+  reviewRevision = 0,
   groupId,
   onOccasionalDeckCreated,
   playerCount,
@@ -155,6 +157,9 @@ export function LiveGameConfigurator({
   const previewOrientation = getViewportTableOrientation(windowWidth, windowHeight);
   const [editingSeat, setEditingSeat] = useState<number | null>(null);
   const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (reviewRevision > 0) {setStep(3); setEditingSeat(null);}
+  }, [reviewRevision]);
   const [customLife, setCustomLife] = useState(String(startingLife));
   const lifePresets = [20, 25, 30, 40, 60];
   useEffect(() => {

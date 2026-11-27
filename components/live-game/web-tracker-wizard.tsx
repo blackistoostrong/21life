@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DeckImage } from '@/components/deck-image';
 import { LayoutMiniature } from '@/components/live-game/layout-miniature';
 import { WebJournalWarning } from '@/components/live-game/web-journal-warning';
+import type { ReactNode } from 'react';
 import { OccasionalDeckForm } from '@/components/arena/occasional-deck-form';
 import { matchesLiveGameDeckSearch } from '@/lib/live-game-deck-search';
 import { getSquareTableLayouts, getCenterToolbarBand, getSeatRotation } from '@/lib/live-game-table-layout';
@@ -15,10 +16,11 @@ import type { WebJournalError } from '@/lib/live-game-offline';
 import type { WebTrackerSetupController } from '@/hooks/use-web-tracker-setup';
 
 /** Presentation delegates occasional creation to its existing form container. */
-export function WebTrackerWizard({ setup, groupId, arenaName, online, journalError, starting,
+export function WebTrackerWizard({ setup, groupId, presetControls, arenaName, online, journalError, starting,
   deckWizardSearch, onExit, onStart }: {
   setup: WebTrackerSetupController;
   groupId: string;
+  presetControls: ReactNode;
   arenaName: string;
   online: boolean;
   journalError: WebJournalError | null;
@@ -67,6 +69,7 @@ export function WebTrackerWizard({ setup, groupId, arenaName, online, journalErr
             <p className="mt-1 text-sm text-muted-foreground">{copy({ it: 'Scegli layout, posti e mazzi. L’ultima configurazione viene ricordata.', en: 'Choose layout, seats and decks. Your last setup is remembered.' })}</p>
           </div>
           <div className="flex flex-col gap-7 p-4 sm:p-7">
+            {presetControls}
             <div className="flex items-center gap-2">
               {[0, 1, 2, 3].map((step) => (
                 <button
