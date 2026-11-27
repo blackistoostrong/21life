@@ -40,6 +40,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 
 ## Current code map
 
+- Rematch preflight foundation (wiring pending): `packages/domain/live-game-reference-validation.ts` reconciles references and watches selected availability without replacement. `packages/data/live-game-round-references.ts` owns bounded ID reads, membership/metadata validation, cancellation and one15s budget; web/Expo `lib/live-game-reference-reader.ts` are thin local SDK adapters using shared columns. No second catalog/cache or new schema. The round controllers are not connected to this foundation yet.
+
 - Arena win-rate presentation: `packages/domain/win-rate.ts` exposes `formatWinRate` (em dash without decisive games, genuine losses remain0%) and the existing unweighted player mean via `averageWinRate`, excluding only neutral records. Web/native group player/deck/color/pair reports use these shared helpers/denominator guards. Stored numbers, queries, ordering and sample thresholds remain unchanged; DEV26-07 consumers outside group reports still require review.
 
 - Native live composition: `expo/app/table/[id]/play.tsx`646nonempty composes setup/session/round owners and UI interactions. `use-native-live-round-commands.ts` owns start/end/discard/rematch and busy lifecycle, emitting typed presentation events. `native-live-round-result-dialog.tsx` is controlled UI, with unchanged JSX; `native-live-screen-styles.ts` retains the unchanged StyleSheet. Session430/journal251/round331/dialog212/styles330 remain separate responsibilities. Updated exports/integration and final device/image QA must be recorded before closing point6.
@@ -117,6 +119,8 @@ description: Apply the PM-led, specification-driven workflow for 21Life. Use for
 - `fastlane/metadata/android/`: canonical public store listing metadata.
 - `fdroid/metadata/`: local F-Droid build recipe; the official submission is reviewed on GitLab.
 - `docs/`: current release-readiness, legal, provenance, and operating documentation.
+
+- Native rematch: `expo/hooks/use-native-live-rematch.ts` owns recap opening, scoped reference validation and cancellation. Shared reference policy/read protocol live in packages/domain and packages/data; local SDK adapters preserve each platform SDK. Renderers receive actions only.
 
 ## Persistent checklist
 

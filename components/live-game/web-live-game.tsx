@@ -354,8 +354,8 @@ const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTr
 
   const onRoundCreated=useCallback(()=>setCompletedRecord(null),[]);
   const {starting,ending,startGame,finishGame,cancelGame}=useWebLiveRoundCommands(groupId,userId,{
-    setup,session,selection:{isDraw,winnerKey,winCondition,duration},
-    presentation:{enterTrackerLandscape,restoreDefaultTrackerDisplay,runRoulette,onRoundCreated},enqueue,
+    setup,completedRecord,session,selection:{isDraw,winnerKey,winCondition,duration},
+    presentation:{enterTrackerLandscape,restoreDefaultTrackerDisplay,runRoulette,onRoundCreated,onSetupRequired:(next)=>{restoreSetup(next);setCompletedRecord(null);}},enqueue,
   });
 
   if (booting) {
@@ -367,7 +367,7 @@ const { tableRef, tableSize, fullscreen, enterTrackerLandscape, restoreDefaultTr
       return <WebCompletedGame record={completedRecord} duration={completedDuration}
         arenaName={arenaName} journalError={recoveryIssue || localSaveError} starting={starting}
         onReselect={(previousSetup) => { restoreSetup(previousSetup); setCompletedRecord(null); }}
-        onRematch={(previousSetup) => void startGame(previousSetup)}
+        onRematch={(previousSetup) => void startGame(previousSetup,completedRecord)}
         onBack={() => router.replace(`/table/${groupId}`)} />;
     }
     return <WebTrackerWizard setup={setup} groupId={groupId} arenaName={arenaName}

@@ -12,7 +12,8 @@ import { parseParticipantKey, type ParticipantKey } from '@/lib/participant-keys
 import { getProfileDisplayName } from '@/lib/profile-display';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
+import {useNativeLiveRematch} from './use-native-live-rematch';
 import type { useArena } from './use-arena';
 import type { useLiveGameCommandScope } from './use-live-game-command-scope';
 import type { useNativeLiveSession } from './use-native-live-session';
@@ -30,9 +31,10 @@ type Ports = {
         id: string;
     } | null;
     completedGame: LiveGameRecord | null;
+    rematchOpen: boolean;
     scope: Pick<ReturnType<typeof useLiveGameCommandScope>, 'epoch' | 'isCurrent' | 'bindClient' | 'beginCommand'>;
     setup: Pick<ReturnType<typeof useNativeLiveSetup>, 'selectedKeys' | 'participantDecks' | 'playerCount' | 'setupReadyKey' | 'getDeckOptions' | 'startingLife' | 'layoutVariant' | 'seatSetups' | 'setPlayerCount' | 'setLayoutVariant' | 'applySeatSetups' | 'applyStartingLife'>;
-    session: Pick<ReturnType<typeof useNativeLiveSession>, 'journal' | 'liveGame' | 'saveJournal' | 'syncJournal' | 'flushArchivedOutbox' | 'cancelScheduledSync' | 'enqueueMutation'>;
+    session: Pick<ReturnType<typeof useNativeLiveSession>, 'networkOnline' | 'journal' | 'liveGame' | 'saveJournal' | 'syncJournal' | 'flushArchivedOutbox' | 'cancelScheduledSync' | 'enqueueMutation'>;
     catalog: Pick<ReturnType<typeof useArena>, 'members' | 'guests'>;
     result: {
         isDraw: boolean;
@@ -46,10 +48,10 @@ type Ports = {
     };
 };
 /** Owns scoped round commands; presentation receives explicit lifecycle events. */
-export function useNativeLiveRoundCommands({ groupId, user, completedGame, scope, setup, session, catalog, result, presentation }: Ports) {
+export function useNativeLiveRoundCommands({ groupId, user, completedGame, rematchOpen, scope, setup, session, catalog, result, presentation }: Ports) {
     const { epoch, isCurrent: isLiveScopeCurrent, bindClient: bindLiveClient, beginCommand: beginLiveCommand } = scope;
     const { journal, liveGame, saveJournal, syncJournal, flushArchivedOutbox, cancelScheduledSync, enqueueMutation } = session;
-    const { selectedKeys, participantDecks, playerCount, setupReadyKey, getDeckOptions, startingLife, layoutVariant, seatSetups, setPlayerCount, setLayoutVariant, applySeatSetups, applyStartingLife } = setup;
+    const { selectedKeys, participantDecks, playerCount, setupReadyKey, getDeckOptions, startingLife, layoutVariant, seatSetups } = setup;
     const { members, guests } = catalog;
     const { isDraw: endIsDraw, winnerKey: endWinnerKey, winCondition: endWinCondition } = result;
     const { onEvent, pulseDamage, revealStartingPlayer } = presentation;
@@ -279,53 +281,7 @@ export function useNativeLiveRoundCommands({ groupId, user, completedGame, scope
             command.release();
         }
     };
-    const preparePreviousPod = useCallback(() => {
-        const previous = completedGame;
-        if (!previous)
-            return null;
-        const orderedPlayers = [...previous.state.players].sort((a, b) => a.slot - b.slot);
-        setPlayerCount(orderedPlayers.length);
-        setLayoutVariant(previous.state.layoutVariant ?? 'classic');
-        applySeatSetups(orderedPlayers.map((player) => ({
-            participantKey: player.participantKey,
-            deckId: player.deckId,
-        })));
-        applyStartingLife(previous.starting_life);
-        return previous;
-    }, [applySeatSetups, applyStartingLife, completedGame, setLayoutVariant, setPlayerCount]);
-    const handleRematchSameDecks = useCallback(async () => {
-        if (!user || !isLiveScopeCurrent())
-            return;
-        const command = beginLiveCommand();
-        if (!command)
-            return;
-        try {
-            const previous = preparePreviousPod();
-            if (!previous)
-                return;
-            const keys = previous.state.players.map((player) => player.participantKey);
-            const record = createLiveGameRound({
-                id: Crypto.randomUUID(), groupId, actorId: user.id, startedAt: new Date().toISOString(),
-                startingLife: previous.starting_life, layoutVariant: previous.state.layoutVariant ?? 'classic',
-                seats: previous.state.players, random: Math.random,
-            });
-            if (!journal.start(record))
-                return;
-            revealStartingPlayer(record.state.startingPlayerKey ?? null, keys);
-            onEvent({ type: 'rematch-prepared' });
-            await saveJournal();
-            if (!command.isCurrent())
-                return;
-            void syncJournal();
-        }
-        finally {
-            command.release();
-        }
-    }, [journal, beginLiveCommand, groupId, isLiveScopeCurrent, preparePreviousPod, revealStartingPlayer, saveJournal, syncJournal, user, onEvent]);
-    const handleRematchReselect = useCallback(() => {
-        preparePreviousPod();
-        onEvent({ type: 'rematch-prepared' });
-    }, [preparePreviousPod, onEvent]);
+    const rematch = useNativeLiveRematch({groupId,user,completedGame,rematchOpen,scope,setup,session,catalog,presentation});
     useLayoutEffect(() => { setStarting(false); setEndingGame(false); setDiscardingGame(false); }, [epoch]);
-    return { starting, endingGame, discardingGame, handleStart, handleDiscardGame, handleEndGame, handleRematchSameDecks, handleRematchReselect };
+    return { starting: starting || rematch.starting, endingGame, discardingGame, handleStart, handleDiscardGame, handleEndGame, handleRematchSameDecks:rematch.handleRematchSameDecks, handleRematchReselect:rematch.handleRematchReselect };
 }

@@ -1,5 +1,11 @@
 # DEV26 — Architettura e responsabilità
 
+## Rivincita: riferimenti e apertura del recap
+
+`packages/domain/live-game-reference-validation.ts` riconcilia soltanto posti/mazzi richiesti, senza sostituzioni automatiche. `packages/data/live-game-round-references.ts` verifica membership e legge gli ID puntuali con un unico budget15s; i due adapter SDK locali condividono protocollo e colonne. Un catalogo limitato non prova che un mazzo sia stato eliminato. Policy archive esplicita: rivincita ordinaria compatibile col picker arena; preset futuri richiedono riferimenti attivi.
+
+`use-native-live-rematch` possiede richiesta abortibile, apertura del recap e comando scoped; il controller round lo compone tramite modelli pubblici. Il corrispondente owner web resta `use-web-live-round-commands`. Cambio account/gruppo, chiusura e unmount invalidano i risultati tardivi; la propria chiusura dopo una partenza accettata conserva persistenza/sync. Busy lookup esclude soltanto il round precedente. Offline conserva metadati scoped del recap; letture malformate non diventano una partenza offline. Nessuna cache/query duplicata nei renderer.
+
 ## Presentazione di record neutrali — tranche report gruppo
 
 `packages/domain/win-rate.ts` mantiene il valore numerico storico0 quando non esiste un denominatore; `formatWinRate` mostra— per assenza di partite decisive e0% per sconfitte reali. `averageWinRate` conserva la media non pesata già mostrata, escludendo soltanto giocatori senza partite decisive. I compatibilità adapter web/Expo esportano lo stesso contratto: nessuna seconda formula nei componenti.
@@ -8,7 +14,7 @@ Report giocatori, classifica mazzi e report colori/coppie del gruppo usano quest
 
 ## Candidato strutturale dei quattro target — 26 novembre
 
-Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo646righe non vuote. I controller possiedono risorse e comandi, i renderer compongono viste e interazioni. Il numero di righe è un vincolo di organizzazione, non la prova unica di qualità: gate, confronti AST e test dei proprietari verificano i confini. Integrazione/export aggiornati e collaudo visuale/dispositivo finale sono ancora necessari prima di dichiarare chiuso il punto6.
+Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo648righe non vuote. I controller possiedono risorse e comandi, i renderer compongono viste e interazioni. Il numero di righe è un vincolo di organizzazione, non la prova unica di qualità: gate, confronti AST e test dei proprietari verificano i confini. Integrazione/export aggiornati e collaudo visuale/dispositivo finale sono ancora necessari prima di dichiarare chiuso il punto6.
 
 | Proprietario nativo | Crea/aggiorna/rilascia | Righe non vuote |
 | --- | --- | ---: |
@@ -17,10 +23,11 @@ Gli entrypoint sono ora profile529, tavolo713, trackerweb658 e trackernativo646r
 | use-native-live-journal | Osservazione Zustand e lease della proiezione carte in focus | 36 |
 | use-native-live-session | Bootstrap, sync single-flight, timer per epoch, subscription e outbox privato; cleanup dei callback prima della rimozione | 430 |
 | use-native-live-connectivity | Listener NetInfo/AppState, singolo polling/read pendente e cleanup piattaforma | Feature già verificata |
-| use-native-live-round-commands | Validazione e lease start/end/discard/rematch; stato busy, eventi tipizzati verso la UI | 331 |
+| use-native-live-round-commands | Validazione e lease start/end/discard; compone rivincita, stato busy ed eventi tipizzati verso la UI | 287 |
+| use-native-live-rematch | Apertura recap, riferimenti correnti e cancellazione scoped prima della partenza | 123 |
 | native-live-round-result-dialog | Presentazione controllata; nessun client/query/journal, delega soltanto il container immagine esistente | 212 |
 | native-live-screen-styles | Dichiarazioni StyleSheet della schermata e del suo dialogo, senza logica | 330 |
-| play.tsx | Composizione, controlli del tavolo, orientamento/fullscreen e timer di presentazione | 646 |
+| play.tsx | Composizione, controlli del tavolo, orientamento/fullscreen e timer di presentazione | 648 |
 
 Il cambio account/gruppo sostituisce epoch, journal e risorse; JWT dello stesso actor mantiene il proprietario. Queue storage serializzata per account, nessuna seconda queue nascosta nel writer. I callback vecchi non possono adottare client nuovi, aggiornare il nuovo owner o cancellarne timer. Il controller round usa i modelli pubblici di setup/sessione, il catalogo e un callback di eventi di presentazione: nessun ref bag o context privato universale.
 
