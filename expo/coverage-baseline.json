@@ -862,5 +862,17 @@
     "branches": 80,
     "functions": 100,
     "statements": 90
+  },
+  "../packages/features/table-presets/codec.ts": {
+    "lines": 100,
+    "branches": 95,
+    "functions": 100,
+    "statements": 98
+  },
+  "../packages/features/table-presets/controller.ts": {
+    "lines": 98,
+    "branches": 80,
+    "functions": 89,
+    "statements": 92
   }
 }

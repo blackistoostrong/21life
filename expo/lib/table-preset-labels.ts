@@ -1,1 +1,1 @@
-export {tablePresetLabels} from '../../lib/table-preset-labels';
+export {tablePresetLabels} from '../../packages/features/table-presets/labels';

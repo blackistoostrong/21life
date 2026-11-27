@@ -1,2 +1,4 @@
-// Shared Zod codec exposes domain DTOs, never library schema instances.
-export {decodeTablePresets, encodeTablePresets, validateTablePresetScope} from '../../lib/table-preset-codec';
+import {z} from 'zod';
+import {createTablePresetCodec} from '../../packages/features/table-presets/codec';
+
+export const {decodeTablePresets, encodeTablePresets, validateTablePresetScope} = createTablePresetCodec(z);
