@@ -17,7 +17,7 @@ import {
   filterDeckRankings,
   isProvisionalDeckRanking,
 } from '@/lib/deck-ranking-visibility';
-import { formatMatchRecord } from '@/lib/win-rate';
+import { formatMatchRecord,formatWinRate } from '@/lib/win-rate';
 
 type PersonalAnalyticsSectionProps = {
   analytics: PersonalAnalytics | null;
@@ -87,7 +87,7 @@ export function PersonalAnalyticsSection({
         <EmptyState icon="bar-chart-outline" title={emptyTitle} body={emptyBody} />
       ) : (
         <View style={styles.content}>
-          <View style={{ alignItems: 'center', paddingVertical: 12 }}><ReportRing value={analytics.winRate} label={winRateLabel} /></View>
+          <View style={{ alignItems: 'center', paddingVertical: 12 }}><ReportRing value={analytics.winRate} valueLabel={formatWinRate(analytics)} label={winRateLabel} /></View>
           <View style={styles.summaryRow}>
             {[
               { label: trackedGamesLabel, value: analytics.gamesPlayed },
@@ -135,7 +135,7 @@ export function PersonalAnalyticsSection({
                 meta={formatMatchRecord(analytics.bestDeck)}
                 gamesPlayed={analytics.bestDeck.gamesPlayed}
                 wins={analytics.bestDeck.wins}
-                trailing={<Text style={styles.deckWinRate}>{analytics.bestDeck.winRate}%</Text>}
+                trailing={<Text style={styles.deckWinRate}>{formatWinRate(analytics.bestDeck)}</Text>}
               />
             </PhyrexianPanel>
           ) : null}
@@ -161,7 +161,7 @@ export function PersonalAnalyticsSection({
                   badge={index + 1}
                   gamesPlayed={deck.gamesPlayed}
                   wins={deck.wins}
-                  trailing={<Text style={styles.deckWinRate}>{deck.winRate}%</Text>}
+                  trailing={<Text style={styles.deckWinRate}>{formatWinRate(deck)}</Text>}
                 />
               ))}
               {visibleTopDecks.length === 0 ? <Text style={styles.emptyFiltered}>{noRankedDecksLabel}</Text> : null}
@@ -180,7 +180,7 @@ export function PersonalAnalyticsSection({
                         <ManaColorBadge color={stat.color} size="sm" />
                         <Text style={styles.colorName}>{label[language]}</Text>
                         <Text style={styles.colorCount}>
-                          {stat.wins}W · {stat.winRate}%
+                          {stat.wins}W · {formatWinRate(stat)}
                         </Text>
                       </View>
                       <View style={styles.progressTrack}>

@@ -11,6 +11,7 @@ import { DeckMasteryBadge } from '@/components/profile/deck-mastery-badge';
 import { ManaColorPills } from '@/components/ui/mana-color-pills';
 import { PhyrexianPanel } from '@/components/ui/phyrexian-panel';
 import { colors, spacing } from '@/constants/theme';
+import {formatWinRate} from '@/lib/win-rate';
 import { getDeckMastery } from '@/lib/deck-mastery';
 import { getDeckDisplayColors } from '@/lib/deck-metadata';
 import type { AppLanguage } from '@/lib/i18n/types';
@@ -112,7 +113,7 @@ export const DeckCard = memo(function DeckCard({
         <View style={styles.performanceRow}>
           {metricsAvailable ? <DeckMasteryBadge gamesPlayed={gamesPlayed} wins={wins} language={language} /> : null}
           <View style={styles.winRateStat}>
-            <Text style={styles.statValue}>{metricsAvailable ? `${winRate?.winRate ?? 0}%` : '—'}</Text>
+            <Text style={styles.statValue}>{metricsAvailable ? formatWinRate(winRate??{gamesPlayed:0,wins:0}) : '—'}</Text>
             <Text style={styles.statLabel}>{copy('winRate')}</Text>
           </View>
         </View>

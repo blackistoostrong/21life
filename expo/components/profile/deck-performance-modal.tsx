@@ -1,3 +1,4 @@
+import {formatWinRate} from '@/lib/win-rate';
 import { ReportRing } from '@/components/ui/report-ring';
 import { CollapsiblePanel } from '@/components/ui/collapsible-panel';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -70,7 +71,7 @@ export function DeckPerformanceModal({ visible, deck, performance, labels, onClo
         </View>
 
         <PhyrexianPanel variant="inset" style={styles.fingerprint}>
-          <ReportRing value={performance?.winRate || 0} label={labels.winRate} />
+          <ReportRing value={performance?.winRate || 0} valueLabel={formatWinRate(performance??{gamesPlayed:0,wins:0})} label={labels.winRate} />
           <View style={styles.outcomes}>
             {outcomes.map(([label, value, color]) => <View key={label} style={styles.outcome}>
               <View style={styles.outcomeHeader}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.outcomeValue}>{value}</Text></View>

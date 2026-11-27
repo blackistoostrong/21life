@@ -1,4 +1,5 @@
 'use client';
+import {formatWinRate} from '@/lib/win-rate';
 
 import { resolveCommanderColorOptions } from '@/lib/profile-commander';
 import type { CommanderArtOption } from '@/lib/profile-commander';
@@ -246,7 +247,7 @@ export default function ProfilePage() {
             <div className="grid gap-3 sm:grid-cols-3">
               {[
                 { label: t({ it: 'Partite giocate', en: 'Matches played' }), value: metricsLoading || metricsError ? '—' : personalSnapshot.games, tone: 'from-cyan-500/20 to-cyan-950/10', icon: Swords },
-                { label: t({ it: 'Win rate', en: 'Win rate' }), value: metricsLoading || metricsError ? '—' : `${personalSnapshot.winRate}%`, tone: 'from-emerald-500/20 to-emerald-950/10', icon: Trophy },
+                { label: t({ it: 'Win rate', en: 'Win rate' }), value: metricsLoading || metricsError ? '—' : formatWinRate(personalSnapshot), tone: 'from-emerald-500/20 to-emerald-950/10', icon: Trophy },
                 { label: t({ it: 'Mazzi attivi', en: 'Active decks' }), value: visibleDecks.length, tone: 'from-violet-500/20 to-violet-950/10', icon: Star },
               ].map(({ label, value, tone, icon: Icon }) => <div key={label} className={`rounded-xl border border-white/10 bg-gradient-to-br ${tone} p-3`}><div className="flex items-center justify-between text-xs text-muted-foreground"><span>{label}</span><Icon className="h-4 w-4 text-white/70" /></div><p className="mt-2 text-2xl font-bold text-foreground">{value}</p></div>)}
             </div>

@@ -71,7 +71,7 @@ export function useProfileDeckCollection(decks: Deck[], adminMode: boolean,
     const favorite = getHighestMasteryDeck(visibleDecks, (deck) => deckPerformance.get(deck.id));
     const mostPlayed = [...visibleDecks].sort((a, b) => (deckPerformance.get(b.id)?.gamesPlayed || 0) - (deckPerformance.get(a.id)?.gamesPlayed || 0))[0];
     const draws=performances.reduce((total,entry)=>total+entry.draws,0);
-    return { games, wins, winRate: buildMatchRecord({gamesPlayed:games,wins,draws}).winRate, favorite, mostPlayed };
+    return { games, ...buildMatchRecord({gamesPlayed:games,wins,draws}), favorite, mostPlayed };
   }, [deckPerformance, visibleDecks]);
   return { deckSearchQuery, setDeckSearchQuery, deckColorFilter, setDeckColorFilter,
     deckPlayerFilter, setDeckPlayerFilter, deckSort, setDeckSort,

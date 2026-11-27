@@ -3,8 +3,8 @@
 import { Pie, PieChart } from 'recharts';
 
 /** Counts define the sectors; the existing decisive-game win rate stays separate. */
-export default function DeckOutcomeChart({ wins, draws, losses, winRate, label }: {
-  wins: number; draws: number; losses: number; winRate: number; label: string;
+export default function DeckOutcomeChart({ wins, draws, losses, winRate, valueLabel, label }: {
+  wins: number; draws: number; losses: number; winRate: number; valueLabel?: string; label: string;
 }) {
   const data = [
     { value: wins, fill: '#34d399' },
@@ -21,7 +21,7 @@ export default function DeckOutcomeChart({ wins, draws, losses, winRate, label }
         </PieChart>
       </div>
       <div className="absolute inset-4 grid place-items-center rounded-full bg-card text-center shadow-inner">
-        <strong className="text-2xl text-emerald-300">{winRate}%</strong>
+        <strong className="text-2xl text-emerald-300">{valueLabel??`${winRate}%`}</strong>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">win rate</span>
       </div>
     </div>

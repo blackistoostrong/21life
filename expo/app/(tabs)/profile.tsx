@@ -1,4 +1,4 @@
-import { buildMatchRecord } from '@/lib/win-rate';
+import { buildMatchRecord,formatWinRate } from '@/lib/win-rate';
 import { CollapsiblePanel } from '@/components/ui/collapsible-panel';
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -148,7 +148,7 @@ export default function ProfileScreen() {
     const wins = entries.reduce((sum, item) => sum + item.wins, 0);
     const favorite = getHighestMasteryDeck(decks, (deck) => performance[deck.id]);
     const draws=entries.reduce((sum,item)=>sum+item.draws,0);
-    return { games, winRate: buildMatchRecord({gamesPlayed:games,wins,draws}).winRate, favorite };
+    return { games, ...buildMatchRecord({gamesPlayed:games,wins,draws}), favorite };
   }, [decks, performance]);
 
   const handleRefresh = async () => {
@@ -258,7 +258,7 @@ export default function ProfileScreen() {
 
           <View style={styles.snapshotRow}>
             <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Partite' : 'Matches'}</Text><Text style={styles.snapshotValue}>{metricsLoading || metricsError ? '—' : personalSnapshot.games}</Text></View>
-            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>Win rate</Text><Text style={styles.snapshotValue}>{metricsLoading || metricsError ? '—' : `${personalSnapshot.winRate}%`}</Text></View>
+            <View style={styles.snapshot}><Text style={styles.snapshotLabel}>Win rate</Text><Text style={styles.snapshotValue}>{metricsLoading || metricsError ? '—' : formatWinRate(personalSnapshot)}</Text></View>
             <View style={styles.snapshot}><Text style={styles.snapshotLabel}>{language === 'it' ? 'Mazzi' : 'Decks'}</Text><Text style={styles.snapshotValue}>{catalogError ? '—' : activeDecks.length}</Text></View>
           </View>
           <Button label={`${copy('archivedDecks')} (${catalogError ? '—' : decks.length - activeDecks.length})`} icon="archive-outline" variant="ghost" size="sm" onPress={() => router.push('/archived-decks')} />

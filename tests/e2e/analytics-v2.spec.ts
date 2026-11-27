@@ -297,3 +297,53 @@ test('profile collection preserves favorite priority, search, colors and metric 
     await grid.screenshot({ path: `artifacts/dev26/collection-${phase}-${test.info().project.name}.png`, animations: 'disabled' });
   }
 });
+
+
+for(const outcome of ['empty','draw-only','losses'] as const){
+ test(`analytics v2 personal rates distinguish ${outcome} without invented losses`,async({page})=>{
+  test.skip(process.env.E2E_ANALYTICS_FLOW!=='1','Requires disposable authentication.');
+  const games=outcome==='empty'?0:3,draws=outcome==='draw-only'?3:0,label=outcome==='losses'?'0%':'—';
+  await page.route('**/rest/v1/rpc/get_personal_analytics_dashboard_v2',route=>{
+   const report=analyticsDashboardFixture();Object.assign(report.totals,{gamesPlayed:games,matches:games,wins:0,draws});
+   for(const deck of report.topDecks)Object.assign(deck,{gamesPlayed:games,wins:0,draws});
+   if(report.bestDeck)Object.assign(report.bestDeck,{gamesPlayed:games,wins:0,draws});
+   for(const color of report.colors)Object.assign(color,{gamesPlayed:games,wins:0,draws});
+   report.streaks={longest:0,current:0};report.bracketWins=[];report.winConditions=[];
+   if(!games){report.uniqueDecks=0;report.topDecks=[];report.bestDeck=null;report.colors=[];}
+   return route.fulfill({json:report});
+  });
+  const userId=process.env.E2E_USER_ID!,deckId='00000000-0000-4000-8000-000000000001';
+  await page.route('**/rest/v1/rpc/get_profile_catalog_page_v2',route=>route.fulfill({json:{
+   schemaVersion:2,scope:'personal',userId,revision:'c'.repeat(32),total:1,next:null,
+   decks:[{id:deckId,user_id:userId,group_id:null,name:'Neutral presentation fixture',commander:'Test commander',
+    commander_image:null,commander_cmc:4,commander_options:[],color_identity:['U'],bracket:'3',source_type:'manual',source_url:null,
+    is_favorite:false,is_archived:false,created_at:'2026-01-01T00:00:00Z',updated_at:null}],
+  }}));
+  await page.route('**/rest/v1/rpc/get_profile_deck_performance_v2',route=>{
+   const report=profileCatalogFixture();report.userId=userId;
+   Object.assign(report.decks[0],{deck_id:deckId,games_played:games,wins:0,draws,tracked_games:0,second_places:0,
+    mastery_points:0,damage_dealt:0,damage_taken:0,life_gained:0,commander_damage:0,infect_dealt:0,eliminations:0,
+    group_damage_dealt:0,group_damage_events:0,median_winning_duration_seconds:null,
+    first_eliminations:0,comeback_wins:0,combo_wins:0,alternate_wins:0});
+   if(!games){report.total=0;report.decks=[];}
+   return route.fulfill({json:report});
+  });
+  await fixtureLogin(page);
+  const personal=page.getByRole('heading',{name:'Personal Analytics',exact:true}).locator('xpath=ancestor::section[1]');
+  if(games){
+   await expect(personal.getByText(`${label} win`,{exact:true}).first()).toBeVisible();
+   await expect(personal.getByText(`0W · ${label}`,{exact:true}).first()).toBeVisible();
+   if(outcome==='draw-only')await expect(personal.getByText('0% win',{exact:true})).toHaveCount(0);
+  }else await expect(page.getByRole('heading',{name:'No personal data yet',exact:true})).toBeVisible();
+  await page.getByRole('banner').getByRole('button',{name:'Profile',exact:true}).click();
+  const player=page.getByRole('region',{name:'Your player card'});
+  await expect(player.getByText(label,{exact:true}).first()).toBeVisible();
+  const deck=page.locator('[data-web-card]').filter({has:page.getByRole('heading',{name:'Neutral presentation fixture',exact:true})});
+  await expect(deck.getByText(label,{exact:true}).first()).toBeVisible();
+  if(outcome!=='losses')await expect(deck.getByText('0%',{exact:true})).toHaveCount(0);
+  await deck.getByRole('button',{name:'Details',exact:true}).click();
+  const losses=games-draws;
+  const chart=page.getByRole('img',{name:`Wins 0, draws ${draws}, losses ${losses}. Win rate ${label}.`,exact:true});
+  await expect(chart).toBeVisible();await expect(chart.getByText(label,{exact:true})).toBeVisible();
+ });
+}
