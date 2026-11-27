@@ -4,9 +4,11 @@ import { Swords, Target, Trophy, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLanguage } from '@/components/language-provider';
 import type { DeckPerformanceStats } from '@/lib/deck-performance-analytics';
+import { averageWinRate, formatWinRate } from '@/lib/win-rate';
 
 export function ArenaDeckSummary({ visibleDeckStats, totalDecks }: { visibleDeckStats: DeckPerformanceStats[]; totalDecks: number }) {
   const { copy: t } = useLanguage();
+  const averageRate = averageWinRate(visibleDeckStats);
   return (
                 <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <Card className="bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border-emerald-500/30">
@@ -22,7 +24,7 @@ export function ArenaDeckSummary({ visibleDeckStats, totalDecks }: { visibleDeck
                           {t({ it: 'Bracket', en: 'Bracket' })} {visibleDeckStats[0].bracket}
                         </p>
                       )}
-                      <p className="text-sm text-muted-foreground">{visibleDeckStats[0]?.winRate ?? 0}% {t({ it: 'win rate', en: 'win rate' })}</p>
+                      <p className="text-sm text-muted-foreground">{visibleDeckStats[0] ? formatWinRate(visibleDeckStats[0]) : '—'} {t({ it: 'win rate', en: 'win rate' })}</p>
                     </CardContent>
                   </Card>
                   <Card className="bg-card/50 border-border">
@@ -61,9 +63,9 @@ export function ArenaDeckSummary({ visibleDeckStats, totalDecks }: { visibleDeck
                         <span className="text-sm font-medium">{t({ it: 'Win rate medio', en: 'Avg Win Rate' })}</span>
                       </div>
                       <p className="text-2xl font-bold text-foreground">
-                        {visibleDeckStats.length > 0 ? Math.round(visibleDeckStats.reduce((a, b) => a + b.winRate, 0) / visibleDeckStats.length) : 0}%
+                        {averageRate === null ? '—' : `${averageRate}%`}
                       </p>
-                      <p className="text-sm text-muted-foreground">{t({ it: 'su tutti i mazzi', en: 'across all decks' })}</p>
+                      <p className="text-sm text-muted-foreground">{t({ it: 'sui mazzi con partite decisive', en: 'across decks with decisive games' })}</p>
                     </CardContent>
                   </Card>
                 </div>
