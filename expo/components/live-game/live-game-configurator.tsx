@@ -249,6 +249,9 @@ export function LiveGameConfigurator({
         {[2, 3, 4, 5, 6].map((count) => (
           <Pressable
             key={count}
+            accessibilityRole="button"
+            accessibilityLabel={`${labels.playerCount}: ${count}`}
+            accessibilityState={{ selected: count === playerCount, disabled: creatingDeck }}
             disabled={creatingDeck} onPress={() => { if (!creatingDeck) onPlayerCountChange(count); }}
             style={({ pressed }) => [
               styles.countButton,

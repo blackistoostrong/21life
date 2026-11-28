@@ -12,6 +12,20 @@ concurrency:
 
 jobs:
   web:
+    if: always()
+    needs: [web-checks, android-core]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require web and isolated Android cores
+        env:
+          WEB_RESULT: ${{ needs.web-checks.result }}
+          ANDROID_RESULT: ${{ needs.android-core.result }}
+        run: test "$WEB_RESULT" = success && test "$ANDROID_RESULT" = success
+
+  android-core:
+    uses: ./.github/workflows/android-core.yml
+
+  web-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
