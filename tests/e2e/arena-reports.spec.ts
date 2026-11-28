@@ -60,6 +60,7 @@ test('arena report panels preserve retry, neutral draws, provisional decks and a
   await fixtureLogin(page);
   await page.locator(`a[href="/table/${process.env.E2E_GROUP_ID!}"]`).first().click();
   await page.getByRole('tab', { name: /Decks/ }).click();
+  await expect(page.getByText(/The 5-game threshold controls visibility; it does not guarantee statistical reliability/)).toBeVisible();
   const error = page.getByRole('alert').filter({ hasText: 'Statistics unavailable.' });
   await expect(error).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No deck stats yet', exact: true })).toHaveCount(0);
@@ -70,6 +71,7 @@ test('arena report panels preserve retry, neutral draws, provisional decks and a
   await page.getByRole('tab', { name: /Players/ }).click();
   const board = page.getByRole('heading', { name: 'Player Leaderboard', exact: true }).locator('xpath=ancestor::div[@data-web-card][1]');
   await expect(board.getByText('Player A', { exact: true })).toBeVisible();
+  await expect(board.getByText(/Win rate = wins \/ games with a winner; draws are excluded/)).toBeVisible();
   await expect(board.getByText('50%', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Meta/ }).click();
   await expect(page.getByRole('heading', { name: 'Color meta', exact: true })).toBeVisible();
