@@ -117,6 +117,7 @@ export function ArenaPlayerReport({ status, playerStats, playerRanksByIndex, tot
                       {t({ it: 'Classifica giocatori', en: 'Player Leaderboard' })}
                     </CardTitle>
                     <CardDescription>{t({ it: 'Ordinata per win rate', en: 'Rankings by win rate' })}</CardDescription>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{t({ it: 'Win rate = vittorie / partite con un vincitore; le patte sono escluse. Senza partite decisive: —. Considera anche quanti giocatori siedono al tavolo: duelli e tavoli multiplayer hanno contesti diversi.', en: 'Win rate = wins / games with a winner; draws are excluded. No decisive games: —. Consider table size too: duels and multiplayer tables have different contexts.' })}</p>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">

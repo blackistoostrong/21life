@@ -19,6 +19,7 @@ type TablePlayersTabProps = {
     leaderboard: string;
     playerLeaderboard: string;
     playerLeaderboardHint: string;
+    statisticsMethodHint: string;
     noMatchesBody: string;
     games: string;
     wins: string;
@@ -93,6 +94,7 @@ export function TablePlayersTab({
           <View style={styles.leaderboardHeaderText}>
             <Text style={styles.leaderboardTitle}>{labels.playerLeaderboard}</Text>
             <Text style={styles.leaderboardHint}>{labels.playerLeaderboardHint}</Text>
+            <Text style={styles.leaderboardHint}>{labels.statisticsMethodHint}</Text>
           </View>
         </View>
 

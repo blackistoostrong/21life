@@ -4,6 +4,8 @@
 
 ### Priorità PM 20 novembre — candidato9.3.0 testabile
 
+- [ ] 28Nov DEV26-07 chiarezza statistiche: aggiunto ai report giocatori/mazzi web+Native aiuto IT/EN su denominatore con vincitore, esclusione patte, assenza decisive e contesto dimensione tavolo; soglia5 esplicitamente di visibilità, non affidabilità. Storico web mostra numero partecipanti completo, Native già presente. Formule/ordinamenti/filtri/soglia/toggle invariati, nessuna query/schema/dependency nuova. TS entrambe piattaforme, lint mirato/confini e6regressioni esistenti PASS. Primo TS Native ha rilevato chiavi traduzione mancanti nel tipo: dichiarate e nuovo PASS, nessun cast/deroga. Build/export e collaudo sul candidato aggiornato ancora richiesti. RecapPR283 head5e900f91 pronto, CIweb ancora in corso al gate; nessun merge presunto.
+
 
 - [x] 28Nov recap VERIFICATO runtime6f6682b3: quality1061web+7skip/80script/163floor e867Native+3skip/151floor PASS;42browser PASS; cleanweb56route3.56/18MiB ed exportAndroid+iOS9.48/12MiB stessoSHA PASS.14autenticati desktop/mobile PASS con cleanup Dev verificato (4recap +10preset/live). Fixture finale usa SDK actor e cancellazione normale mazzo personale, readback historical; nessuna modifica prodotto/guard DB per adattare fixture non valide. Ultime correzioni soltanto QA/docs, identità runtime da conservare. PR283 ancora da integrare con nuovo head e4check; report docs/DEV26_PLAYGROUP_RECAP.md. Renderer/dispositivi/immagini finali; nessunaAPK/prod.
 
