@@ -1,0 +1,120 @@
+name: Isolated Android core
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      APP_VARIANT: dev
+      NATIVE_CI: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_SENTRY_ENABLED: 'false'
+      SENTRY_ENABLED: 'false'
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      MAESTRO_CLI_ANALYTICS_OPTOUT: 'true'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            expo/package-lock.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.114.0
+          github-token: ${{ github.token }}
+      - run: npm ci
+      - run: npm --prefix expo ci
+      - name: Start disposable backend with Realtime and current migrations
+        run: supabase start -x imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
+      - name: Configure only local CI services
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "EXPO_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo 'NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000'
+            echo 'EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:3000'
+            echo 'EXPO_PUBLIC_SITE_URL=http://127.0.0.1:3000'
+          } >> "$GITHUB_ENV"
+      - name: Validate isolated target and pre-build gates
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import {nativeCiConfiguration} from './scripts/native-ci-config.mjs'; nativeCiConfiguration(process.env); console.log('Isolated native CI target verified');"
+          cat .agents/MERGE_FAILURES.md .agents/RELEASE_PREBUILD_CHECKLIST.md
+          git diff --exit-code
+      - run: npm run build
+      - name: Generate isolated Dev Android sources
+        run: npx --no-install expo prebuild --platform android --no-install
+        working-directory: expo
+      - name: Compile Dev debug APK for the emulator
+        run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=x86_64 --max-workers=2 --no-daemon --console=plain
+        working-directory: expo/android
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=2'
+      - name: Install pinned Maestro CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.13.0/maestro.zip -o "$RUNNER_TEMP/maestro.zip"
+          echo 'ccc536679ed35e3a84b7e9e5c364f2371204c291fb331fec8c00e3e496dda5ff  '"$RUNNER_TEMP/maestro.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run three consecutive authenticated native cores
+        uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            PORT=3000 HOSTNAME=127.0.0.1 node scripts/start-standalone.mjs > "$RUNNER_TEMP/native-api.log" 2>&1 &
+            (cd expo && npx --no-install expo start --offline --port 8081 --max-workers 2) > "$RUNNER_TEMP/native-metro.log" 2>&1 &
+            for attempt in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/auth/login >/dev/null && break || sleep 2; done
+            curl -fsS http://127.0.0.1:3000/auth/login >/dev/null
+            for attempt in $(seq 1 60); do curl -fsS http://127.0.0.1:8081/status >/dev/null && break || sleep 2; done
+            curl -fsS http://127.0.0.1:8081/status
+            adb install -r expo/android/app/build/outputs/apk/debug/app-debug.apk
+            adb reverse tcp:8081 tcp:8081
+            adb reverse tcp:3000 tcp:3000
+            adb reverse tcp:54321 tcp:54321
+            node scripts/run-ci-native-e2e.mjs
+      - name: Retain native core evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: isolated-native-core
+          path: |
+            ${{ runner.temp }}/native-ci/
+            ${{ runner.temp }}/native-api.log
+            ${{ runner.temp }}/native-metro.log
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Remove disposable CI backend
+        if: always()
+        run: supabase stop --no-backup

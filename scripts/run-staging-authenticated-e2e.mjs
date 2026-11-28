@@ -107,7 +107,8 @@ try {
     for (const flow of ['authenticated-live-game', 'authenticated-archive']) {
       const result = runMaestro(['test', '--debug-output', resolve(`artifacts/e2e/maestro/${flow}`), resolve(`expo/e2e/${flow}.yaml`)], {
         stdio: 'inherit', env: { ...process.env, MAESTRO_E2E_USERNAME: email, MAESTRO_E2E_PASSWORD: password,
-          MAESTRO_PLAYER_1: usernames[0], MAESTRO_PLAYER_2: usernames[1], MAESTRO_METRO_URL: process.env.E2E_METRO_URL || '' },
+          MAESTRO_PLAYER_1: usernames[0], MAESTRO_PLAYER_2: usernames[1], MAESTRO_METRO_URL: process.env.E2E_METRO_URL || '',
+          MAESTRO_RESUME_URL: `phyrexianarena-dev://table/${groupId}/play` },
       });
       if ((result.status ?? 1) !== 0) { exitCode = result.status ?? 1; break; }
     }

@@ -1,6 +1,7 @@
 appId: com.phyrexianarena.app.dev
 env:
   METRO_URL: ${MAESTRO_METRO_URL}
+  RESUME_URL: ${MAESTRO_RESUME_URL}
 ---
 - launchApp:
     clearState: true
@@ -27,28 +28,65 @@ env:
     timeout: 20000
 - tapOn: "IMP synthetic playgroup"
 - tapOn: "Play [Gg]ame|Gioca partita"
-- tapOn: "2"
+- tapOn: "(Number of players|Numero di giocatori): 2"
+- scrollUntilVisible:
+    element:
+      text: "Next|Avanti"
+    direction: DOWN
 - tapOn: "Next|Avanti"
+- scrollUntilVisible:
+    element:
+      text: "Next|Avanti"
+    direction: DOWN
 - tapOn: "Next|Avanti"
+- scrollUntilVisible:
+    element:
+      text: "Next|Avanti"
+    direction: DOWN
 - tapOn: "Next|Avanti"
+- scrollUntilVisible:
+    element:
+      text: "(Seat|Posto) 1:.*"
+    direction: DOWN
 - tapOn: "(Seat|Posto) 1:.*"
 - tapOn: ${MAESTRO_PLAYER_1}
 - tapOn: "(Choose deck|Scegli mazzo): IMP synthetic deck 1"
 - tapOn: "Confirm|Conferma"
+- scrollUntilVisible:
+    element:
+      text: "(Seat|Posto) 2:.*"
+    direction: DOWN
 - tapOn: "(Seat|Posto) 2:.*"
 - tapOn: ${MAESTRO_PLAYER_2}
 - tapOn: "(Choose deck|Scegli mazzo): IMP synthetic deck 2"
 - tapOn: "Confirm|Conferma"
+- scrollUntilVisible:
+    element:
+      text: "Start game|Inizia partita"
+    direction: DOWN
 - tapOn: "Start game|Inizia partita"
 - extendedWaitUntil:
     visible: "End game|Fine partita"
     timeout: 20000
-- tapOn: ${MAESTRO_PLAYER_1 + " -1"}
 - runFlow:
     when:
       visible: "Close guide|Chiudi guida"
     commands:
       - tapOn: "Close guide|Chiudi guida"
+- tapOn: ${MAESTRO_PLAYER_1 + " -1"}
+- assertVisible: "39"
+- setOrientation: LANDSCAPE_LEFT
+- assertVisible: "39"
+- setOrientation: PORTRAIT
+- pressKey: Home
+- killApp
+- launchApp:
+    stopApp: false
+- openLink: ${RESUME_URL}
+- extendedWaitUntil:
+    visible: "End game|Fine partita"
+    timeout: 60000
+- assertVisible: "39"
 - tapOn: "End game|Fine partita"
 - tapOn: "Draw|Patta"
 - tapOn: "Confirm & save|Conferma e salva"
