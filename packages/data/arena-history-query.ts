@@ -37,6 +37,20 @@ export async function fetchArenaHistoryDaySummaries(client:ArenaHistoryRpcClient
 /** Explicit export operation: no partial day escapes timeout/size/revision failures. */
 export async function fetchCompleteArenaHistoryDay(client:ArenaHistoryRpcClient,input:ArenaHistoryScope,dayKey:string,signal?:AbortSignal) {
   const scope=arenaHistoryScope(input.groupId,{...input,dayKey});
+  return fetchCompleteArenaHistory(client,scope,signal);
+}
+
+/** Complete calendar-period input for recap; never reuse the arena's 08:00 day filter. */
+export async function fetchCompleteArenaHistoryPeriod(client:ArenaHistoryRpcClient,
+  input:Pick<ArenaHistoryScope,'groupId'|'since'|'until'>,signal?:AbortSignal) {
+  const scope=arenaHistoryScope(input.groupId,{since:input.since,until:input.until,dayKey:null,boundaryHour:0,limit:100});
+  if(scope.since===null || scope.until===null || Date.parse(scope.until)-Date.parse(scope.since)>31*86400000) {
+    throw new Error('ARENA_HISTORY_PERIOD_INVALID');
+  }
+  return fetchCompleteArenaHistory(client,scope,signal);
+}
+
+async function fetchCompleteArenaHistory(client:ArenaHistoryRpcClient,scope:ArenaHistoryScope,signal?:AbortSignal) {
   const controller=new AbortController(),abort=()=>controller.abort();
   if(signal?.aborted)controller.abort();
   signal?.addEventListener('abort',abort,{once:true});

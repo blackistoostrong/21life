@@ -117,7 +117,7 @@ try {
       console.log('Staging native saved-match history verified.');
     }
   }
-  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands', 'live game realtime', 'arena report'])) {
+  for (const grep of (driver === 'maestro' ? [] : process.env.E2E_GREP ? [process.env.E2E_GREP] : ['Archidekt settings', 'authenticated screens fit', 'wizard → damage', 'synthetic deck archive', 'wizard layout previews', 'low-sample decks', 'arena guest scope', 'arena match atomic API', 'web live catalog', 'web live commands', 'web live presets', 'live game realtime', 'arena report', 'arena recap'])) {
     const status = await runNodeCommand([
       resolve('node_modules/@playwright/test/cli.js'), 'test',
       'tests/e2e/public-ui.spec.ts',
@@ -157,6 +157,7 @@ try {
       'tests/e2e/native-live-connectivity.spec.ts',
       'tests/e2e/web-live-catalog.spec.ts',
       'tests/e2e/web-live-commands.spec.ts',
+      'tests/e2e/arena-recap-authenticated.spec.ts',
       'tests/e2e/live-game-realtime.spec.ts',
       'tests/e2e/arena-match-atomic.spec.ts',
       '--grep', grep,

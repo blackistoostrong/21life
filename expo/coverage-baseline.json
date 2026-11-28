@@ -874,5 +874,35 @@
     "branches": 80,
     "functions": 89,
     "statements": 92
+  },
+  "../packages/domain/arena-recap-period.ts": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  },
+  "../packages/domain/arena-recap.ts": {
+    "lines": 100,
+    "branches": 97,
+    "functions": 100,
+    "statements": 98
+  },
+  "../packages/data/arena-recap-source.ts": {
+    "lines": 100,
+    "branches": 97,
+    "functions": 100,
+    "statements": 95
+  },
+  "../packages/features/arena-recap/controller.ts": {
+    "lines": 100,
+    "branches": 86,
+    "functions": 95,
+    "statements": 91
+  },
+  "../packages/features/arena-recap/text.ts": {
+    "lines": 100,
+    "branches": 97,
+    "functions": 100,
+    "statements": 100
   }
 }

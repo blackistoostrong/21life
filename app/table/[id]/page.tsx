@@ -1,6 +1,8 @@
 'use client';
 import { useArenaSessionExport } from '@/hooks/use-arena-session-export';
 import { useArenaSharing } from '@/hooks/use-arena-sharing';
+import { useWebArenaRecap } from '@/hooks/use-web-arena-recap';
+import { ArenaRecapDialog } from '@/components/arena/arena-recap-dialog';
 import { ArenaHistoryPanel } from '@/components/arena/arena-history-panel';
 import { ArenaPlayerReport } from '@/components/arena/arena-player-report';
 import { ArenaMemberRoster } from '@/components/arena/arena-member-roster';
@@ -137,6 +139,7 @@ export default function TablePage() {
   const { group, setGroup, decks, setDecks, members, setMembers, guests, loading, decksLoading,
     deckColorOverrides, updateDeckColors, catalogError, guestsError, decksError,
     fetchData, reloadGuests, loadArenaDecks, ensureArenaMemberDecksLoaded } = useArenaCatalog(user?.id ?? null, groupId, adminMode);
+  const recap = useWebArenaRecap(user?.id ?? '', groupId, group?.name ?? '');
   const season=useArenaSeasonContext(user?.id,groupId);
   const seasonContext=season.data;
   const [activeTab, setActiveTab] = useState('matches');
@@ -282,9 +285,7 @@ export default function TablePage() {
     return scheduleArenaDeckColors(deckIdsInMatches, 2000);
   }, [activeTab, deckIdsInMatches, scheduleArenaDeckColors, loading]);
 
-  const { copyInviteLink, getWinConditionLabel, handleShareArenaStats, handleShareMatch } = useArenaSharing({
-    group, season, reportAnalytics, history, dateFilter, seasonContext, analyticsPayload, playerStats, deckStats, colorAnalytics
-  });
+  const { copyInviteLink, getWinConditionLabel, handleShareMatch } = useArenaSharing({group});
 
   const getParticipantDeckOptions = (participantKey: ParticipantKey) => {
     const parsed = parseParticipantKey(participantKey);
@@ -374,9 +375,9 @@ export default function TablePage() {
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <AppProfileButton />
-              <Button variant="outline" size="sm" onClick={handleShareArenaStats} disabled={!season.ready || !reportAnalytics.ready || history.loading || Boolean(history.error)} className="h-11 border-border px-3 text-foreground sm:px-4" title={t({ it: 'Condividi statistiche', en: 'Share stats' })}>
+              <Button variant="outline" size="sm" onClick={() => void recap.controller.open()} disabled={!user?.id} className="h-11 border-border px-3 text-foreground sm:px-4" title={recap.labels.open} aria-label={recap.labels.open}>
                 <Share2 className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">{t({ it: 'Condividi', en: 'Share' })}</span>
+                <span className="hidden sm:inline">{recap.labels.open}</span>
               </Button>
 
             </div>
@@ -764,6 +765,7 @@ export default function TablePage() {
         />
       )}
 
+      <ArenaRecapDialog recap={recap} />
       <ArenaMembershipDialogs group={group} controls={membership} />
 
       {/* Edit Match Modal */}
