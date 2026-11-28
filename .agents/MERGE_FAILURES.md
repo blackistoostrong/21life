@@ -127,3 +127,10 @@ L'avanzamento dei task resta in `PROJECT_CHECKLIST.md`.
 - Artifact expected/actual ispezionati: nuova barra sticky Back/Next copre le etichette inferiori nella cattura del componente a viewport corto. Fix applicativo9.2.1 preservato.
 - Recupero candidato: cattura preview desktop con altezza sufficiente, golden/tolleranza invariati; ripristino viewport originale e verifica Next→scelta posti. Test locale e nuova CI necessari prima del merge.
 - Prevenzione: screenshot di componenti non deve includere overlay esterni; azioni sticky vanno verificate funzionalmente alla viewport reale. Nessun aggiornamento cieco snapshot o bypass.
+
+
+## 2026-11-28 — Riallineamento ramo statistiche dopo squash recap PR283
+
+- Merge origin/Dev2ae5d50c in fix/dev26-statistics-context9280a594: exit1 soltanto PROJECT_CHECKLIST e code map workflow. Il ramo deriva dal precedente head5e900f91, poi squashed su Dev; append statistiche e aggiornamento descrizioni incontrano le precedenti versioni documentali. Nessuna compilazione/test dipendente avviata dopo il fallimento.
+- REST PR283 confermata CLOSED/merged=true, head5e900f91 e merge2ae5d50c prima del recupero. Conflitti ispezionati per hunk: mantenuta nuova voce07 (incoming vuoto) e descrizioni verificate recap/rematch; nessuna informazione entrante nuova scartata. File risolti identici a9280a594 verificati con git diff, nessuna scelta ours/theirs dell'intero file.
+- Prevenzione: per branch dipendenti da una PR poi squashed, verificare ancestry e delta; preferire nuovo branch dal merge Dev e riportare soltanto il delta successivo, oppure riconciliare gli hunk documentali e provare identità runtime prima di riutilizzare build/test.
