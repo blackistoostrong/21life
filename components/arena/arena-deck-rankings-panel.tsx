@@ -48,6 +48,8 @@ export function ArenaDeckRankingsPanel({ status, deckStats, visibleDeckStats, de
                       {deckStatsSort === 'winRate' && t({ it: 'Ordinata per win rate, vittorie e partite giocate', en: 'Sorted by win rate, wins, and games played' })}
                       {deckStatsSort === 'gamesPlayed' && t({ it: 'Ordinata per partite giocate', en: 'Sorted by games played' })}
                     </CardDescription>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{t({ it: 'Win rate = vittorie / partite con un vincitore; le patte sono escluse. Senza partite decisive: —. Considera anche quanti giocatori siedono al tavolo: duelli e tavoli multiplayer hanno contesti diversi.', en: 'Win rate = wins / games with a winner; draws are excluded. No decisive games: —. Consider table size too: duels and multiplayer tables have different contexts.' })}</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{t({ it: 'Meno di 5 partite: campione ridotto, nascosto di default. La soglia di 5 regola la visibilità, non garantisce affidabilità statistica.', en: 'Under 5 games: low sample, hidden by default. The 5-game threshold controls visibility; it does not guarantee statistical reliability.' })}</p>
                     {provisionalDeckCount > 0 ? (
                       <button
                         type="button"

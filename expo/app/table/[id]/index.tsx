@@ -719,6 +719,7 @@ export default function TableScreen() {
               leaderboard: copy('leaderboard'),
               playerLeaderboard: copy('playerLeaderboard'),
               playerLeaderboardHint: copy('playerLeaderboardHint'),
+              statisticsMethodHint: copy('statisticsMethodHint'),
               noMatchesBody: copy('noMatchesBody'),
               games: copy('games'),
               wins: copy('wins'),
@@ -761,6 +762,8 @@ export default function TableScreen() {
               showProvisionalDecks: copy('showProvisionalDecks'),
               hideProvisionalDecks: copy('hideProvisionalDecks'),
               provisionalDeckSample: copy('provisionalDeckSample'),
+              statisticsMethodHint: copy('statisticsMethodHint'),
+              statisticsSampleHint: copy('statisticsSampleHint'),
               noRankedDecks: copy('noRankedDecks'),
             }}
           />

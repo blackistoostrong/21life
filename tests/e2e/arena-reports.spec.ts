@@ -65,11 +65,15 @@ test('arena report panels preserve retry, neutral draws, provisional decks and a
   await expect(page.getByRole('heading', { name: 'No deck stats yet', exact: true })).toHaveCount(0);
   valid = true; await error.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Deck Rankings', exact: true })).toBeVisible();
+  await expect(page.getByText(/The 5-game threshold controls visibility; it does not guarantee statistical reliability/)).toBeVisible();
   await page.getByRole('button', { name: 'Show 1 decks under 5 games', exact: true }).click();
   await expect(page.getByText('Deck', { exact: true }).first()).toBeVisible();
+  await page.screenshot({path: `artifacts/dev26/final-deck-report-${test.info().project.name}.png`, fullPage: true});
   await page.getByRole('tab', { name: /Players/ }).click();
   const board = page.getByRole('heading', { name: 'Player Leaderboard', exact: true }).locator('xpath=ancestor::div[@data-web-card][1]');
   await expect(board.getByText('Player A', { exact: true })).toBeVisible();
+  await expect(board.getByText(/Win rate = wins \/ games with a winner; draws are excluded/)).toBeVisible();
+  await page.screenshot({path: `artifacts/dev26/final-player-report-${test.info().project.name}.png`, fullPage: true});
   await expect(board.getByText('50%', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Meta/ }).click();
   await expect(page.getByRole('heading', { name: 'Color meta', exact: true })).toBeVisible();

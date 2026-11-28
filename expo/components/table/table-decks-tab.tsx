@@ -28,6 +28,8 @@ type TableDecksTabProps = {
     showProvisionalDecks: string;
     hideProvisionalDecks: string;
     provisionalDeckSample: string;
+    statisticsMethodHint: string;
+    statisticsSampleHint: string;
     noRankedDecks: string;
   };
 };
@@ -58,6 +60,8 @@ export function TableDecksTab({ commanderStats, labels }: TableDecksTabProps) {
 
       <View style={styles.rankingHeader}>
         <Text style={styles.sectionTitle}>{labels.deckRankings}</Text>
+        <Text style={styles.help}>{labels.statisticsMethodHint}</Text>
+        <Text style={styles.help}>{labels.statisticsSampleHint}</Text>
         {provisionalCount > 0 ? (
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>{showProvisional ? labels.hideProvisionalDecks : labels.showProvisionalDecks}</Text>
@@ -100,6 +104,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   rankingHeader: { gap: 10 },
+  help: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   toggleLabel: { flex: 1, color: colors.muted, fontSize: 12 },
   emptyFiltered: { color: colors.muted, fontSize: 13, textAlign: 'center', paddingVertical: 18 },

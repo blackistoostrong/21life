@@ -103,6 +103,7 @@ export function ArenaHistoryPanel({ season, history, seasonContext, matchDayGrou
                                 <CardContent className="py-4">
                                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0 flex-1">
+                                      <p className="mb-2 text-sm text-muted-foreground">{match.match_participants.length} {t({ it: match.match_participants.length === 1 ? 'giocatore' : 'giocatori', en: match.match_participants.length === 1 ? 'player' : 'players' })}</p>
                                       <div className="mb-3 flex flex-col gap-2">
                                         {match.match_participants.map((p) => {
                                           const deck = getParticipantDeckSnapshot(p);

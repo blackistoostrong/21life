@@ -234,6 +234,8 @@ export type TranslationKey =
   | 'showProvisionalDecks'
   | 'hideProvisionalDecks'
   | 'provisionalDeckSample'
+  | 'statisticsMethodHint'
+  | 'statisticsSampleHint'
   | 'noRankedDecks'
   | 'deckSortWinRate'
   | 'deckSortGamesPlayed'

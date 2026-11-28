@@ -7,11 +7,11 @@ import {
 } from '@/lib/deck-ranking-visibility';
 
 describe('deck ranking visibility', () => {
-  const decks = [{ id: 'new', gamesPlayed: 4 }, { id: 'ranked', gamesPlayed: 5 }];
+  const decks = [{ id: 'new', gamesPlayed: 4 }, { id: 'ranked', gamesPlayed: 5 }, { id: 'established', gamesPlayed: 6 }];
 
   it('hides samples below five games by default', () => {
     expect(DECK_RANKING_MIN_GAMES).toBe(5);
-    expect(filterDeckRankings(decks, false).map((deck) => deck.id)).toEqual(['ranked']);
+    expect(filterDeckRankings(decks, false).map((deck) => deck.id)).toEqual(['ranked', 'established']);
     expect(countProvisionalDeckRankings(decks)).toBe(1);
   });
 
@@ -19,5 +19,6 @@ describe('deck ranking visibility', () => {
     expect(filterDeckRankings(decks, true)).toEqual(decks);
     expect(isProvisionalDeckRanking(4)).toBe(true);
     expect(isProvisionalDeckRanking(5)).toBe(false);
+    expect(isProvisionalDeckRanking(6)).toBe(false);
   });
 });

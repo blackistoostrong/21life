@@ -1,10 +1,10 @@
 # DEV26 — Architettura e responsabilità
 
-## Preset locali: fondazione
+## Preset locali
 
-`packages/domain/table-presets.ts` definisce DTO e policy di collezione senza dipendenze esterne. `lib/table-preset-codec.ts` riusa Zod4.6.7 già installato per il documento strict; l’adapter Expo riusa lo stesso codec senza esportare schema/istanze di libreria. I gate domain/data rimangono invariati.
+`packages/domain/table-presets.ts` definisce DTO e policy di collezione senza dipendenze esterne. `lib/table-preset-codec.ts` riusa Zod4.6.7 già installato per il documento strict; la factory condivisa in packages/features/table-presets riceve Zod installato dal rispettivo adapter web/Expo, senza importare il runtime Root nel bundle nativo. I gate domain/data rimangono invariati.
 
-`packages/data/table-preset-storage.ts` possiede la coda immediata per chiave account/gruppo e i comandi read/modify/write, con storage/codec/clock ricevuti da port tipizzati. Gli adapter `lib/table-presets.ts` ed `expo/lib/table-presets.ts` usano rispettivamente localStorage con lock cross-tab e AsyncStorage. Nessuna lista di dati privati viene memorizzata nel singleton: solo promise di operazioni accettate, rimosse a completamento. Codec invalido/futuro non diventa una collezione vuota e nessun comando lo sovrascrive. La fondazione non avvia partite o crea mazzi; controller e UI devono ancora essere collegati.
+`packages/data/table-preset-storage.ts` possiede la coda immediata per chiave account/gruppo e i comandi read/modify/write, con storage/codec/clock ricevuti da port tipizzati. Gli adapter `lib/table-presets.ts` ed `expo/lib/table-presets.ts` usano rispettivamente localStorage con lock cross-tab e AsyncStorage. Nessuna lista di dati privati viene memorizzata nel singleton: solo promise di operazioni accettate, rimosse a completamento. Codec invalido/futuro non diventa una collezione vuota e nessun comando lo sovrascrive. Controller portabile e UI web/native gestiscono CRUD, anteprima e conferma; non avviano partite o creano mazzi. Riferimenti selezionati freschi preservano le scelte valide oltre i cap dei picker. Vedi docs/DEV26_TABLE_PRESETS.md, integrato Dev6922af25.
 
 ## Rivincita: riferimenti e apertura del recap
 
@@ -713,3 +713,7 @@ packages/features/arena-recap possiede formatter IT/EN e controller privato per 
 Web: navigator.share soltanto su richiesta, copia dopo ACK, downloadUTF8 con filename derivato dalle date. L’adapter possiede il breve lease BlobURL, da revocare anche se il dialogo chiude. Native: Share.share, senza messaggi di pubblicazione riuscita; Android risolve sharedAction anche quando non prova un invio. Riferimenti primari: https://reactnative.dev/docs/share e https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share. Nei test gli export sono intercettati, senza invii reali.
 
 La vecchia costruzione del riepilogo privato in use-arena-sharing e nella routeNative è rimossa. Inviti, export del giorno e log di una singola partita restano azioni distinte. La CTA recap non dipende dallo stato di un report corrente: il proprio owner prepara e valida una fonte completa. I nuovi moduli condivisi sono nei watchFolders Metro espliciti e nei controlli coverage/confini; nessuna dipendenza o migrazione nuova.
+
+## Significato delle statistiche — 28 novembre
+
+Report giocatori e mazzi web/native spiegano in IT/EN il denominatore: vittorie diviso partite con vincitore, patte escluse, nessuna decisiva resa con trattino. La soglia esistente5 determina soltanto la visibilità di default dei mazzi; l’aiuto non promette affidabilità statistica. I report ricordano il contesto diverso di duelli e multiplayer. La dimensione effettiva è nel singolo storico completo su entrambe le piattaforme; non viene derivata una media da report filtrati/parziali. Periodi, numeri, ordinamenti, filtri, toggle e invalidazioni restano gli esistenti. Nessuna nuova query o metrica.
