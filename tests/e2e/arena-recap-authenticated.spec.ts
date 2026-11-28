@@ -15,6 +15,9 @@ test('arena recap reads real Dev zero/manual/draw/guest/deleted-deck history and
   const backend = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   if (new URL(backend).hostname !== process.env.STAGING_SUPABASE_DOMAIN) throw Error('Dev fixture required');
   const admin = createClient(backend, process.env.SUPABASE_SERVICE_ROLE_KEY!, {auth: {persistSession: false, autoRefreshToken: false}});
+  const actor = createClient(backend, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    accessToken: async () => process.env.E2E_ACCESS_TOKEN!, auth: {persistSession: false, autoRefreshToken: false},
+  });
   const groupId = crypto.randomUUID(), deckId = crypto.randomUUID(), guestId = crypto.randomUUID(), guestDeckId = crypto.randomUUID();
   const userId = process.env.E2E_USER_ID!;
   const matchIds: string[] = [];
@@ -29,18 +32,21 @@ test('arena recap reads real Dev zero/manual/draw/guest/deleted-deck history and
     await expect(preview).toContainText(/Median duration: Data unavailable|Durata mediana: Dati non disponibili/);
     await page.getByRole('button', {name: /^(Close|Chiudi)$/}).click();
 
-    const deck = await admin.from('decks').insert({id: deckId, user_id: userId, group_id: groupId, name: 'Recap Owner Deck',
-      commander: "Atraxa, Praetors' Voice", source_type: 'occasional'}); expect(deck.error).toBeNull();
-    const guest = await admin.from('arena_guests').insert({id: guestId, group_id: groupId, display_name: 'Private Recap Guest'}); expect(guest.error).toBeNull();
-    const guestDeck = await admin.from('arena_guest_decks').insert({id: guestDeckId, guest_id: guestId, group_id: groupId,
+    // Exercise collection deletion, which is the existing user-facing flow.
+    // Occasional decks have a separate immutable arena scope and no delete UI.
+    const deck = await actor.from('decks').insert({id: deckId, user_id: userId, group_id: null, name: 'Recap Owner Deck',
+      commander: "Atraxa, Praetors' Voice", source_type: 'manual'}); expect(deck.error).toBeNull();
+    const guest = await actor.from('arena_guests').insert({id: guestId, group_id: groupId,
+      display_name: 'Private Recap Guest', normalized_name: 'private recap guest'}); expect(guest.error).toBeNull();
+    const guestDeck = await actor.from('arena_guest_decks').insert({id: guestDeckId, guest_id: guestId, group_id: groupId,
       name: 'Recap Guest Deck', commander: 'Krenko, Mob Boss'}); expect(guestDeck.error).toBeNull();
     for (const draw of [false, true]) {
       const id = crypto.randomUUID();
       matchIds.push(id);
-      const header = await admin.from('matches').insert({id, group_id: groupId, created_by: userId, played_at: new Date().toISOString(),
+      const header = await actor.from('matches').insert({id, group_id: groupId, created_by: userId, played_at: new Date().toISOString(),
         winner_id: draw ? null : userId, winner_guest_id: null, is_draw: draw, notes: 'PRIVATE_RECAP_NOTE',
         duration_seconds: draw ? 300 : null, tracking_version: draw ? 1 : null}); expect(header.error).toBeNull();
-      const seats = await admin.from('match_participants').insert([
+      const seats = await actor.from('match_participants').insert([
         {match_id: id, user_id: userId, guest_id: null, deck_id: deckId, guest_deck_id: null, is_winner: !draw,
           participant_name_snapshot: 'Private Recap Owner', commander_snapshot: "Atraxa, Praetors' Voice"},
         {match_id: id, user_id: null, guest_id: guestId, deck_id: null, guest_deck_id: guestDeckId, is_winner: false,
@@ -52,7 +58,9 @@ test('arena recap reads real Dev zero/manual/draw/guest/deleted-deck history and
     const ownerName = snapshots.data!.find(row => row.user_id === userId)?.participant_name_snapshot;
     const guestName = snapshots.data!.find(row => row.guest_id === guestId)?.participant_name_snapshot;
     expect(typeof ownerName).toBe('string'); expect(typeof guestName).toBe('string');
-    const removed = await admin.from('decks').delete().eq('id', deckId).eq('user_id', userId); expect(removed.error).toBeNull();
+    const removed = await actor.from('decks').delete().eq('id', deckId).eq('user_id', userId); expect(removed.error).toBeNull();
+    const historical = await admin.from('decks').select('source_type').eq('id', deckId).single();
+    expect(historical.error).toBeNull(); expect(historical.data?.source_type).toBe('historical');
     await trigger.click(); await expect(preview).toContainText(/Completed games: 2|Partite concluse: 2/);
     await expect(preview).toContainText(/Distinct players: 2|Partecipanti distinti: 2/);
     await expect(preview).toContainText("Atraxa, Praetors' Voice"); await expect(preview).toContainText('Krenko, Mob Boss');
